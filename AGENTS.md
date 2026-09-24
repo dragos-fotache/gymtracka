@@ -11,10 +11,18 @@ This is a single-module Android app (`:app`) written in Kotlin with Jetpack Comp
 
 ## App structure and navigation
 
-- The UI currently lives in `app/src/main/java/com/dragosfotache/gymtracka/MainActivity.kt`; it uses Compose state and small private composables rather than a ViewModel/navigation-library architecture.
+- `MainActivity.kt` is intentionally a thin entry point: it enables edge-to-edge rendering, applies `GymTrackaTheme`, and calls `GymApp()`.
+- UI code is organized by responsibility under `app/src/main/java/com/dragosfotache/gymtracka/ui/`:
+  - `GymApp.kt` owns the root scaffold, destination rendering, bottom navigation, and app-level dialogs.
+  - `GymAppState.kt` owns in-memory navigation, the active workout, workout start/finish/discard coordination, and the active rest timer lifecycle.
+  - `exercises/ExerciseScreens.kt` contains the catalogue and picker UI plus `ExerciseCatalogueState`.
+  - `workouts/WorkoutScreens.kt` contains workout history/list/detail UI plus its screen state holders.
+  - `activeworkout/ActiveWorkoutScreen.kt` contains the active-workout screen and `ActiveWorkoutState`; `WorkoutExerciseComponents.kt` contains exercise/set editing components; `RestTimerComponents.kt` contains rest-duration and countdown UI.
+  - `util/WorkoutFormatters.kt` contains shared workout display calculations and formatting extensions.
+- The app uses small composition-scoped state-holder classes backed by Compose state and coroutine scopes. It does not currently use Android `ViewModel`, a dependency-injection framework, or a navigation library. Keep repository work in these state holders rather than constructing repositories in leaf UI components.
 - Edge-to-edge is enabled. Custom top bars must account for system status bars (`Modifier.statusBarsPadding()`). Nested active-workout and picker screens apply only the app-level scaffold's bottom inset (`innerPadding.calculateBottomPadding()`), because their own top bar handles the status-bar inset; other screens apply the full `innerPadding`.
-- The app opens on the **Workouts** tab. The bottom navigation has only **Exercises** (dumbbell icon) and **Workouts** (auto-mirrored runner icon). It is 80dp high and is shown only on those two tab screens; there is no Home/Hello Android screen.
-- `Destination` is local UI state. It contains `Exercises`, `Workout`, `ActiveWorkout`, `AddExercises`, and `WorkoutHistoryDetail`.
+- The app opens on the **Workouts** tab. The bottom navigation has only **Exercises** (dumbbell icon) and **Workouts** (auto-mirrored runner icon). It is 88dp high and is shown only on those two tab screens; there is no Home/Hello Android screen.
+- `Destination` is owned by `GymAppState`. It contains `Exercises`, `Workout`, `ActiveWorkout`, `AddExercises`, and `WorkoutHistoryDetail`.
 - Active-workout and picker navigation is in-memory only. A newly created workout is persisted immediately. The active-workout top bar has a left-aligned down-chevron that returns to Workouts and collapses the workout into the active-workout pill; app relaunch does not yet automatically resume an active workout. An active rest timer is also in-memory, but is hoisted to app-level state so it continues after collapsing the workout.
 
 ### Current screens
@@ -59,6 +67,8 @@ This is a single-module Android app (`:app`) written in Kotlin with Jetpack Comp
 ### Repository conventions
 
 - `GymRepository` is the application-facing API. It owns UUID creation and should be extended instead of exposing database builders to UI code.
+- Repository instances are created by the `remember...State()` factories and passed into state holders. Screen and leaf composables should render state and emit callbacks; do not perform database work directly in components such as `WorkoutExerciseCard` or `WorkoutSetRow`.
+- `GymAppState` coordinates app-wide persistence operations. Feature state holders (`ExerciseCatalogueState`, `WorkoutHistoryState`, `WorkoutHistoryDetailState`, and `ActiveWorkoutState`) own feature-specific loading and mutations. Keep purely transient visual interaction state—menus, confirmation-dialog visibility, text-field presentation, and swipe animation—inside the relevant composable.
 - Creating a workout calls `startEmptyWorkout()` and writes it immediately. Default names are time-of-day based: Morning (05:00–11:59), Afternoon (12:00–16:59), Evening (17:00–20:59), otherwise Night.
 - `addExercisesToWorkout()` creates selected `workout_exercises` and their initial sets in one DAO transaction. It copies the completed set count, weights, and reps from each exercise's most recent finished workout when available; copied sets are incomplete with null rest time. Exercises without completed history receive exactly one empty initial set. Preserve this atomic behavior when changing the picker flow.
 - Set edits, completion toggles, and workout-name edits are autosaved immediately. New mutable workout controls should follow the same persistence-first behavior.
@@ -66,7 +76,7 @@ This is a single-module Android app (`:app`) written in Kotlin with Jetpack Comp
 - Deleting a set is transactional: after deletion, the remaining sets for that workout exercise are renumbered to consecutive zero-based positions.
 - Deleting an exercise from an active workout cascades to its sets and transactionally renumbers the remaining workout exercises. Deleting a finished workout cascades to all of its workout exercises and sets.
 - Finished-workout history is loaded as `WorkoutDetails` through `finishedWorkoutDetails()`; only workouts with `finished` status appear in the history list.
-- Total volume is derived in UI as the sum of `weightKg * repetitions` across persisted sets; it is not a database column.
+- Total volume is derived by `WorkoutDetails.totalVolumeKg()` in `ui/util/WorkoutFormatters.kt` as the sum of `weightKg * repetitions` across persisted sets; it is not a database column.
 
 ## Active-workout UI conventions
 
@@ -92,6 +102,9 @@ This is a single-module Android app (`:app`) written in Kotlin with Jetpack Comp
 
 ## Code style
 
-- Follow existing Kotlin formatting: trailing commas in multiline calls and Room annotations/queries; prefer clear private composables and repository methods.
+- Follow existing Kotlin formatting: trailing commas in multiline calls and Room annotations/queries; prefer clear private composables, focused state-holder methods, and repository methods.
+- Keep `MainActivity` limited to Android/Compose setup. Add screen UI to the matching feature package and place cross-feature shell behavior in `GymApp`/`GymAppState`.
+- Preserve unidirectional data flow: state holders expose observable state and mutation methods, screen composables connect that state to UI, and reusable/leaf composables receive values and callbacks.
+- Shared workout formatting and derived display calculations belong in `ui/util/WorkoutFormatters.kt`, not duplicated across screens.
 - Keep labels and data model terms explicit: weight is kilograms; positions are zero-based in storage and displayed one-based.
 - For any change affecting Room entities, update the database version/migration and compile with KSP before handoff.
