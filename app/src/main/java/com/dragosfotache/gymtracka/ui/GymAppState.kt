@@ -9,7 +9,6 @@ import android.os.VibrationEffect
 import android.os.VibrationAttributes
 import android.os.Vibrator
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -17,7 +16,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import com.dragosfotache.gymtracka.data.gym.GymRepository
 import com.dragosfotache.gymtracka.data.gym.GymAppStateRepository
 import com.dragosfotache.gymtracka.data.gym.WorkoutEntity
 import com.dragosfotache.gymtracka.data.gym.WorkoutSetEntity
@@ -28,7 +26,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlin.coroutines.coroutineContext
+import kotlin.time.Duration.Companion.milliseconds
 
 internal enum class Destination {
     Exercises,
@@ -365,9 +363,7 @@ internal class GymAppState(
                 destination = Destination.ActiveWorkout
             } catch (error: CancellationException) {
                 throw error
-            } catch (_: Exception) {
-                Unit
-            }
+            } catch (_: Exception) {}
         }
     }
 
@@ -378,9 +374,7 @@ internal class GymAppState(
                 activeWorkout?.let { destination = Destination.ActiveWorkout }
             } catch (error: CancellationException) {
                 throw error
-            } catch (_: Exception) {
-                Unit
-            }
+            } catch (_: Exception) {}
         }
     }
 
@@ -391,9 +385,7 @@ internal class GymAppState(
                 activeWorkout?.let { destination = Destination.ActiveWorkout }
             } catch (error: CancellationException) {
                 throw error
-            } catch (_: Exception) {
-                Unit
-            }
+            } catch (_: Exception) {}
         }
     }
 
@@ -437,9 +429,7 @@ internal class GymAppState(
                 }
             } catch (error: CancellationException) {
                 throw error
-            } catch (_: Exception) {
-                Unit
-            }
+            } catch (_: Exception) {}
         }
     }
 
@@ -549,7 +539,7 @@ internal class GymAppState(
                         return@launch
                     }
                 }
-                delay(100L)
+                delay(100.milliseconds)
             }
         }
     }

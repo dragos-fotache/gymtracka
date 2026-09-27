@@ -17,7 +17,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.dragosfotache.gymtracka.data.gym.GymDatabaseTest
 import com.dragosfotache.gymtracka.data.gym.RoutineEntity
@@ -164,7 +164,7 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
                 runBlocking { repository.workoutDetails("picker-workout")?.exercises?.size == 2 }
         }
         composeRule.runOnIdle { assertEquals(1, addedCount.get()) }
-        val persisted = runBlocking { repository.workoutDetails("picker-workout")!! }
+        val persisted = repository.workoutDetails("picker-workout")!!
         assertEquals(listOf(firstExerciseId, secondExerciseId), persisted.exercises.map { it.workoutExercise.exerciseId })
         assertEquals(listOf(0, 1), persisted.exercises.map { it.workoutExercise.position })
         persisted.exercises.forEach { entry ->
@@ -257,7 +257,7 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
             }
         }
         composeRule.runOnIdle { assertEquals(1, replacedCount.get()) }
-        val replaced = runBlocking { repository.workoutDetails("replacement-workout")!!.exercises.single() }
+        val replaced = repository.workoutDetails("replacement-workout")!!.exercises.single()
         assertEquals("entry-to-replace", replaced.workoutExercise.id)
         assertEquals("replacement-workout", replaced.workoutExercise.workoutId)
         assertEquals(secondExerciseId, replaced.workoutExercise.exerciseId)
@@ -294,7 +294,7 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
         composeRule.onNodeWithText("Save").performClick()
         composeRule.onNodeWithText("Exercise name required").assertIsDisplayed()
         composeRule.runOnIdle { assertEquals(0, savedCount.get()) }
-        assertTrue(runBlocking { repository.exercises().none { it.isUserCreated } })
+        assertTrue(repository.exercises().none { it.isUserCreated })
         composeRule.onNodeWithText("OK").performClick()
         composeRule.onNodeWithTag("exercise-field-name").performTextInput("Custom Press")
         composeRule.onNodeWithContentDescription("Back to exercises").performClick()
@@ -311,7 +311,7 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
             assertEquals(1, backCount.get())
             assertEquals(0, savedCount.get())
         }
-        assertTrue(runBlocking { repository.exercises().none { it.isUserCreated } })
+        assertTrue(repository.exercises().none { it.isUserCreated })
     }
 
     @Test
@@ -465,7 +465,7 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
         composeRule.onNodeWithTag("workout-set-reps-active-set").performTextReplacement("6")
         composeRule.onNodeWithTag("workout-set-complete-active-set").performClick()
         composeRule.waitUntil { runBlocking { repository.workoutDetails("active-ui")!!.exercises.single().sets.single().isCompleted } }
-        val completedSet = runBlocking { repository.workoutDetails("active-ui")!!.exercises.single().sets.single() }
+        val completedSet = repository.workoutDetails("active-ui")!!.exercises.single().sets.single()
         assertEquals(62.5, completedSet.weightKg!!, 0.0)
         assertEquals(6, completedSet.repetitions)
         assertTrue(completedSet.isCompleted)
@@ -476,7 +476,7 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
         composeRule.onNodeWithText("Delete").performClick()
         composeRule.onNodeWithText("Delete exercise?").assertIsDisplayed()
         composeRule.onNodeWithText("Cancel").performClick()
-        val afterCancel = runBlocking { repository.workoutDetails("active-ui")!! }
+        val afterCancel = repository.workoutDetails("active-ui")!!
         val retainedEntry = afterCancel.exercises.single()
         assertEquals("active-entry", retainedEntry.workoutExercise.id)
         val retainedSet = retainedEntry.sets.single()
@@ -488,7 +488,7 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
         composeRule.onNodeWithText("Delete").performClick()
         composeRule.onNodeWithText("Delete").performClick()
         composeRule.waitUntil { runBlocking { repository.workoutDetails("active-ui")!!.exercises.isEmpty() } }
-        assertTrue(runBlocking { database.workoutDao().getWorkoutSets("active-entry").isEmpty() })
+        assertTrue(database.workoutDao().getWorkoutSets("active-entry").isEmpty())
     }
 
     @Test
@@ -519,12 +519,12 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
         composeRule.waitUntil { composeRule.onAllNodesWithTag("workout-set-row-swipe-set").fetchSemanticsNodes().isNotEmpty() }
         composeRule.onNodeWithTag("workout-set-row-swipe-set").performTouchInput { swipeLeft() }
         composeRule.waitUntil { runBlocking { repository.workoutDetails("swipe-ui")?.exercises?.singleOrNull()?.sets?.isEmpty() == true } }
-        val detailsAfterSwipe = runBlocking { repository.workoutDetails("swipe-ui")!! }
+        val detailsAfterSwipe = repository.workoutDetails("swipe-ui")!!
         assertEquals("swipe-ui", detailsAfterSwipe.workout.id)
         val survivingEntry = detailsAfterSwipe.exercises.single()
         assertEquals("swipe-entry", survivingEntry.workoutExercise.id)
         assertEquals(exerciseId, survivingEntry.workoutExercise.exerciseId)
-        assertTrue(runBlocking { database.workoutDao().getWorkoutSets("swipe-entry").isEmpty() })
+        assertTrue(database.workoutDao().getWorkoutSets("swipe-entry").isEmpty())
     }
 
     @Test

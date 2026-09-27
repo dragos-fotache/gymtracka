@@ -2,16 +2,16 @@
 
 GymTracka is a single-module (`:app`) Kotlin Android application built with Jetpack Compose, Material 3, and Room. The namespace/application ID is `com.dragosfotache.gymtracka`; the minimum SDK is 24.
 
-This file contains only rules that apply to most Android implementation tasks. Detailed product, architecture, testing, and backend/sync knowledge lives in the sibling `shared-docs` repository and must not be duplicated here.
+This file contains only rules that apply to most Android implementation tasks. Detailed product, architecture, testing, and backend/sync knowledge lives in the nested `shared-docs` repository and must not be duplicated here.
 
 ## Read the relevant shared documentation
 
-The repositories are normally checked out as siblings: `GymTracka/` and `shared-docs/`. Before changing an area, read its source document:
+The `shared-docs/` repository is checked out inside the GymTracka repository. Before changing an area, read its source document:
 
-- Product behavior, screen flows, UI conventions, and known limitations: [`../shared-docs/docs/product-behavior.md`](../shared-docs/docs/product-behavior.md).
-- Android structure, Room schema/migrations, repositories, state holders, and persistence invariants: [`../shared-docs/docs/android-app/architecture.md`](../shared-docs/docs/android-app/architecture.md).
-- Test layers, current coverage, and pending milestones: [`../shared-docs/docs/android-app/testing-strategy.md`](../shared-docs/docs/android-app/testing-strategy.md).
-- Backend domain contract, proposed server schema, offline sync, and HTTP API: [`../shared-docs/docs/backend-contract/README.md`](../shared-docs/docs/backend-contract/README.md).
+- Product behavior, screen flows, UI conventions, and known limitations: [`shared-docs/docs/product-behavior.md`](shared-docs/docs/product-behavior.md).
+- Android structure, Room schema/migrations, repositories, state holders, and persistence invariants: [`shared-docs/docs/android-app/architecture.md`](shared-docs/docs/android-app/architecture.md).
+- Test layers, current coverage, and pending milestones: [`shared-docs/docs/android-app/testing-strategy.md`](shared-docs/docs/android-app/testing-strategy.md).
+- Backend domain contract, proposed server schema, offline sync, and HTTP API: [`shared-docs/docs/backend-contract/README.md`](shared-docs/docs/backend-contract/README.md).
 
 Read only the documents relevant to the task. For backend or sync work, follow the backend contract and its linked files in full. The checked-in Android code is the authority for what the current app implements; the shared contract is the authority for finalized future backend/sync decisions. If implementation and documentation diverge, identify whether the change is intentional and update the affected shared document in the same task.
 
@@ -74,4 +74,4 @@ Read only the documents relevant to the task. For backend or sync work, follow t
 - Prefer focused private composables, small state-holder methods, explicit names, and narrow repository methods.
 - Keep user-visible terminology and persistence terminology precise: workout versus routine, configured rest versus recorded rest, and active versus finished.
 - Avoid unrelated cleanup. Preserve existing user changes in this working tree and inspect the diff before editing overlapping code.
-- When a product behavior, data invariant, schema, test milestone, or sync decision changes, update the corresponding file in `../shared-docs/docs/` instead of expanding this guide.
+- When a product behavior, data invariant, schema, test milestone, or sync decision changes, update the corresponding file in `shared-docs/docs/` instead of expanding this guide.

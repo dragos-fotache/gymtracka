@@ -15,6 +15,21 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class ExerciseStateTest {
     @Test
+    fun catalogueState_restoresSearchAndFiltersFromInitialValues() = runTest {
+        val state = ExerciseCatalogueState(
+            repository = FakeExerciseRepository(),
+            scope = this,
+            initialSearchQuery = "bench",
+            initialEquipmentIds = setOf("barbell"),
+            initialMuscleGroupIds = setOf("chest"),
+        )
+
+        assertEquals("bench", state.searchQuery)
+        assertEquals(setOf("barbell"), state.selectedEquipmentIds)
+        assertEquals(setOf("chest"), state.selectedMuscleGroupIds)
+    }
+
+    @Test
     fun catalogueSelection_isClearedOnlyAfterSuccessfulPersistence() = runTest {
         val repository = FakeExerciseRepository()
         val state = ExerciseCatalogueState(repository, this)

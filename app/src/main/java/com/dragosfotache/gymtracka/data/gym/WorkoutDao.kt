@@ -14,9 +14,6 @@ interface WorkoutDao {
     suspend fun insertWorkout(workout: WorkoutEntity)
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
-    suspend fun insertWorkoutExercise(workoutExercise: WorkoutExerciseEntity)
-
-    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertWorkoutSet(workoutSet: WorkoutSetEntity)
 
     @Transaction
@@ -45,9 +42,6 @@ interface WorkoutDao {
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertWorkoutSets(workoutSets: List<WorkoutSetEntity>)
-
-    @Update
-    suspend fun updateWorkout(workout: WorkoutEntity)
 
     @Query("UPDATE workouts SET name = :name WHERE id = :workoutId")
     suspend fun updateWorkoutName(workoutId: String, name: String)

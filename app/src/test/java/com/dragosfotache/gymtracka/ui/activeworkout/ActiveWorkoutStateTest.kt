@@ -5,7 +5,6 @@ import com.dragosfotache.gymtracka.testing.FakeActiveWorkoutRepository
 import com.dragosfotache.gymtracka.testing.workoutDetailsFixture
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals

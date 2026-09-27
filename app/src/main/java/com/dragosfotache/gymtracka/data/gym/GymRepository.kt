@@ -19,19 +19,13 @@ internal class GymRepository(
     }
 
     override suspend fun muscleGroups() = database.muscleGroupDao().getAll()
-    suspend fun muscleGroup(id: String) = database.muscleGroupDao().getById(id)
-    suspend fun muscleGroupBySlug(slug: String) = database.muscleGroupDao().getBySlug(slug)
 
     override suspend fun equipment() = database.equipmentDao().getAll()
-    suspend fun equipment(id: String) = database.equipmentDao().getById(id)
 
     suspend fun exercises() = database.exerciseDao().getAll()
     override suspend fun exerciseCategories() = database.exerciseDao().getCategories()
     override suspend fun exerciseSummaries() = database.exerciseDao().getAllSummaries()
     suspend fun exercise(id: String) = database.exerciseDao().getById(id)
-    suspend fun searchExercises(query: String) = database.exerciseDao().searchByName(query)
-    suspend fun exercisesForMuscleGroup(muscleGroupId: String) =
-        database.exerciseDao().getForMuscleGroup(muscleGroupId)
 
     override suspend fun exerciseDetails(exerciseId: String) = database.exerciseDao().getDetails(exerciseId)
 
@@ -321,22 +315,6 @@ internal class GymRepository(
         }
         workoutDao.insertWorkoutWithExercisesAndSets(workout, workoutExercises, workoutSets)
         return workout
-    }
-
-    suspend fun addExerciseToWorkout(
-        workoutId: String,
-        exerciseId: String,
-        position: Int,
-    ): WorkoutExerciseEntity {
-        val workoutExercise = WorkoutExerciseEntity(
-            id = UUID.randomUUID().toString(),
-            workoutId = workoutId,
-            exerciseId = exerciseId,
-            position = position,
-            restDurationSeconds = DEFAULT_REST_DURATION_SECONDS,
-        )
-        database.workoutDao().insertWorkoutExercise(workoutExercise)
-        return workoutExercise
     }
 
     override suspend fun addSetToWorkoutExercise(

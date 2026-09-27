@@ -33,6 +33,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -59,6 +60,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.seconds
 
 internal class ActiveWorkoutState(
     private val workoutId: String,
@@ -68,7 +70,7 @@ internal class ActiveWorkoutState(
 ) {
     var details by mutableStateOf<WorkoutDetails?>(null)
         private set
-    var elapsedSeconds by mutableStateOf(
+    var elapsedSeconds by mutableLongStateOf(
         (System.currentTimeMillis() - workoutStartMillis).coerceAtLeast(0L) / 1_000,
     )
         private set
@@ -80,7 +82,7 @@ internal class ActiveWorkoutState(
         scope.launch {
             while (true) {
                 elapsedSeconds = (System.currentTimeMillis() - workoutStartMillis) / 1_000
-                delay(1_000)
+                delay(1.seconds)
             }
         }
     }
@@ -356,12 +358,12 @@ internal fun ActiveWorkoutPill(
     onDiscard: () -> Unit,
 ) {
     var elapsedSeconds by remember(workout.id, workout.startedAtMillis) {
-        mutableStateOf((System.currentTimeMillis() - workout.startedAtMillis).coerceAtLeast(0L) / 1_000)
+        mutableLongStateOf((System.currentTimeMillis() - workout.startedAtMillis).coerceAtLeast(0L) / 1_000)
     }
     LaunchedEffect(workout.id, workout.startedAtMillis) {
         while (true) {
             elapsedSeconds = (System.currentTimeMillis() - workout.startedAtMillis) / 1_000
-            delay(1_000)
+            delay(1.seconds)
         }
     }
     val shape = RoundedCornerShape(50)

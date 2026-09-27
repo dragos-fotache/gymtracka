@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -553,12 +552,12 @@ internal fun ExerciseReplacementPickerScreen(
 private fun ExerciseCatalogueContent(
     state: ExerciseCatalogueState,
     selectable: Boolean,
+    modifier: Modifier = Modifier,
     singleSelection: Boolean = false,
     onExerciseSelected: ((String) -> Unit)? = null,
     onEditCustomExercise: ((String) -> Unit)? = null,
     onDeleteCustomExercise: ((String) -> Unit)? = null,
     listState: LazyListState? = null,
-    modifier: Modifier = Modifier,
 ) {
     val exercises = state.summaries
     if (exercises == null) {
@@ -783,10 +782,10 @@ private fun ExerciseDetailValue(label: String, value: String) {
 
 @Composable
 internal fun CreateExerciseScreen(
-    exerciseId: String? = null,
-    modifier: Modifier = Modifier,
     onBack: () -> Unit,
     onSaved: () -> Unit,
+    modifier: Modifier = Modifier,
+    exerciseId: String? = null,
     state: ExerciseCreationState = rememberExerciseCreationState(exerciseId),
 ) {
     var showDiscardDialog by remember { mutableStateOf(false) }

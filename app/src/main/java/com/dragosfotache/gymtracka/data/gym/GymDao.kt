@@ -9,21 +9,12 @@ import androidx.room.Transaction
 interface MuscleGroupDao {
     @Query("SELECT * FROM muscle_groups ORDER BY name")
     suspend fun getAll(): List<MuscleGroupEntity>
-
-    @Query("SELECT * FROM muscle_groups WHERE id = :id")
-    suspend fun getById(id: String): MuscleGroupEntity?
-
-    @Query("SELECT * FROM muscle_groups WHERE slug = :slug")
-    suspend fun getBySlug(slug: String): MuscleGroupEntity?
 }
 
 @Dao
 interface EquipmentDao {
     @Query("SELECT * FROM equipment ORDER BY name")
     suspend fun getAll(): List<EquipmentEntity>
-
-    @Query("SELECT * FROM equipment WHERE id = :id")
-    suspend fun getById(id: String): EquipmentEntity?
 }
 
 @Dao
@@ -105,17 +96,6 @@ interface ExerciseDao {
 
     @Query("SELECT * FROM exercises WHERE id = :id")
     suspend fun getById(id: String): ExerciseEntity?
-
-    @Query("SELECT * FROM exercises WHERE name LIKE '%' || :query || '%' COLLATE NOCASE ORDER BY name")
-    suspend fun searchByName(query: String): List<ExerciseEntity>
-
-    @Query(
-        """SELECT exercises.* FROM exercises
-            INNER JOIN exercise_muscle_groups ON exercise_muscle_groups.exercise_id = exercises.id
-            WHERE exercise_muscle_groups.muscle_group_id = :muscleGroupId
-            ORDER BY exercises.name""",
-    )
-    suspend fun getForMuscleGroup(muscleGroupId: String): List<ExerciseEntity>
 
     @Query(
         """SELECT muscle_groups.id, muscle_groups.slug, muscle_groups.name,

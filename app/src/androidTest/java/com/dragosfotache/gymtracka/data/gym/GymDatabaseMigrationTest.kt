@@ -179,7 +179,7 @@ class GymDatabaseMigrationTest {
             ).use { cursor ->
                 assertTrue(cursor.moveToFirst())
                 val expectedName = if (startVersion == 2) {
-                    expectedDefaultWorkoutName(LEGACY_STARTED_AT_MILLIS)
+                    expectedDefaultWorkoutName()
                 } else {
                     "Legacy Workout"
                 }
@@ -234,9 +234,9 @@ class GymDatabaseMigrationTest {
         }
     }
 
-    private fun expectedDefaultWorkoutName(startedAtMillis: Long): String {
+    private fun expectedDefaultWorkoutName(): String {
         val hour = Calendar.getInstance().run {
-            timeInMillis = startedAtMillis
+            timeInMillis = LEGACY_STARTED_AT_MILLIS
             get(Calendar.HOUR_OF_DAY)
         }
         val prefix = when (hour) {

@@ -6,7 +6,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.printToLog
 import androidx.compose.ui.test.onRoot
 import com.dragosfotache.gymtracka.data.gym.GymDatabaseTest
@@ -16,6 +16,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Rule
+import kotlin.time.Duration.Companion.seconds
 
 abstract class AppFlowTestSupport : GymDatabaseTest() {
     @get:Rule
@@ -62,7 +63,7 @@ abstract class AppFlowTestSupport : GymDatabaseTest() {
         composeRule.runOnIdle { appEnabled?.value = false }
         composeRule.waitForIdle()
         compositionScopeJob?.let { job ->
-            runBlocking { withTimeout(5_000) { job.join() } }
+            runBlocking { withTimeout(5.seconds) { job.join() } }
         }
     }
 }

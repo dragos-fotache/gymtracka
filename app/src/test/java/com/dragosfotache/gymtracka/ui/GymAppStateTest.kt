@@ -19,6 +19,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class GymAppStateTest {
@@ -101,7 +103,7 @@ class GymAppStateTest {
         assertNull(state.finishedWorkoutSummary)
 
         repository.finishError = null
-        advanceTimeBy(1_200L)
+        advanceTimeBy(1_200.milliseconds)
         state.confirmFinishWorkout()
         runCurrent()
         assertEquals(listOf("active" to clock.wallTimeMillis()), repository.finished)
@@ -225,7 +227,7 @@ class GymAppStateTest {
         val activeTimer = state.activeRestTimer!!
         assertEquals(4, state.restTimerRemainingSeconds)
         assertEquals(listOf(5_000L), hardware.acquiredTimeouts)
-        advanceTimeBy(4_000L)
+        advanceTimeBy(4.seconds)
         runCurrent()
 
         assertNull(state.activeRestTimer)
@@ -253,7 +255,7 @@ class GymAppStateTest {
 
         val persistenceGate = CompletableDeferred<Unit>()
         repository.restUpdate = { _, _ -> persistenceGate.await() }
-        advanceTimeBy(750L)
+        advanceTimeBy(750.milliseconds)
         state.startRestTimer(WorkoutSetEntity("second", "entry", 1), 50)
         val second = state.activeRestTimer!!
         runCurrent()
@@ -266,7 +268,7 @@ class GymAppStateTest {
         state.adjustRestTimer(first, 60)
         assertEquals(second, state.activeRestTimer)
         assertEquals(50, state.activeRestTimer?.durationSeconds)
-        advanceTimeBy(5_000L)
+        advanceTimeBy(5.seconds)
         persistenceGate.complete(Unit)
         runCurrent()
         assertEquals(2, hardware.releaseCount)
@@ -311,7 +313,7 @@ class GymAppStateTest {
         }
 
         state.startRestTimer(WorkoutSetEntity("expired", "entry", 0), 1)
-        advanceTimeBy(1_000L)
+        advanceTimeBy(1.seconds)
         runCurrent()
         assertEquals(listOf("expired" to 1), repository.restUpdates)
         assertTrue(repository.committedRestUpdates.isEmpty())
@@ -368,7 +370,7 @@ class GymAppStateTest {
         val state = state(repository, hardware = hardware)
         state.startRestTimer(WorkoutSetEntity("failed", "entry", 0), 1)
         val failedTimer = state.activeRestTimer!!
-        advanceTimeBy(1_000L)
+        advanceTimeBy(1.seconds)
         runCurrent()
         state.skipRestTimer(failedTimer)
         runCurrent()
@@ -402,7 +404,7 @@ class GymAppStateTest {
         val state = state(repository, clock, hardware)
         runCurrent()
         state.startRestTimer(WorkoutSetEntity("finish-set", "entry", 0), 30)
-        advanceTimeBy(1_500L)
+        advanceTimeBy(1_500.milliseconds)
         state.requestFinishWorkout()
         runCurrent()
         state.confirmFinishWorkout()
