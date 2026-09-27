@@ -18,9 +18,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         WorkoutEntity::class,
         WorkoutExerciseEntity::class,
         WorkoutSetEntity::class,
+        RoutineEntity::class,
+        RoutineExerciseEntity::class,
+        RoutineSetEntity::class,
     ],
-    version = 5,
-    exportSchema = false,
+    version = 8,
+    exportSchema = true,
 )
 @TypeConverters(GymTypeConverters::class)
 abstract class GymDatabase : RoomDatabase() {
@@ -28,6 +31,7 @@ abstract class GymDatabase : RoomDatabase() {
     abstract fun equipmentDao(): EquipmentDao
     abstract fun exerciseDao(): ExerciseDao
     abstract fun workoutDao(): WorkoutDao
+    abstract fun routineDao(): RoutineDao
 
     companion object {
         private const val DATABASE_NAME = "gym.db"
@@ -43,10 +47,7 @@ abstract class GymDatabase : RoomDatabase() {
                     DATABASE_NAME,
                 )
                     .createFromAsset(ASSET_PATH)
-                    .addMigrations(MIGRATION_1_2)
-                    .addMigrations(MIGRATION_2_3)
-                    .addMigrations(MIGRATION_3_4)
-                    .addMigrations(MIGRATION_4_5)
+                    .addMigrations(*MIGRATIONS)
                     .build()
                     .also { instance = it }
             }
@@ -131,6 +132,77 @@ abstract class GymDatabase : RoomDatabase() {
                 )
             }
         }
+
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `workout_exercises` ADD COLUMN `rest_duration_seconds` INTEGER NOT NULL DEFAULT 30",
+                )
+            }
+        }
+
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `routines` (
+                        `id` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `is_draft` INTEGER NOT NULL DEFAULT 0,
+                        PRIMARY KEY(`id`)
+                    )""",
+                )
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `routine_exercises` (
+                        `id` TEXT NOT NULL,
+                        `routine_id` TEXT NOT NULL,
+                        `exercise_id` TEXT NOT NULL,
+                        `position` INTEGER NOT NULL,
+                        `rest_duration_seconds` INTEGER NOT NULL DEFAULT 30,
+                        PRIMARY KEY(`id`),
+                        FOREIGN KEY(`routine_id`) REFERENCES `routines`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(`exercise_id`) REFERENCES `exercises`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION
+                    )""",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_routine_exercises_routine_id` ON `routine_exercises` (`routine_id`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_routine_exercises_exercise_id` ON `routine_exercises` (`exercise_id`)",
+                )
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `routine_sets` (
+                        `id` TEXT NOT NULL,
+                        `routine_exercise_id` TEXT NOT NULL,
+                        `position` INTEGER NOT NULL,
+                        `repetitions` INTEGER,
+                        `weight_kg` REAL,
+                        PRIMARY KEY(`id`),
+                        FOREIGN KEY(`routine_exercise_id`) REFERENCES `routine_exercises`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )""",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_routine_sets_routine_exercise_id` ON `routine_sets` (`routine_exercise_id`)",
+                )
+            }
+        }
+
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `exercises` ADD COLUMN `is_user_created` INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
+        internal val MIGRATIONS: Array<Migration> = arrayOf(
+            MIGRATION_1_2,
+            MIGRATION_2_3,
+            MIGRATION_3_4,
+            MIGRATION_4_5,
+            MIGRATION_5_6,
+            MIGRATION_6_7,
+            MIGRATION_7_8,
+        )
 
     }
 }

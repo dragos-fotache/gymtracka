@@ -2,15 +2,22 @@ package com.dragosfotache.gymtracka.ui.util
 
 import com.dragosfotache.gymtracka.data.gym.WorkoutDetails
 import com.dragosfotache.gymtracka.data.gym.WorkoutExerciseDetails
+import com.dragosfotache.gymtracka.data.gym.WorkoutExerciseHistorySummary
+import com.dragosfotache.gymtracka.data.gym.WorkoutHistorySummary
 import com.dragosfotache.gymtracka.data.gym.WorkoutSetEntity
+import java.text.NumberFormat
+import java.text.ParsePosition
 import java.util.Locale
 
 internal fun WorkoutDetails.totalVolumeKg(): String {
     val volume = exercises.sumOf { exercise ->
         exercise.sets.sumOf { set -> (set.weightKg ?: 0.0) * (set.repetitions ?: 0) }
     }
-    return if (volume % 1.0 == 0.0) "${volume.toInt()} kg" else "${"%.2f".format(volume)} kg"
+    return formatTotalVolumeKg(volume)
 }
+
+internal fun WorkoutHistorySummary.totalVolumeKg(): String =
+    formatTotalVolumeKg(exercises.sumOf(WorkoutExerciseHistorySummary::volumeKg))
 
 internal fun WorkoutExerciseDetails.bestSetText(): String {
     val bestSet = sets.maxByOrNull { set ->
@@ -21,14 +28,44 @@ internal fun WorkoutExerciseDetails.bestSetText(): String {
     return "${formatKilograms(weight)} kg × $repetitions"
 }
 
+internal fun WorkoutExerciseHistorySummary.bestSetText(): String {
+    val weight = bestSetWeightKg ?: return "—"
+    val repetitions = bestSetRepetitions ?: return "—"
+    return "${formatKilograms(weight)} kg × $repetitions"
+}
+
 internal fun WorkoutSetEntity.historySetText(): String {
     val weight = weightKg ?: return "—"
     val repetitions = repetitions ?: return "—"
     return "${formatKilograms(weight)} kg × $repetitions"
 }
 
-internal fun formatKilograms(weightKg: Double): String =
-    if (weightKg % 1.0 == 0.0) weightKg.toInt().toString() else "%.2f".format(weightKg)
+internal fun formatKilograms(
+    weightKg: Double,
+    locale: Locale = Locale.getDefault(),
+): String = NumberFormat.getNumberInstance(locale).apply {
+    isGroupingUsed = false
+    minimumFractionDigits = 0
+    maximumFractionDigits = 2
+}.format(weightKg)
+
+internal fun parseKilograms(
+    value: String,
+    locale: Locale = Locale.getDefault(),
+): Double? {
+    val trimmed = value.trim()
+    if (trimmed.isEmpty()) return null
+    val position = ParsePosition(0)
+    val formatter = NumberFormat.getNumberInstance(locale).apply { isGroupingUsed = false }
+    val parsed = formatter.parse(trimmed, position) ?: return null
+    return parsed.toDouble().takeIf { position.index == trimmed.length }
+}
+
+private fun formatTotalVolumeKg(volumeKg: Double): String = if (volumeKg % 1.0 == 0.0) {
+    "${volumeKg.toInt()} kg"
+} else {
+    "${"%.2f".format(volumeKg)} kg"
+}
 
 internal fun formatWorkoutDuration(durationMillis: Long): String {
     val totalMinutes = (durationMillis.coerceAtLeast(0) / 60_000).toInt()

@@ -1,6 +1,7 @@
 package com.dragosfotache.gymtracka.data.gym
 
 import androidx.room.Dao
+import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
 
@@ -27,8 +28,80 @@ interface EquipmentDao {
 
 @Dao
 interface ExerciseDao {
+    @Insert
+    suspend fun insertExercise(exercise: ExerciseEntity)
+
+    @Insert
+    suspend fun insertExerciseMuscleGroups(relations: List<ExerciseMuscleGroupEntity>)
+
+    @Insert
+    suspend fun insertExerciseEquipment(relations: List<ExerciseEquipmentEntity>)
+
+    @Transaction
+    suspend fun insertCustomExercise(
+        exercise: ExerciseEntity,
+        muscleGroups: List<ExerciseMuscleGroupEntity>,
+        equipment: List<ExerciseEquipmentEntity>,
+    ) {
+        insertExercise(exercise)
+        insertExerciseMuscleGroups(muscleGroups)
+        insertExerciseEquipment(equipment)
+    }
+
+    @Query(
+        """UPDATE exercises SET name = :name, category = :category, instructions = :instructions
+            WHERE id = :exerciseId AND is_user_created = 1""",
+    )
+    suspend fun updateCustomExercise(
+        exerciseId: String,
+        name: String,
+        category: String?,
+        instructions: List<String>?,
+    )
+
+    @Query("SELECT EXISTS(SELECT 1 FROM exercises WHERE id = :exerciseId AND is_user_created = 1)")
+    suspend fun isUserCreatedExercise(exerciseId: String): Boolean
+
+    @Query("DELETE FROM exercise_muscle_groups WHERE exercise_id = :exerciseId")
+    suspend fun deleteExerciseMuscleGroups(exerciseId: String)
+
+    @Query("DELETE FROM exercise_equipment WHERE exercise_id = :exerciseId")
+    suspend fun deleteExerciseEquipment(exerciseId: String)
+
+    @Transaction
+    suspend fun updateCustomExerciseWithRelations(
+        exerciseId: String,
+        name: String,
+        category: String?,
+        instructions: List<String>?,
+        muscleGroups: List<ExerciseMuscleGroupEntity>,
+        equipment: List<ExerciseEquipmentEntity>,
+    ): Boolean {
+        if (!isUserCreatedExercise(exerciseId)) return false
+        updateCustomExercise(exerciseId, name, category, instructions)
+        deleteExerciseMuscleGroups(exerciseId)
+        deleteExerciseEquipment(exerciseId)
+        insertExerciseMuscleGroups(muscleGroups)
+        insertExerciseEquipment(equipment)
+        return true
+    }
+
+    @Query("DELETE FROM exercises WHERE id = :exerciseId AND is_user_created = 1")
+    suspend fun deleteCustomExerciseRow(exerciseId: String): Int
+
+    @Transaction
+    suspend fun deleteCustomExercise(exerciseId: String): Boolean {
+        if (!isUserCreatedExercise(exerciseId)) return false
+        deleteExerciseMuscleGroups(exerciseId)
+        deleteExerciseEquipment(exerciseId)
+        return deleteCustomExerciseRow(exerciseId) == 1
+    }
+
     @Query("SELECT * FROM exercises ORDER BY name")
     suspend fun getAll(): List<ExerciseEntity>
+
+    @Query("SELECT DISTINCT category FROM exercises WHERE category IS NOT NULL AND category != '' ORDER BY category")
+    suspend fun getCategories(): List<String>
 
     @Query("SELECT * FROM exercises WHERE id = :id")
     suspend fun getById(id: String): ExerciseEntity?

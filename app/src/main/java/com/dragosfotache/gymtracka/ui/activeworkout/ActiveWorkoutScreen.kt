@@ -41,11 +41,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.dragosfotache.gymtracka.data.gym.GymRepository
+import com.dragosfotache.gymtracka.data.gym.ActiveWorkoutStateRepository
+import com.dragosfotache.gymtracka.ui.rememberGymRepository
 import com.dragosfotache.gymtracka.data.gym.WorkoutDetails
 import com.dragosfotache.gymtracka.data.gym.WorkoutEntity
 import com.dragosfotache.gymtracka.data.gym.WorkoutExerciseDetails
@@ -55,13 +56,14 @@ import com.dragosfotache.gymtracka.ui.util.formatCountdown
 import com.dragosfotache.gymtracka.ui.util.formatElapsedTime
 import com.dragosfotache.gymtracka.ui.util.totalVolumeKg
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 internal class ActiveWorkoutState(
     private val workoutId: String,
     private val workoutStartMillis: Long,
-    private val repository: GymRepository,
+    private val repository: ActiveWorkoutStateRepository,
     private val scope: CoroutineScope,
 ) {
     var details by mutableStateOf<WorkoutDetails?>(null)
@@ -70,6 +72,8 @@ internal class ActiveWorkoutState(
         (System.currentTimeMillis() - workoutStartMillis).coerceAtLeast(0L) / 1_000,
     )
         private set
+    private var refreshGeneration = 0
+    private var nameSaveJob: Job? = null
 
     init {
         refresh()
@@ -82,18 +86,47 @@ internal class ActiveWorkoutState(
     }
 
     fun refresh() {
-        scope.launch { details = repository.workoutDetails(workoutId) }
+        val generation = ++refreshGeneration
+        scope.launch {
+            val loaded = repository.workoutDetails(workoutId)
+            if (generation == refreshGeneration) details = loaded
+        }
     }
 
     fun updateWorkoutName(name: String) {
         details = details?.let { current ->
             current.copy(workout = current.workout.copy(name = name))
         }
-        scope.launch { repository.updateWorkoutName(workoutId, name) }
+        val previousSave = nameSaveJob
+        nameSaveJob = scope.launch {
+            previousSave?.join()
+            repository.updateWorkoutName(workoutId, name)
+        }
     }
 
     fun updateNotes(workoutExerciseId: String, notes: String) {
         scope.launch { repository.updateWorkoutExerciseNotes(workoutExerciseId, notes) }
+    }
+
+    fun updateRestDuration(workoutExerciseId: String, restDurationSeconds: Int) {
+        details = details?.let { current ->
+            current.copy(
+                exercises = current.exercises.map { exercise ->
+                    if (exercise.workoutExercise.id == workoutExerciseId) {
+                        exercise.copy(
+                            workoutExercise = exercise.workoutExercise.copy(
+                                restDurationSeconds = restDurationSeconds,
+                            ),
+                        )
+                    } else {
+                        exercise
+                    }
+                },
+            )
+        }
+        scope.launch {
+            repository.updateWorkoutExerciseRestDuration(workoutExerciseId, restDurationSeconds)
+        }
     }
 
     fun addSet(exercise: WorkoutExerciseDetails) {
@@ -140,8 +173,7 @@ private fun rememberActiveWorkoutState(
     workoutId: String,
     workoutStartMillis: Long,
 ): ActiveWorkoutState {
-    val context = LocalContext.current.applicationContext
-    val repository = remember(context) { GymRepository(context) }
+    val repository = rememberGymRepository()
     val scope = rememberCoroutineScope()
     return remember(workoutId, workoutStartMillis, repository, scope) {
         ActiveWorkoutState(workoutId, workoutStartMillis, repository, scope)
@@ -164,6 +196,7 @@ internal fun ActiveWorkoutScreen(
     onRestTimerStarted: (WorkoutSetEntity, Int) -> Unit,
     onRestTimerEnded: (ActiveRestTimer) -> Unit,
     onRestTimerAdjusted: (ActiveRestTimer, Int) -> Unit,
+    onExerciseReplacementRequested: (String) -> Unit,
     state: ActiveWorkoutState = rememberActiveWorkoutState(workoutId, workoutStartMillis),
 ) {
     LaunchedEffect(restTimerCompletionKey) {
@@ -213,10 +246,12 @@ internal fun ActiveWorkoutScreen(
                     WorkoutExerciseCard(
                         exercise = exercise,
                         onNotesChanged = state::updateNotes,
+                        onRestDurationChanged = state::updateRestDuration,
                         onSetAdded = { state.addSet(exercise) },
                         onSetChanged = state::updateSet,
                         onSetDeleted = state::deleteSet,
                         onExerciseDeleted = { state.deleteExercise(exercise) },
+                        onExerciseReplacementRequested = onExerciseReplacementRequested,
                         onRestStarted = onRestTimerStarted,
                     )
                 }
@@ -262,7 +297,7 @@ private fun WorkoutNameField(
             color = MaterialTheme.colorScheme.onBackground,
             fontWeight = FontWeight.Bold,
         ),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().testTag("workout-name-input"),
     )
 }
 
@@ -332,6 +367,7 @@ internal fun ActiveWorkoutPill(
     val shape = RoundedCornerShape(50)
     Surface(
         modifier = modifier
+            .testTag("active-workout-pill")
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .shadow(

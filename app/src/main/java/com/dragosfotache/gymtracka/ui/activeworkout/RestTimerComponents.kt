@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.dragosfotache.gymtracka.ui.ActiveRestTimer
 import com.dragosfotache.gymtracka.ui.util.formatCountdown
@@ -233,7 +234,7 @@ internal fun RestTimerBar(
                     modifier = Modifier.fillMaxSize(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    RestTimerAdjustmentButton("−15") { onDurationAdjusted(-15) }
+                    RestTimerAdjustmentButton("−15", "rest-timer-minus") { onDurationAdjusted(-15) }
                     Spacer(Modifier.width(8.dp))
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                         Text(
@@ -243,9 +244,9 @@ internal fun RestTimerBar(
                         )
                     }
                     Spacer(Modifier.width(8.dp))
-                    RestTimerAdjustmentButton("+15") { onDurationAdjusted(15) }
+                    RestTimerAdjustmentButton("+15", "rest-timer-plus") { onDurationAdjusted(15) }
                     Spacer(Modifier.width(24.dp))
-                    Button(onClick = onSkip) { Text("Skip") }
+                    Button(onClick = onSkip, modifier = Modifier.testTag("rest-timer-skip")) { Text("Skip") }
                 }
             }
         }
@@ -253,10 +254,10 @@ internal fun RestTimerBar(
 }
 
 @Composable
-private fun RestTimerAdjustmentButton(text: String, onClick: () -> Unit) {
+private fun RestTimerAdjustmentButton(text: String, tag: String, onClick: () -> Unit) {
     Button(
         onClick = onClick,
-        modifier = Modifier.width(56.dp).height(44.dp),
+        modifier = Modifier.width(56.dp).height(44.dp).testTag(tag),
         shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,

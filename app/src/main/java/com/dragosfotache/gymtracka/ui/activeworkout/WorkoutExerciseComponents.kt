@@ -24,10 +24,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +54,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -58,24 +62,30 @@ import androidx.compose.ui.unit.dp
 import com.dragosfotache.gymtracka.data.gym.WorkoutExerciseDetails
 import com.dragosfotache.gymtracka.data.gym.WorkoutSetEntity
 import com.dragosfotache.gymtracka.ui.util.formatKilograms
+import com.dragosfotache.gymtracka.ui.util.parseKilograms
 import kotlinx.coroutines.launch
 
 @Composable
 internal fun WorkoutExerciseCard(
     exercise: WorkoutExerciseDetails,
     onNotesChanged: (String, String) -> Unit,
+    onRestDurationChanged: (String, Int) -> Unit,
     onSetAdded: () -> Unit,
     onSetChanged: (WorkoutSetEntity, (() -> Unit)?) -> Unit,
     onSetDeleted: (WorkoutSetEntity) -> Unit,
     onExerciseDeleted: () -> Unit,
+    onExerciseReplacementRequested: (String) -> Unit,
     onRestStarted: (WorkoutSetEntity, Int) -> Unit,
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showExerciseMenu by remember { mutableStateOf(false) }
     var showRestDurationDialog by remember { mutableStateOf(false) }
     var notes by remember(exercise.workoutExercise.id) {
         mutableStateOf(exercise.workoutExercise.notes)
     }
-    var restSeconds by remember(exercise.workoutExercise.id) { mutableIntStateOf(30) }
+    var restSeconds by remember(exercise.workoutExercise.id) {
+        mutableIntStateOf(exercise.workoutExercise.restDurationSeconds)
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -95,13 +105,38 @@ internal fun WorkoutExerciseCard(
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.titleMedium,
                 )
-                IconButton(onClick = { showDeleteDialog = true }, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        Icons.Filled.Delete,
-                        contentDescription = "Delete ${exercise.workoutExercise.exerciseName}",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(20.dp),
-                    )
+                Box {
+                    IconButton(
+                        onClick = { showExerciseMenu = true },
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            Icons.Filled.MoreVert,
+                            contentDescription = "Options for ${exercise.workoutExercise.exerciseName}",
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showExerciseMenu,
+                        onDismissRequest = { showExerciseMenu = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Replace") },
+                            onClick = {
+                                showExerciseMenu = false
+                                onExerciseReplacementRequested(exercise.workoutExercise.id)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Text("Delete", color = MaterialTheme.colorScheme.error)
+                            },
+                            onClick = {
+                                showExerciseMenu = false
+                                showDeleteDialog = true
+                            },
+                        )
+                    }
                 }
             }
             BasicTextField(
@@ -188,6 +223,7 @@ internal fun WorkoutExerciseCard(
             onDismiss = { showRestDurationDialog = false },
             onDone = {
                 restSeconds = it
+                onRestDurationChanged(exercise.workoutExercise.id, it)
                 showRestDurationDialog = false
             },
         )
@@ -236,14 +272,14 @@ private fun WorkoutSetRow(
     var dragOffset by remember(workoutSet.id) { mutableFloatStateOf(0f) }
     var passedDeleteThreshold by remember(workoutSet.id) { mutableStateOf(false) }
     val swipeOffset = remember(workoutSet.id) { Animatable(0f) }
-    val canComplete = weightText.toDoubleOrNull() != null && repetitionsText.toIntOrNull() != null
+    val canComplete = parseKilograms(weightText) != null && repetitionsText.toIntOrNull() != null
     val isCheckEnabled = canComplete || completed
     val completedRowColor = Color(0xFFE1F3E5)
     val completedCheckColor = Color(0xFF2E7D32)
     val rowShape = RoundedCornerShape(12.dp)
 
     fun editedSet(isCompleted: Boolean = completed): WorkoutSetEntity = workoutSet.copy(
-        weightKg = weightText.toDoubleOrNull(),
+        weightKg = parseKilograms(weightText),
         repetitions = repetitionsText.toIntOrNull(),
         isCompleted = isCompleted,
         restSeconds = if (isCompleted) workoutSet.restSeconds else null,
@@ -252,6 +288,7 @@ private fun WorkoutSetRow(
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .testTag("workout-set-row-${workoutSet.id}")
             .clip(rowShape)
             .background(MaterialTheme.colorScheme.error)
             .onSizeChanged { rowWidth = it.width },
@@ -322,7 +359,7 @@ private fun WorkoutSetRow(
                     weightText = it
                     onSetChanged(editedSet(), null)
                 },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).testTag("workout-set-weight-${workoutSet.id}"),
                 showBorder = !completed,
                 keyboardType = KeyboardType.Decimal,
             )
@@ -333,7 +370,7 @@ private fun WorkoutSetRow(
                     repetitionsText = it
                     onSetChanged(editedSet(), null)
                 },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).testTag("workout-set-reps-${workoutSet.id}"),
                 showBorder = !completed,
                 keyboardType = KeyboardType.Number,
             )
@@ -341,6 +378,7 @@ private fun WorkoutSetRow(
             Box(
                 modifier = Modifier
                     .size(36.dp)
+                    .testTag("workout-set-complete-${workoutSet.id}")
                     .clip(RoundedCornerShape(12.dp))
                     .background(
                         when {

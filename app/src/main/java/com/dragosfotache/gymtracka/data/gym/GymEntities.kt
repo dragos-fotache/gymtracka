@@ -32,6 +32,7 @@ data class ExerciseEntity(
     @ColumnInfo(name = "mechanics") val mechanics: String?,
     @ColumnInfo(name = "category") val category: String?,
     @ColumnInfo(name = "instructions") val instructions: List<String>?,
+    @ColumnInfo(name = "is_user_created", defaultValue = "0") val isUserCreated: Boolean = false,
 )
 
 @Entity(

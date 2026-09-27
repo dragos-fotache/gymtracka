@@ -28,6 +28,18 @@ interface WorkoutDao {
         insertWorkoutSets(workoutSets)
     }
 
+    /** Persists a complete active-workout copy as one transaction. */
+    @Transaction
+    suspend fun insertWorkoutWithExercisesAndSets(
+        workout: WorkoutEntity,
+        workoutExercises: List<WorkoutExerciseEntity>,
+        workoutSets: List<WorkoutSetEntity>,
+    ) {
+        insertWorkout(workout)
+        insertWorkoutExercises(workoutExercises)
+        insertWorkoutSets(workoutSets)
+    }
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertWorkoutExercises(workoutExercises: List<WorkoutExerciseEntity>)
 
@@ -105,6 +117,17 @@ interface WorkoutDao {
     @Query("UPDATE workout_exercises SET notes = :notes WHERE id = :workoutExerciseId")
     suspend fun updateWorkoutExerciseNotes(workoutExerciseId: String, notes: String)
 
+    @Query(
+        "UPDATE workout_exercises SET rest_duration_seconds = :restDurationSeconds WHERE id = :workoutExerciseId",
+    )
+    suspend fun updateWorkoutExerciseRestDuration(
+        workoutExerciseId: String,
+        restDurationSeconds: Int,
+    )
+
+    @Query("UPDATE workout_exercises SET exercise_id = :exerciseId WHERE id = :workoutExerciseId")
+    suspend fun replaceWorkoutExercise(workoutExerciseId: String, exerciseId: String)
+
     @Transaction
     suspend fun deleteWorkoutExerciseAndReorder(workoutExerciseId: String, workoutId: String) {
         deleteWorkoutExercise(workoutExerciseId)
@@ -152,6 +175,7 @@ interface WorkoutDao {
     @Query(
         """SELECT workout_exercises.id, workout_exercises.workout_id AS workoutId,
             workout_exercises.exercise_id AS exerciseId, workout_exercises.position, workout_exercises.notes,
+            workout_exercises.rest_duration_seconds AS restDurationSeconds,
             exercises.name AS exerciseName
             FROM workout_exercises
             INNER JOIN exercises ON exercises.id = workout_exercises.exercise_id
@@ -162,6 +186,57 @@ interface WorkoutDao {
 
     @Query("SELECT * FROM workout_sets WHERE workout_exercise_id = :workoutExerciseId ORDER BY position")
     suspend fun getWorkoutSets(workoutExerciseId: String): List<WorkoutSetEntity>
+
+    /**
+     * Returns the card-level history data for every exercise in two queries overall,
+     * rather than loading each finished workout and each of its set lists separately.
+     */
+    @Query(
+        """SELECT workout_exercises.id AS workoutExerciseId,
+            workout_exercises.workout_id AS workoutId,
+            workout_exercises.position AS position,
+            exercises.name AS exerciseName,
+            COUNT(workout_sets.id) AS setCount,
+            COALESCE(
+                SUM(
+                    COALESCE(workout_sets.weight_kg, 0.0) *
+                        COALESCE(workout_sets.repetitions, 0)
+                ),
+                0.0
+            ) AS volumeKg,
+            (
+                SELECT best_set.weight_kg
+                FROM workout_sets AS best_set
+                WHERE best_set.workout_exercise_id = workout_exercises.id
+                ORDER BY
+                    COALESCE(best_set.weight_kg, 0.0) *
+                        COALESCE(best_set.repetitions, 0) DESC,
+                    best_set.position
+                LIMIT 1
+            ) AS bestSetWeightKg,
+            (
+                SELECT best_set.repetitions
+                FROM workout_sets AS best_set
+                WHERE best_set.workout_exercise_id = workout_exercises.id
+                ORDER BY
+                    COALESCE(best_set.weight_kg, 0.0) *
+                        COALESCE(best_set.repetitions, 0) DESC,
+                    best_set.position
+                LIMIT 1
+            ) AS bestSetRepetitions
+            FROM workout_exercises
+            INNER JOIN workouts ON workouts.id = workout_exercises.workout_id
+            INNER JOIN exercises ON exercises.id = workout_exercises.exercise_id
+            LEFT JOIN workout_sets ON workout_sets.workout_exercise_id = workout_exercises.id
+            WHERE workouts.status = 'finished'
+            GROUP BY
+                workout_exercises.id,
+                workout_exercises.workout_id,
+                workout_exercises.position,
+                exercises.name
+            ORDER BY workouts.finished_at_millis DESC, workout_exercises.position""",
+    )
+    suspend fun getFinishedWorkoutExerciseSummaries(): List<WorkoutExerciseHistorySummary>
 
     /** Returns the completed sets from this exercise's most recently finished workout. */
     @Query(
@@ -181,6 +256,19 @@ interface WorkoutDao {
     )
     suspend fun previousCompletedSetsForExercise(exerciseId: String): List<WorkoutSetEntity>
 
+    /** Returns the configured rest duration from this exercise's most recent finished workout. */
+    @Query(
+        """SELECT previous_workout_exercises.rest_duration_seconds
+            FROM workout_exercises AS previous_workout_exercises
+            INNER JOIN workouts AS previous_workouts
+                ON previous_workouts.id = previous_workout_exercises.workout_id
+            WHERE previous_workout_exercises.exercise_id = :exerciseId
+                AND previous_workouts.status = 'finished'
+            ORDER BY previous_workouts.finished_at_millis DESC, previous_workout_exercises.position
+            LIMIT 1""",
+    )
+    suspend fun previousRestDurationForExercise(exerciseId: String): Int?
+
     @Transaction
     suspend fun getWorkoutDetails(workoutId: String): WorkoutDetails? {
         val workout = getWorkout(workoutId) ?: return null
@@ -194,9 +282,32 @@ interface WorkoutDao {
     }
 
     @Transaction
-    suspend fun getFinishedWorkoutDetails(): List<WorkoutDetails> =
-        getFinishedWorkouts().mapNotNull { workout -> getWorkoutDetails(workout.id) }
+    suspend fun getFinishedWorkoutSummaries(): List<WorkoutHistorySummary> {
+        val exercisesByWorkout = getFinishedWorkoutExerciseSummaries().groupBy { it.workoutId }
+        return getFinishedWorkouts().map { workout ->
+            WorkoutHistorySummary(
+                workout = workout,
+                exercises = exercisesByWorkout[workout.id].orEmpty(),
+            )
+        }
+    }
 }
+
+data class WorkoutHistorySummary(
+    val workout: WorkoutEntity,
+    val exercises: List<WorkoutExerciseHistorySummary>,
+)
+
+data class WorkoutExerciseHistorySummary(
+    val workoutExerciseId: String,
+    val workoutId: String,
+    val position: Int,
+    val exerciseName: String,
+    val setCount: Int,
+    val volumeKg: Double,
+    val bestSetWeightKg: Double?,
+    val bestSetRepetitions: Int?,
+)
 
 data class WorkoutDetails(
     val workout: WorkoutEntity,
@@ -214,5 +325,6 @@ data class WorkoutExerciseWithName(
     val exerciseId: String,
     val position: Int,
     val notes: String,
+    val restDurationSeconds: Int,
     val exerciseName: String,
 )

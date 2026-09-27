@@ -40,6 +40,7 @@ data class WorkoutExerciseEntity(
     @ColumnInfo(name = "exercise_id") val exerciseId: String,
     @ColumnInfo(name = "position") val position: Int,
     @ColumnInfo(name = "notes", defaultValue = "''") val notes: String = "",
+    @ColumnInfo(name = "rest_duration_seconds", defaultValue = "30") val restDurationSeconds: Int = 30,
 )
 
 /** One set for an exercise in a workout. Weight is stored in kilograms. */
@@ -62,6 +63,6 @@ data class WorkoutSetEntity(
     @ColumnInfo(name = "repetitions") val repetitions: Int? = null,
     @ColumnInfo(name = "weight_kg") val weightKg: Double? = null,
     @ColumnInfo(name = "is_completed", defaultValue = "0") val isCompleted: Boolean = false,
-    /** Actual rest elapsed after this set, in seconds. The countdown choice is UI-only. */
+    /** Actual rest elapsed after this set, in seconds. */
     @ColumnInfo(name = "rest_seconds") val restSeconds: Int? = null,
 )
