@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -489,6 +490,113 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
         composeRule.onNodeWithText("Delete").performClick()
         composeRule.waitUntil { runBlocking { repository.workoutDetails("active-ui")!!.exercises.isEmpty() } }
         assertTrue(database.workoutDao().getWorkoutSets("active-entry").isEmpty())
+    }
+
+    @Test
+    fun invalidatingCompletedSetShowsIncompleteAndStartsNoTimer() = runTest {
+        val exerciseId = repository.createCustomExercise("Bench Press", null, emptySet(), null, "strength", "")
+        insertWorkoutAggregate(
+            workoutFixture(id = "invalidate-ui", name = "Upper day"),
+            listOf(workoutExerciseFixture(id = "invalidate-entry", workoutId = "invalidate-ui", exerciseId = exerciseId)),
+            listOf(workoutSetFixture(id = "invalidate-set", workoutExerciseId = "invalidate-entry", weightKg = 50.0, repetitions = 8)),
+        )
+        lateinit var state: ActiveWorkoutState
+        val restStartPayloads = mutableListOf<Pair<String, Int>>()
+        val cancelledSetIds = mutableListOf<String>()
+
+        composeRule.setContent {
+            val scope = trackScope(rememberCoroutineScope())
+            MaterialTheme {
+                state = remember { ActiveWorkoutState("invalidate-ui", 1_000L, repository, scope) }
+                ActiveWorkoutScreen(
+                    workoutId = "invalidate-ui",
+                    workoutStartMillis = 1_000L,
+                    activeRestTimer = null,
+                    restTimerRemainingSeconds = 0,
+                    restTimerCompletionKey = 0,
+                    onAddExercise = {},
+                    onCollapse = {},
+                    onWorkoutNameChanged = {},
+                    onFinishWorkout = {},
+                    onCancelWorkout = {},
+                    onRestTimerStarted = { set, seconds -> restStartPayloads += set.id to seconds },
+                    onRestTimerEnded = {},
+                    onRestTimerAdjusted = { _, _ -> },
+                    onRestTimerCancelled = { cancelledSetIds += it },
+                    onExerciseReplacementRequested = {},
+                    state = state,
+                )
+            }
+        }
+        composeRule.waitUntil { composeRule.onAllNodesWithTag("workout-set-weight-invalidate-set").fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithTag("workout-set-complete-invalidate-set").performClick()
+        composeRule.waitUntil { runBlocking { repository.workoutDetails("invalidate-ui")!!.exercises.single().sets.single().isCompleted } }
+        composeRule.waitUntil(5_000) { composeRule.runOnIdle { restStartPayloads.isNotEmpty() } }
+
+        // Clearing the weight invalidates the set: persistence goes incomplete,
+        // the refreshed row shows a disabled check, and no phantom timer starts.
+        composeRule.onNodeWithTag("workout-set-weight-invalidate-set").performTextReplacement("")
+        composeRule.waitUntil(5_000) {
+            val stored = runBlocking {
+                repository.workoutDetails("invalidate-ui")!!.exercises.single().sets.single()
+            }
+            if (!stored.isCompleted && stored.weightKg == null) {
+                try {
+                    composeRule.onNodeWithTag("workout-set-complete-invalidate-set")
+                        .assertIsNotEnabled()
+                    true
+                } catch (_: AssertionError) {
+                    false
+                }
+            } else {
+                false
+            }
+        }
+        composeRule.runOnIdle { assertEquals(listOf("invalidate-set" to 30), restStartPayloads) }
+
+        // Unchecking a completed set reports cancellation for exactly that set.
+        composeRule.onNodeWithTag("workout-set-weight-invalidate-set").performTextReplacement("50")
+        composeRule.waitUntil {
+            runBlocking {
+                repository.workoutDetails("invalidate-ui")!!.exercises.single().sets.single().weightKg == 50.0
+            }
+        }
+        composeRule.onNodeWithTag("workout-set-complete-invalidate-set").performClick()
+        composeRule.waitUntil { runBlocking { repository.workoutDetails("invalidate-ui")!!.exercises.single().sets.single().isCompleted } }
+        composeRule.onNodeWithTag("workout-set-complete-invalidate-set").performClick()
+        composeRule.waitUntil { runBlocking { !repository.workoutDetails("invalidate-ui")!!.exercises.single().sets.single().isCompleted } }
+        composeRule.runOnIdle { assertEquals(listOf("invalidate-set"), cancelledSetIds) }
+
+        // Negative repetitions disable completion and never start a timer.
+        composeRule.onNodeWithTag("workout-set-reps-invalidate-set").performTextReplacement("-2")
+        composeRule.waitUntil {
+            runBlocking {
+                repository.workoutDetails("invalidate-ui")!!.exercises.single().sets.single().repetitions == null
+            }
+        }
+        composeRule.onNodeWithTag("workout-set-complete-invalidate-set").assertIsNotEnabled()
+        composeRule.runOnIdle { assertEquals(2, restStartPayloads.size) }
+
+        // Valid zero repetitions stay allowed, and typing valid values never
+        // auto-checks: the set remains incomplete until the checkbox is tapped.
+        composeRule.onNodeWithTag("workout-set-reps-invalidate-set").performTextReplacement("0")
+        composeRule.waitUntil {
+            runBlocking {
+                repository.workoutDetails("invalidate-ui")!!.exercises.single().sets.single().repetitions == 0
+            }
+        }
+        composeRule.runOnIdle {
+            assertEquals(
+                false,
+                runBlocking {
+                    repository.workoutDetails("invalidate-ui")!!.exercises.single().sets.single().isCompleted
+                },
+            )
+        }
+        composeRule.onNodeWithTag("workout-set-complete-invalidate-set").assertIsEnabled()
+        composeRule.onNodeWithTag("workout-set-complete-invalidate-set").performClick()
+        composeRule.waitUntil { runBlocking { repository.workoutDetails("invalidate-ui")!!.exercises.single().sets.single().isCompleted } }
+        composeRule.runOnIdle { assertEquals(3, restStartPayloads.size) }
     }
 
     @Test

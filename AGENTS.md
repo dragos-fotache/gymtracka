@@ -15,6 +15,11 @@ The `shared-docs/` repository is checked out inside the GymTracka repository. Be
 
 Read only the documents relevant to the task. For backend or sync work, follow the backend contract and its linked files in full. The checked-in Android code is the authority for what the current app implements; the shared contract is the authority for finalized future backend/sync decisions. If implementation and documentation diverge, identify whether the change is intentional and update the affected shared document in the same task.
 
+## Code navigation and search
+
+- Prefer `mcpls` language-server tools for code navigation, symbol search, definitions, references, diagnostics, formatting, and refactoring.
+- Use text tools such as `rg`, `grep`, `find`, `sed`, and `cat` only when `mcpls` cannot provide the information needed for the task, such as reading full documentation or exact file contents.
+
 ## Build and verification
 
 - Run commands from this repository root.
@@ -39,7 +44,7 @@ Read only the documents relevant to the task. For backend or sync work, follow t
 ## Persistence and domain safeguards
 
 - The bundled `app/src/main/assets/databases/gym.db` is a version-1 source asset. Room copies it into app-private storage and migrates the runtime database. Do not edit the asset to add user-data tables.
-- The runtime Room database is currently version 8. It combines the read-only bundled catalogue with custom exercises, workouts, and routines.
+- The runtime Room database is currently version 9. It combines the read-only bundled catalogue with custom exercises, workouts, routines, and sync storage foundations.
 - Bundled exercises are immutable. Creation, editing, and deletion apply only to rows marked `is_user_created`; keep repository/DAO guards intact.
 - IDs are client-generated UUID strings. Storage positions are zero-based and consecutive; UI numbering is one-based.
 - Weight is kilograms. The selected rest countdown (`rest_duration_seconds`) and actual elapsed rest (`rest_seconds`) are different values.

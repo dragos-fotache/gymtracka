@@ -76,6 +76,7 @@ internal fun WorkoutExerciseCard(
     onExerciseDeleted: () -> Unit,
     onExerciseReplacementRequested: (String) -> Unit,
     onRestStarted: (WorkoutSetEntity, Int) -> Unit,
+    onRestCancelled: (String) -> Unit,
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showExerciseMenu by remember { mutableStateOf(false) }
@@ -177,6 +178,7 @@ internal fun WorkoutExerciseCard(
                     onSetChanged = onSetChanged,
                     onSetDeleted = onSetDeleted,
                     onRestStarted = onRestStarted,
+                    onRestCancelled = onRestCancelled,
                 )
             }
             TextButton(
@@ -257,6 +259,7 @@ private fun WorkoutSetRow(
     onSetChanged: (WorkoutSetEntity, (() -> Unit)?) -> Unit,
     onSetDeleted: (WorkoutSetEntity) -> Unit,
     onRestStarted: (WorkoutSetEntity, Int) -> Unit,
+    onRestCancelled: (String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -267,12 +270,22 @@ private fun WorkoutSetRow(
     var repetitionsText by remember(workoutSet.id) {
         mutableStateOf(workoutSet.repetitions?.toString().orEmpty())
     }
-    var completed by remember(workoutSet.id) { mutableStateOf(workoutSet.isCompleted) }
+    // Presentation follows the persisted result: re-key on the stored flag so a
+    // refresh that forced incomplete (invalid inputs, newer uncheck) cannot
+    // leave a stale checked box. Draft strings stay keyed on the row ID so
+    // refreshes never overwrite in-progress typing or steal focus.
+    var completed by remember(workoutSet.id, workoutSet.isCompleted) {
+        mutableStateOf(workoutSet.isCompleted)
+    }
     var rowWidth by remember(workoutSet.id) { mutableIntStateOf(0) }
     var dragOffset by remember(workoutSet.id) { mutableFloatStateOf(0f) }
     var passedDeleteThreshold by remember(workoutSet.id) { mutableStateOf(false) }
     val swipeOffset = remember(workoutSet.id) { Animatable(0f) }
-    val canComplete = parseKilograms(weightText) != null && repetitionsText.toIntOrNull() != null
+    // Completion needs finite nonnegative kilograms and a nonnegative integer
+    // repetition count, matching the repository validity rule. Valid values
+    // never auto-check: only the checkbox toggles the local flag.
+    val canComplete = parseKilograms(weightText)?.let { it >= 0.0 && it.isFinite() } == true &&
+        repetitionsText.toIntOrNull()?.let { it >= 0 } == true
     val isCheckEnabled = canComplete || completed
     val completedRowColor = Color(0xFFE1F3E5)
     val completedCheckColor = Color(0xFF2E7D32)
@@ -394,6 +407,12 @@ private fun WorkoutSetRow(
                             val isNowCompleted = !completed
                             completed = isNowCompleted
                             val updatedSet = editedSet(isNowCompleted)
+                            if (!isNowCompleted) {
+                                // Unchecking ends only the matching running
+                                // timer; the uncheck write already cleared
+                                // recorded rest, so nothing is persisted here.
+                                onRestCancelled(workoutSet.id)
+                            }
                             onSetChanged(
                                 updatedSet,
                                 if (isNowCompleted && restDurationSeconds > 0) {

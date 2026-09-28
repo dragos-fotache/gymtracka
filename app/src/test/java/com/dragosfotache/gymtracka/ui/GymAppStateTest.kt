@@ -18,6 +18,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -59,10 +60,11 @@ class GymAppStateTest {
         assertTrue(state.showStartNewWorkoutDialog)
         state.confirmStartNewWorkout()
         runCurrent()
-        assertEquals(listOf("old"), repository.discarded)
+        assertTrue(repository.discarded.isEmpty())
         assertEquals(listOf(clock.wallTimeMillis()), repository.startedEmptyAt)
         assertEquals("empty", state.activeWorkout?.id)
         assertEquals(Destination.ActiveWorkout, state.destination)
+        assertFalse(state.showStartNewWorkoutDialog)
 
         state.requestPerformAgain("finished")
         assertTrue(state.showStartNewWorkoutDialog)
@@ -70,6 +72,7 @@ class GymAppStateTest {
         state.requestPerformAgain("finished")
         state.confirmStartNewWorkout()
         runCurrent()
+        assertTrue(repository.discarded.isEmpty())
         assertEquals(listOf("finished" to clock.wallTimeMillis()), repository.performedAgainAt)
         assertEquals("clone", state.activeWorkout?.id)
 
@@ -77,9 +80,9 @@ class GymAppStateTest {
         assertTrue(state.showStartNewWorkoutDialog)
         state.confirmStartNewWorkout()
         runCurrent()
+        assertTrue(repository.discarded.isEmpty())
         assertEquals(listOf("routine" to clock.wallTimeMillis()), repository.startedRoutineAt)
         assertEquals("routine-start", state.activeWorkout?.id)
-        assertEquals(listOf("old", "empty", "clone"), repository.discarded)
     }
 
     @Test
@@ -188,7 +191,7 @@ class GymAppStateTest {
     }
 
     @Test
-    fun failedReplacementCreationOrDiscardPreservesWorkoutTimerAndConfirmation() = runTest {
+    fun failedStartKeepsWorkoutTimerAndConfirmationWithoutDiscard() = runTest {
         val repository = FakeGymAppStateRepository().apply {
             active = WorkoutEntity("current", "Current", 1_000L)
             startError = IllegalStateException("create failed")
@@ -204,15 +207,19 @@ class GymAppStateTest {
         assertTrue(state.showStartNewWorkoutDialog)
         assertEquals("timer-set", state.activeRestTimer?.workoutSetId)
         assertTrue(hardware.isHeld)
+        assertTrue(repository.discarded.isEmpty())
 
+        // An invalid source falls back to a fresh empty workout instead.
         repository.startError = null
-        repository.discardError = IllegalStateException("discard failed")
+        repository.performAgainResult = null
+        state.requestPerformAgain("missing-source")
         state.confirmStartNewWorkout()
         runCurrent()
-        assertEquals("current", state.activeWorkout?.id)
-        assertTrue(state.showStartNewWorkoutDialog)
-        assertEquals("timer-set", state.activeRestTimer?.workoutSetId)
-        assertTrue(hardware.isHeld)
+        assertEquals(listOf("missing-source" to VirtualClock(testScheduler).wallTimeMillis()), repository.performedAgainAt)
+        assertEquals(1, repository.startedEmptyAt.size)
+        assertEquals("empty", state.activeWorkout?.id)
+        assertFalse(state.showStartNewWorkoutDialog)
+        assertTrue(repository.discarded.isEmpty())
     }
 
     @Test
@@ -451,6 +458,253 @@ class GymAppStateTest {
         runCurrent()
         assertNull(state.activeRestTimer)
         assertTrue(repository.restUpdates.none { it.first == "dispose-set" })
+        assertEquals(1, hardware.releaseCount)
+    }
+
+    @Test
+    fun finishRequestWaitsForRegisteredFeatureDrain() = runTest {
+        val repository = FakeGymAppStateRepository().apply {
+            active = WorkoutEntity("active", "Lift", 1_000L)
+        }
+        val state = state(repository)
+        runCurrent()
+        val gate = CompletableDeferred<Unit>()
+        var drained = false
+        val owner = Any()
+        state.registerFinishDrain("active", owner) {
+            gate.await()
+            drained = true
+        }
+
+        state.requestFinishWorkout()
+        runCurrent()
+        assertFalse(drained)
+        assertFalse(state.showFinishDialog)
+        assertFalse(state.showNoCompletedSetsDialog)
+
+        gate.complete(Unit)
+        runCurrent()
+        assertTrue(drained)
+        assertTrue(state.showFinishDialog)
+    }
+
+    @Test
+    fun failedFeatureDrainNeverTriggersFinish() = runTest {
+        val repository = FakeGymAppStateRepository().apply {
+            active = WorkoutEntity("active", "Lift", 1_000L)
+        }
+        val state = state(repository)
+        runCurrent()
+        val owner = Any()
+        state.registerFinishDrain("active", owner) {
+            throw IllegalStateException("accepted edit failed")
+        }
+
+        state.requestFinishWorkout()
+        runCurrent()
+        assertFalse(state.showFinishDialog)
+        assertFalse(state.showNoCompletedSetsDialog)
+        assertTrue(repository.finished.isEmpty())
+
+        state.unregisterFinishDrain("active", Any())
+        state.requestFinishWorkout()
+        runCurrent()
+        assertFalse(state.showFinishDialog)
+
+        state.unregisterFinishDrain("active", owner)
+        state.requestFinishWorkout()
+        runCurrent()
+        assertTrue(state.showFinishDialog)
+
+        // A drain registered for another workout never runs here.
+        state.registerFinishDrain("other", owner) {
+            fail("Drain for another workout must not run")
+        }
+        state.confirmFinishWorkout()
+        runCurrent()
+        assertEquals(1, repository.finished.size)
+    }
+
+    @Test
+    fun confirmFinishDrainsLateAcceptedEdits() = runTest {
+        val repository = FakeGymAppStateRepository().apply {
+            active = WorkoutEntity("active", "Lift", 1_000L)
+        }
+        val state = state(repository)
+        runCurrent()
+        val owner = Any()
+        var releases = 0
+        state.registerFinishDrain("active", owner) {
+            if (releases++ == 0) return@registerFinishDrain
+        }
+
+        state.requestFinishWorkout()
+        runCurrent()
+        assertTrue(state.showFinishDialog)
+
+        val lateGate = CompletableDeferred<Unit>()
+        state.registerFinishDrain("active", owner) { lateGate.await() }
+        state.confirmFinishWorkout()
+        runCurrent()
+        assertTrue(repository.finished.isEmpty())
+        assertTrue(state.showFinishDialog)
+
+        lateGate.complete(Unit)
+        runCurrent()
+        assertEquals(1, repository.finished.size)
+        assertNull(state.activeWorkout)
+    }
+
+    @Test
+    fun repeatedTerminalWritesToOneSetCommitInClaimOrder() = runTest {
+        val repository = FakeGymAppStateRepository()
+        val clock = VirtualClock(testScheduler)
+        val state = state(repository, clock)
+        val firstWriteGate = CompletableDeferred<Unit>()
+        repository.restUpdate = { setId, _ ->
+            if (setId == "same-set") firstWriteGate.await()
+        }
+
+        state.startRestTimer(WorkoutSetEntity("same-set", "entry", 0), 30)
+        advanceTimeBy(2.seconds)
+        state.startRestTimer(WorkoutSetEntity("same-set", "entry", 0), 30)
+        val second = state.activeRestTimer!!
+        runCurrent()
+        // The replacement countdown starts immediately while the old write waits.
+        assertEquals("same-set", second.workoutSetId)
+        assertEquals(listOf("same-set" to 2), repository.restUpdates)
+        assertTrue(repository.committedRestUpdates.isEmpty())
+
+        advanceTimeBy(5.seconds)
+        state.skipRestTimer(second)
+        runCurrent()
+        // The newer write is queued behind the gated older one: still nothing committed.
+        assertEquals(listOf("same-set" to 2), repository.restUpdates)
+        assertTrue(repository.committedRestUpdates.isEmpty())
+
+        firstWriteGate.complete(Unit)
+        runCurrent()
+        // Both transitions commit exactly once, oldest first, so the final
+        // elapsed value comes from the newer transition.
+        assertEquals(
+            listOf("same-set" to 2, "same-set" to 5),
+            repository.committedRestUpdates,
+        )
+        assertEquals(2, state.restTimerCompletionKey)
+        assertNull(state.activeRestTimer)
+    }
+
+    @Test
+    fun confirmFinishWaitsForGatedTerminalWrite() = runTest {
+        // Replacement leaves a current timer; skip/expiry leave no active
+        // timer. In all three, finish must stay blocked until the earlier
+        // gated terminal write commits, then commit everything exactly once.
+        listOf("replacement", "skip", "expiry").forEach { scenario ->
+            val repository = FakeGymAppStateRepository().apply {
+                active = WorkoutEntity("active", "Lift", 1_000L)
+                details = workoutDetailsFixture()
+            }
+            val clock = VirtualClock(testScheduler)
+            val state = state(repository, clock)
+            runCurrent()
+            val writeGate = CompletableDeferred<Unit>()
+            repository.restUpdate = { _, _ -> writeGate.await() }
+
+            state.startRestTimer(WorkoutSetEntity("old-set", "entry", 0), 30)
+            advanceTimeBy(1.seconds)
+            var expectedAttempts = listOf("old-set" to 1)
+            var expectedCommits = listOf("old-set" to 1)
+            when (scenario) {
+                "replacement" -> {
+                    state.startRestTimer(WorkoutSetEntity("new-set", "entry", 1), 30)
+                    runCurrent()
+                    assertEquals("new-set", state.activeRestTimer?.workoutSetId)
+                    expectedAttempts = listOf("old-set" to 1)
+                    expectedCommits = listOf("old-set" to 1, "new-set" to 1)
+                }
+
+                "skip" -> {
+                    state.skipRestTimer(state.activeRestTimer!!)
+                    runCurrent()
+                    assertNull(state.activeRestTimer)
+                }
+
+                "expiry" -> {
+                    // Skip the 30s timer, then let a fresh 1s timer expire
+                    // while gated: the skip attempt is recorded, the expiry
+                    // write queues behind it on the serial queue.
+                    state.skipRestTimer(state.activeRestTimer!!)
+                    runCurrent()
+                    state.startRestTimer(WorkoutSetEntity("old-set", "entry", 0), 1)
+                    advanceTimeBy(1.seconds)
+                    runCurrent()
+                    assertNull(state.activeRestTimer)
+                    expectedCommits = listOf("old-set" to 1, "old-set" to 1)
+                }
+            }
+            runCurrent()
+            assertEquals(expectedAttempts, repository.restUpdates)
+            assertTrue(repository.committedRestUpdates.isEmpty())
+
+            state.requestFinishWorkout()
+            runCurrent()
+            assertTrue(state.showFinishDialog)
+            advanceTimeBy(1.seconds)
+            state.confirmFinishWorkout()
+            runCurrent()
+            assertTrue(repository.finished.isEmpty())
+            assertTrue(state.showFinishDialog)
+
+            writeGate.complete(Unit)
+            runCurrent()
+            assertEquals(expectedCommits, repository.committedRestUpdates)
+            assertEquals(1, repository.finished.size)
+            assertNull(state.activeWorkout)
+        }
+    }
+
+    @Test
+    fun disposalCancelsGatedTerminalWritesWithoutLaterCommit() = runTest {
+        val repository = FakeGymAppStateRepository()
+        val state = state(repository)
+        val writeGate = CompletableDeferred<Unit>()
+        repository.restUpdate = { _, _ -> writeGate.await() }
+
+        state.startRestTimer(WorkoutSetEntity("old-set", "entry", 0), 30)
+        advanceTimeBy(1.seconds)
+        state.startRestTimer(WorkoutSetEntity("new-set", "entry", 1), 30)
+        runCurrent()
+        // Replacement never cancels the older terminal write: it is pending.
+        assertEquals(listOf("old-set" to 1), repository.restUpdates)
+        assertEquals("new-set", state.activeRestTimer?.workoutSetId)
+
+        state.dispose()
+        writeGate.complete(Unit)
+        runCurrent()
+        assertTrue(repository.committedRestUpdates.isEmpty())
+        assertNull(state.activeRestTimer)
+
+        // The parent scope stays alive: new countdowns still start.
+        state.startRestTimer(WorkoutSetEntity("fresh-set", "entry", 2), 30)
+        assertEquals("fresh-set", state.activeRestTimer?.workoutSetId)
+    }
+
+    @Test
+    fun uncheckingEndsOnlyTheMatchingTimerWithoutRestWrite() = runTest {
+        val repository = FakeGymAppStateRepository()
+        val hardware = FakeTimerHardware()
+        val state = state(repository, hardware = hardware)
+        state.startRestTimer(WorkoutSetEntity("timed-set", "entry", 0), 30)
+
+        state.cancelRestTimerForSet("other-set")
+        assertEquals("timed-set", state.activeRestTimer?.workoutSetId)
+        assertTrue(hardware.isHeld)
+
+        state.cancelRestTimerForSet("timed-set")
+        runCurrent()
+        assertNull(state.activeRestTimer)
+        assertFalse(hardware.isHeld)
+        assertTrue(repository.restUpdates.isEmpty())
         assertEquals(1, hardware.releaseCount)
     }
 

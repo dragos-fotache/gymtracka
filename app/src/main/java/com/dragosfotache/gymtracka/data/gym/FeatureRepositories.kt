@@ -70,7 +70,7 @@ internal interface ActiveWorkoutStateRepository {
         repetitions: Int? = null,
         weightKg: Double? = null,
     ): WorkoutSetEntity
-    suspend fun updateWorkoutSet(workoutSet: WorkoutSetEntity)
+    suspend fun updateWorkoutSet(workoutSet: WorkoutSetEntity): Boolean
     suspend fun deleteWorkoutSet(workoutSet: WorkoutSetEntity)
     suspend fun deleteExerciseFromWorkout(workoutExerciseId: String, workoutId: String)
 }

@@ -7,11 +7,19 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /** A reusable workout template. Draft routines are hidden until explicitly saved. */
-@Entity(tableName = "routines")
+@Entity(
+    tableName = "routines",
+    indices = [Index(value = ["account_id", "deleted_at_millis"])],
+)
 data class RoutineEntity(
     @PrimaryKey @ColumnInfo(name = "id") val id: String,
     @ColumnInfo(name = "name") val name: String,
     @ColumnInfo(name = "is_draft", defaultValue = "0") val isDraft: Boolean = false,
+    @ColumnInfo(name = "account_id") val accountId: String? = null,
+    @ColumnInfo(name = "server_revision") val serverRevision: Long? = null,
+    @ColumnInfo(name = "local_generation", defaultValue = "0") val localGeneration: Long = 0,
+    @ColumnInfo(name = "sync_state", defaultValue = "'local_only'") val syncState: String = "local_only",
+    @ColumnInfo(name = "deleted_at_millis") val deletedAtMillis: Long? = null,
 )
 
 @Entity(

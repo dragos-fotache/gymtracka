@@ -91,6 +91,7 @@ internal open class FakeActiveWorkoutRepository : ActiveWorkoutStateRepository {
     val noteUpdates = mutableListOf<Pair<String, String>>()
     val restUpdates = mutableListOf<Pair<String, Int>>()
     val setUpdates = mutableListOf<WorkoutSetEntity>()
+    var updateSetTransitionResult = false
 
     override suspend fun workoutDetails(workoutId: String) = detailsProvider(workoutId)
 
@@ -117,8 +118,9 @@ internal open class FakeActiveWorkoutRepository : ActiveWorkoutStateRepository {
         weightKg: Double?,
     ) = WorkoutSetEntity("new-set", workoutExerciseId, position, repetitions, weightKg)
 
-    override suspend fun updateWorkoutSet(workoutSet: WorkoutSetEntity) {
+    override suspend fun updateWorkoutSet(workoutSet: WorkoutSetEntity): Boolean {
         setUpdates += workoutSet
+        return updateSetTransitionResult
     }
 
     override suspend fun deleteWorkoutSet(workoutSet: WorkoutSetEntity) = Unit
@@ -229,19 +231,25 @@ internal class FakeGymAppStateRepository : GymAppStateRepository {
     override suspend fun startEmptyWorkout(startedAtMillis: Long): WorkoutEntity {
         startError?.let { throw it }
         startedEmptyAt += startedAtMillis
-        return startEmptyResult.copy(startedAtMillis = startedAtMillis)
+        val created = startEmptyResult.copy(startedAtMillis = startedAtMillis)
+        active = created
+        return created
     }
 
     override suspend fun performWorkoutAgain(workoutId: String, startedAtMillis: Long): WorkoutEntity? {
         performAgainError?.let { throw it }
         performedAgainAt += workoutId to startedAtMillis
-        return performAgainResult?.copy(startedAtMillis = startedAtMillis)
+        val created = performAgainResult?.copy(startedAtMillis = startedAtMillis)
+        created?.let { active = it }
+        return created
     }
 
     override suspend fun startWorkoutFromRoutine(routineId: String, startedAtMillis: Long): WorkoutEntity? {
         routineStartError?.let { throw it }
         startedRoutineAt += routineId to startedAtMillis
-        return startRoutineResult?.copy(startedAtMillis = startedAtMillis)
+        val created = startRoutineResult?.copy(startedAtMillis = startedAtMillis)
+        created?.let { active = it }
+        return created
     }
 
     override suspend fun discardWorkout(workoutId: String) {

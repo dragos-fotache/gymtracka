@@ -1,6 +1,7 @@
 package com.dragosfotache.gymtracka.data.gym
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.dragosfotache.gymtracka.data.sync.model.SyncModelException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -31,7 +32,9 @@ class RoutinePersistenceTest : GymDatabaseTest() {
 
     @Test
     fun saveRoutine_promotesDraftAndPersistsItsName() = runTest {
+        insertExercises(exerciseFixture(id = "leg", name = "Leg Press"))
         val draft = repository.createRoutineDraft()
+        repository.addExercisesToRoutine(draft.id, listOf("leg"))
 
         repository.saveRoutine(draft.id, "Lower Body")
 
@@ -102,12 +105,13 @@ class RoutinePersistenceTest : GymDatabaseTest() {
         var failure: Throwable? = null
         try {
             repository.addExercisesToRoutine(routine.id, listOf("valid", "missing"))
-        } catch (throwable: Throwable) {
+        } catch (throwable: SyncModelException) {
             failure = throwable
         }
 
         assertNotNull(failure)
         assertTrue(database.routineDao().getRoutineExercises(routine.id).isEmpty())
+        assertEquals(0L, database.routineDao().getRoutine(routine.id)?.localGeneration)
     }
 
     @Test

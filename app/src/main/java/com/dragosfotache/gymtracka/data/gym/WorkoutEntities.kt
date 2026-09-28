@@ -7,13 +7,21 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /** A workout session. `status` is `active` or `finished`. */
-@Entity(tableName = "workouts")
+@Entity(
+    tableName = "workouts",
+    indices = [Index(value = ["account_id", "deleted_at_millis"])],
+)
 data class WorkoutEntity(
     @PrimaryKey @ColumnInfo(name = "id") val id: String,
     @ColumnInfo(name = "name", defaultValue = "''") val name: String,
     @ColumnInfo(name = "started_at_millis") val startedAtMillis: Long,
     @ColumnInfo(name = "finished_at_millis") val finishedAtMillis: Long? = null,
     @ColumnInfo(name = "status", defaultValue = "'active'") val status: String = "active",
+    @ColumnInfo(name = "account_id") val accountId: String? = null,
+    @ColumnInfo(name = "server_revision") val serverRevision: Long? = null,
+    @ColumnInfo(name = "local_generation", defaultValue = "0") val localGeneration: Long = 0,
+    @ColumnInfo(name = "sync_state", defaultValue = "'local_only'") val syncState: String = "local_only",
+    @ColumnInfo(name = "deleted_at_millis") val deletedAtMillis: Long? = null,
 )
 
 /** An exercise added to a particular workout, in display order. */

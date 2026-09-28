@@ -1,0 +1,29 @@
+{
+  "id": "e9cd4a3c-4cce-4b7d-8b7b-8763956a2f15",
+  "name": "Afternoon Workout",
+  "status": "finished",
+  "startedAt": "2026-09-24T14:00:00Z",
+  "finishedAt": "2026-09-24T15:02:12Z",
+  "revision": 12,
+  "exercises": [
+    {
+      "id": "df037724-faf9-4b2e-993f-f37993726ee1",
+      "exerciseId": "a52af213-b0b8-4d7a-a43f-7758f838dc41",
+      "exerciseName": "Barbell Squat",
+      "position": 0,
+      "notes": "Controlled depth",
+      "restDurationSeconds": 90,
+      "sets": [
+        {
+          "id": "10dfcb31-4588-421e-9800-0d40e3c7b863",
+          "position": 0,
+          "repetitions": 8,
+          "weightKg": 100.0,
+          "isCompleted": true,
+          "restSeconds": 87
+        }
+      ]
+    }
+  ],
+  "totalVolumeKg": 800.0
+}

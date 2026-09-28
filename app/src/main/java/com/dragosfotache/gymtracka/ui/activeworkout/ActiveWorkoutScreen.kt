@@ -56,9 +56,13 @@ import com.dragosfotache.gymtracka.ui.ActiveRestTimer
 import com.dragosfotache.gymtracka.ui.util.formatCountdown
 import com.dragosfotache.gymtracka.ui.util.formatElapsedTime
 import com.dragosfotache.gymtracka.ui.util.totalVolumeKg
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
@@ -76,6 +80,11 @@ internal class ActiveWorkoutState(
         private set
     private var refreshGeneration = 0
     private var nameSaveJob: Job? = null
+    private var setEditSequence = 0L
+    private val latestAcceptedSetEdit = mutableMapOf<String, Long>()
+    private val pendingEditSignals = mutableListOf<CompletableDeferred<Unit>>()
+    private data class RetainedEditFailure(val key: String, val error: Exception)
+    private val retainedEditFailures = mutableListOf<RetainedEditFailure>()
 
     init {
         refresh()
@@ -95,19 +104,90 @@ internal class ActiveWorkoutState(
         }
     }
 
+    /**
+     * Tracks one accepted finite mutation so finish can drain it. Failures are
+     * recorded on the drain signal (a plain join would hide them) and retained
+     * under the edit's identity key until an explicit retry or a superseding
+     * edit for the same key succeeds — observing the failure does not resolve
+     * the unsaved edit. Cancellation propagates. A job that never runs still
+     * settles its signal so a drain cannot hang on it. The endless
+     * elapsed-time ticker is never tracked.
+     */
+    private fun launchEdit(key: String, block: suspend () -> Unit): Job {
+        val signal = CompletableDeferred<Unit>()
+        pendingEditSignals += signal
+        val job = scope.launch {
+            try {
+                block()
+                signal.complete(Unit)
+                pendingEditSignals -= signal
+                retainedEditFailures.removeAll { it.key == key }
+            } catch (error: CancellationException) {
+                signal.cancel(error)
+                pendingEditSignals -= signal
+                throw error
+            } catch (error: Exception) {
+                signal.completeExceptionally(error)
+                pendingEditSignals -= signal
+                retainedEditFailures.removeAll { it.key == key }
+                retainedEditFailures += RetainedEditFailure(key, error)
+            }
+        }
+        job.invokeOnCompletion { error ->
+            if (error != null && !signal.isCompleted) {
+                signal.cancel(
+                    error as? CancellationException
+                        ?: CancellationException("Edit did not run", error),
+                )
+                pendingEditSignals -= signal
+            }
+        }
+        return job
+    }
+
+    /**
+     * Suspends until every accepted edit has committed. Throws when any drained
+     * edit failed, when an unresolved retained failure exists, or when the
+     * scope was cancelled, so finish never overtakes an accepted edit and
+     * never runs while an accepted edit remains unsaved.
+     */
+    suspend fun awaitPendingEdits() {
+        while (true) {
+            val snapshot = pendingEditSignals.toList()
+            if (snapshot.isEmpty()) {
+                // A cancelled feature scope must fail the drain instead of
+                // silently succeeding with no tracked edits left.
+                scope.ensureActive()
+                retainedEditFailures.firstOrNull()?.let { throw it.error }
+                return
+            }
+            for (signal in snapshot) {
+                try {
+                    signal.await()
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    throw error
+                }
+            }
+        }
+    }
+
     fun updateWorkoutName(name: String) {
         details = details?.let { current ->
             current.copy(workout = current.workout.copy(name = name))
         }
         val previousSave = nameSaveJob
-        nameSaveJob = scope.launch {
+        nameSaveJob = launchEdit("workout:name") {
             previousSave?.join()
             repository.updateWorkoutName(workoutId, name)
         }
     }
 
     fun updateNotes(workoutExerciseId: String, notes: String) {
-        scope.launch { repository.updateWorkoutExerciseNotes(workoutExerciseId, notes) }
+        launchEdit("notes:$workoutExerciseId") {
+            repository.updateWorkoutExerciseNotes(workoutExerciseId, notes)
+        }
     }
 
     fun updateRestDuration(workoutExerciseId: String, restDurationSeconds: Int) {
@@ -126,14 +206,14 @@ internal class ActiveWorkoutState(
                 },
             )
         }
-        scope.launch {
+        launchEdit("rest:$workoutExerciseId") {
             repository.updateWorkoutExerciseRestDuration(workoutExerciseId, restDurationSeconds)
         }
     }
 
     fun addSet(exercise: WorkoutExerciseDetails) {
         val previousSet = exercise.sets.lastOrNull()
-        scope.launch {
+        launchEdit("sets:${exercise.workoutExercise.id}") {
             repository.addSetToWorkoutExercise(
                 workoutExerciseId = exercise.workoutExercise.id,
                 position = exercise.sets.size,
@@ -145,22 +225,46 @@ internal class ActiveWorkoutState(
     }
 
     fun updateSet(workoutSet: WorkoutSetEntity, afterUpdate: (() -> Unit)? = null) {
-        scope.launch {
-            repository.updateWorkoutSet(workoutSet)
-            details = repository.workoutDetails(workoutId)
-            afterUpdate?.invoke()
+        // Newer accepted edits supersede older callbacks for the same set: an
+        // older completion must not start a timer after a newer edit already
+        // unchecked or invalidated that set.
+        val sequence = ++setEditSequence
+        latestAcceptedSetEdit[workoutSet.id] = sequence
+        launchEdit("set:${workoutSet.id}") {
+            // The fenced result reports a real incomplete-to-complete
+            // transition; no-ops, guards, invalidations, and already-completed
+            // edits never start a timer, even when the stored row reads
+            // completed (finished roots, wrong parents, stale entities).
+            val transitioned = repository.updateWorkoutSet(workoutSet)
+            val loaded = try {
+                repository.workoutDetails(workoutId)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                null
+            }
+            if (loaded != null) details = loaded
+            if (!transitioned) return@launchEdit
+            if (latestAcceptedSetEdit[workoutSet.id] != sequence) return@launchEdit
+            val storedExercise = loaded?.exercises?.singleOrNull {
+                it.workoutExercise.id == workoutSet.workoutExerciseId
+            }
+            val stored = storedExercise?.sets?.singleOrNull { it.id == workoutSet.id }
+            if (loaded?.workout?.status == "active" && stored?.isCompleted == true) {
+                afterUpdate?.invoke()
+            }
         }
     }
 
     fun deleteSet(workoutSet: WorkoutSetEntity) {
-        scope.launch {
+        launchEdit("set:${workoutSet.id}") {
             repository.deleteWorkoutSet(workoutSet)
             details = repository.workoutDetails(workoutId)
         }
     }
 
     fun deleteExercise(exercise: WorkoutExerciseDetails) {
-        scope.launch {
+        launchEdit("entry:${exercise.workoutExercise.id}") {
             repository.deleteExerciseFromWorkout(
                 workoutExerciseId = exercise.workoutExercise.id,
                 workoutId = exercise.workoutExercise.workoutId,
@@ -198,11 +302,22 @@ internal fun ActiveWorkoutScreen(
     onRestTimerStarted: (WorkoutSetEntity, Int) -> Unit,
     onRestTimerEnded: (ActiveRestTimer) -> Unit,
     onRestTimerAdjusted: (ActiveRestTimer, Int) -> Unit,
+    onRestTimerCancelled: (String) -> Unit = {},
     onExerciseReplacementRequested: (String) -> Unit,
+    onRegisterFinishDrain: (workoutId: String, owner: Any, drain: suspend () -> Unit) -> Unit = { _, _, _ -> },
+    onUnregisterFinishDrain: (workoutId: String, owner: Any) -> Unit = { _, _ -> },
     state: ActiveWorkoutState = rememberActiveWorkoutState(workoutId, workoutStartMillis),
 ) {
     LaunchedEffect(restTimerCompletionKey) {
         state.refresh()
+    }
+    LaunchedEffect(workoutId, state) {
+        onRegisterFinishDrain(workoutId, state, state::awaitPendingEdits)
+        try {
+            awaitCancellation()
+        } finally {
+            onUnregisterFinishDrain(workoutId, state)
+        }
     }
 
     Scaffold(
@@ -255,6 +370,7 @@ internal fun ActiveWorkoutScreen(
                         onExerciseDeleted = { state.deleteExercise(exercise) },
                         onExerciseReplacementRequested = onExerciseReplacementRequested,
                         onRestStarted = onRestTimerStarted,
+                        onRestCancelled = onRestTimerCancelled,
                     )
                 }
             }

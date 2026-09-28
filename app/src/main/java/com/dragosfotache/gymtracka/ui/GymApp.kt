@@ -199,7 +199,10 @@ internal fun GymApp(appState: GymAppState = rememberGymAppState()) {
                     onRestTimerStarted = appState::startRestTimer,
                     onRestTimerEnded = appState::skipRestTimer,
                     onRestTimerAdjusted = appState::adjustRestTimer,
+                    onRestTimerCancelled = appState::cancelRestTimerForSet,
                     onExerciseReplacementRequested = appState::showExerciseReplacementPicker,
+                    onRegisterFinishDrain = appState::registerFinishDrain,
+                    onUnregisterFinishDrain = appState::unregisterFinishDrain,
                 )
             }
             Destination.AddExercises -> appState.activeWorkout?.let { workout ->

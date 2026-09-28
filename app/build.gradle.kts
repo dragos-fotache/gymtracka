@@ -30,6 +30,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        isCoreLibraryDesugaringEnabled = true
     }
     buildFeatures {
         compose = true
@@ -38,6 +39,13 @@ android {
         getByName("androidTest").assets.directories.add(
             "$projectDir/schemas",
         )
+        // Test-only fake service scaffold shared by JVM and instrumentation
+        // tests. Never packaged into production; it uses only main-source
+        // models plus stdlib/coroutines, no Room or Android classes.
+        getByName("test").java.srcDir("src/sharedTest/java")
+        getByName("test").kotlin.srcDir("src/sharedTest/java")
+        getByName("androidTest").java.srcDir("src/sharedTest/java")
+        getByName("androidTest").kotlin.srcDir("src/sharedTest/java")
     }
 }
 
@@ -59,6 +67,8 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.core)
+    implementation(libs.kotlinx.serialization.json)
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)
     testImplementation(libs.json)

@@ -3,6 +3,7 @@ package com.dragosfotache.gymtracka.data.gym
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(
@@ -22,7 +23,10 @@ data class EquipmentEntity(
     @ColumnInfo(name = "usage_type") val usageType: String?,
 )
 
-@Entity(tableName = "exercises")
+@Entity(
+    tableName = "exercises",
+    indices = [Index(value = ["account_id", "deleted_at_millis"])],
+)
 data class ExerciseEntity(
     @PrimaryKey @ColumnInfo(name = "id") val id: String,
     @ColumnInfo(name = "name") val name: String,
@@ -33,6 +37,11 @@ data class ExerciseEntity(
     @ColumnInfo(name = "category") val category: String?,
     @ColumnInfo(name = "instructions") val instructions: List<String>?,
     @ColumnInfo(name = "is_user_created", defaultValue = "0") val isUserCreated: Boolean = false,
+    @ColumnInfo(name = "account_id") val accountId: String? = null,
+    @ColumnInfo(name = "server_revision") val serverRevision: Long? = null,
+    @ColumnInfo(name = "local_generation", defaultValue = "0") val localGeneration: Long = 0,
+    @ColumnInfo(name = "sync_state", defaultValue = "'local_only'") val syncState: String = "local_only",
+    @ColumnInfo(name = "deleted_at_millis") val deletedAtMillis: Long? = null,
 )
 
 @Entity(

@@ -162,6 +162,90 @@ interface ExerciseDao {
             )
         }
     }
+
+    /**
+     * Account-scoped catalogue reads. Bundled rows are globally visible; custom rows
+     * must belong to the bound account. Tombstoned rows are hidden everywhere. The
+     * SQLite IS operator matches null accounts to signed-out local rows.
+     */
+    @Query(
+        """SELECT * FROM exercises
+            WHERE (is_user_created = 0 OR account_id IS :accountId)
+                AND deleted_at_millis IS NULL ORDER BY name""",
+    )
+    suspend fun getScopedAll(accountId: String?): List<ExerciseEntity>
+
+    @Query(
+        """SELECT DISTINCT category FROM exercises
+            WHERE (is_user_created = 0 OR account_id IS :accountId)
+                AND deleted_at_millis IS NULL
+                AND category IS NOT NULL AND category != '' ORDER BY category""",
+    )
+    suspend fun getScopedCategories(accountId: String?): List<String>
+
+    @Query(
+        """SELECT * FROM exercises WHERE id = :id
+            AND (is_user_created = 0 OR account_id IS :accountId)
+            AND deleted_at_millis IS NULL""",
+    )
+    suspend fun getScopedById(id: String, accountId: String?): ExerciseEntity?
+
+    @Query(
+        """SELECT exercise_muscle_groups.exercise_id AS exerciseId,
+            muscle_groups.id, muscle_groups.slug, muscle_groups.name,
+            exercise_muscle_groups.type AS relationshipType
+            FROM exercise_muscle_groups
+            INNER JOIN muscle_groups ON muscle_groups.id = exercise_muscle_groups.muscle_group_id
+            INNER JOIN exercises ON exercises.id = exercise_muscle_groups.exercise_id
+            WHERE (exercises.is_user_created = 0 OR exercises.account_id IS :accountId)
+                AND exercises.deleted_at_millis IS NULL
+            ORDER BY exercise_muscle_groups.exercise_id, muscle_groups.name""",
+    )
+    suspend fun getScopedAllMuscleGroups(accountId: String?): List<ExerciseMuscleGroupRow>
+
+    @Query(
+        """SELECT exercise_equipment.exercise_id AS exerciseId,
+            equipment.id, equipment.name, equipment.type, equipment.usage_type AS usageType,
+            exercise_equipment.num_items AS numberOfItems
+            FROM exercise_equipment
+            INNER JOIN equipment ON equipment.id = exercise_equipment.equipment_id
+            INNER JOIN exercises ON exercises.id = exercise_equipment.exercise_id
+            WHERE (exercises.is_user_created = 0 OR exercises.account_id IS :accountId)
+                AND exercises.deleted_at_millis IS NULL
+            ORDER BY exercise_equipment.exercise_id, equipment.name""",
+    )
+    suspend fun getScopedAllEquipment(accountId: String?): List<ExerciseEquipmentRow>
+
+    @Transaction
+    suspend fun getScopedSummaries(accountId: String?): List<ExerciseSummary> {
+        val muscleGroupsByExercise = getScopedAllMuscleGroups(accountId).groupBy { it.exerciseId }
+        val equipmentByExercise = getScopedAllEquipment(accountId).groupBy { it.exerciseId }
+
+        return getScopedAll(accountId).map { exercise ->
+            ExerciseSummary(
+                exercise = exercise,
+                muscleGroups = muscleGroupsByExercise[exercise.id].orEmpty(),
+                equipment = equipmentByExercise[exercise.id].orEmpty(),
+            )
+        }
+    }
+
+    @Transaction
+    suspend fun getScopedDetails(exerciseId: String, accountId: String?): ExerciseDetails? {
+        val exercise = getScopedById(exerciseId, accountId) ?: return null
+        return ExerciseDetails(
+            exercise = exercise,
+            muscleGroups = getMuscleGroups(exerciseId),
+            equipment = getEquipment(exerciseId),
+        )
+    }
+
+    /** Hides an owned custom exercise while preserving its row for publication. */
+    @Query(
+        """UPDATE exercises SET deleted_at_millis = :deletedAtMillis, sync_state = 'pending'
+            WHERE id = :exerciseId AND is_user_created = 1""",
+    )
+    suspend fun tombstoneCustomExercise(exerciseId: String, deletedAtMillis: Long)
 }
 
 data class ExerciseMuscleGroup(

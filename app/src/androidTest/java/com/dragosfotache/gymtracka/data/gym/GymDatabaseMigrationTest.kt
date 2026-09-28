@@ -30,15 +30,15 @@ class GymDatabaseMigrationTest {
 
     @Test
     fun everySupportedVersion_migratesToCurrentSchemaAndPreservesAvailableData() {
-        for (startVersion in 1 until 8) {
-            val databaseName = "migration-$startVersion-to-8.db"
+        for (startVersion in 1 until 9) {
+            val databaseName = "migration-$startVersion-to-9.db"
             migrationHelper.createDatabase(databaseName, startVersion).use { database ->
                 seedLegacyDatabase(database, startVersion)
             }
 
             migrationHelper.runMigrationsAndValidate(
                 databaseName,
-                8,
+                9,
                 true,
                 *GymDatabase.MIGRATIONS,
             ).use { database ->
@@ -73,6 +73,10 @@ class GymDatabaseMigrationTest {
             )
             assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM workouts"))
             assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM routines"))
+            assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM sync_outbox"))
+            assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM sync_state"))
+            assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM sync_device_state"))
+            assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM catalogue_state"))
         } finally {
             database.close()
         }
@@ -80,11 +84,41 @@ class GymDatabaseMigrationTest {
 
     private fun seedLegacyDatabase(database: SupportSQLiteDatabase, version: Int) {
         database.execSQL("INSERT INTO muscle_groups (id, slug, name) VALUES ('muscle', 'muscle', 'Muscle')")
-        database.execSQL("INSERT INTO equipment (id, name, type, usage_type) VALUES ('equipment', 'Equipment', 'weight', NULL)")
         database.execSQL(
-            """INSERT INTO exercises
-                (id, name, type, difficulty_level, force_type, mechanics, category, instructions)
-                VALUES ('exercise', 'Legacy Exercise', 'reps', NULL, NULL, NULL, 'strength', '["Step"]')""",
+            "INSERT INTO equipment (id, name, type, usage_type) VALUES ('equipment', 'Equipment', 'weight', NULL)",
+        )
+        val catalogueExerciseColumns = buildList {
+            addAll(
+                listOf(
+                    "id",
+                    "name",
+                    "type",
+                    "difficulty_level",
+                    "force_type",
+                    "mechanics",
+                    "category",
+                    "instructions",
+                ),
+            )
+            if (version >= 8) add("is_user_created")
+        }
+        val catalogueExerciseValues = buildList {
+            addAll(
+                listOf(
+                    "'exercise'",
+                    "'Legacy Exercise'",
+                    "'reps'",
+                    "NULL",
+                    "NULL",
+                    "NULL",
+                    "'strength'",
+                    "'[\"Step\"]'",
+                ),
+            )
+            if (version >= 8) add("0")
+        }
+        database.execSQL(
+            "INSERT INTO exercises (${catalogueExerciseColumns.joinToString()}) VALUES (${catalogueExerciseValues.joinToString()})",
         )
         database.execSQL(
             "INSERT INTO exercise_muscle_groups (exercise_id, muscle_group_id, type) VALUES ('exercise', 'muscle', 'primary')",
@@ -161,6 +195,22 @@ class GymDatabaseMigrationTest {
                 (id, routine_exercise_id, position, repetitions, weight_kg)
                 VALUES ('routine-set', 'routine-exercise', 5, NULL, 37.5)""",
         )
+
+        if (version < 8) return
+
+        database.execSQL(
+            """INSERT INTO exercises
+                (id, name, type, difficulty_level, force_type, mechanics, category,
+                    instructions, is_user_created)
+                VALUES ('custom-exercise', 'Legacy Custom', 'reps', NULL, NULL, NULL,
+                    'strength', '["Custom step"]', 1)""",
+        )
+        database.execSQL(
+            "INSERT INTO exercise_muscle_groups (exercise_id, muscle_group_id, type) VALUES ('custom-exercise', 'muscle', 'primary')",
+        )
+        database.execSQL(
+            "INSERT INTO exercise_equipment (exercise_id, equipment_id, num_items) VALUES ('custom-exercise', 'equipment', NULL)",
+        )
     }
 
     private fun assertMigratedData(database: SupportSQLiteDatabase, startVersion: Int) {
@@ -169,8 +219,37 @@ class GymDatabaseMigrationTest {
             assertEquals("Legacy Exercise", cursor.getString(0))
             assertEquals(0, cursor.getInt(1))
         }
-        assertEquals(1, database.singleInt("SELECT COUNT(*) FROM exercise_muscle_groups"))
-        assertEquals(1, database.singleInt("SELECT COUNT(*) FROM exercise_equipment"))
+        assertRootDefaults(database, "exercises", "id = 'exercise'")
+        val expectedRelationCount = if (startVersion >= 8) 2 else 1
+        assertEquals(
+            expectedRelationCount,
+            database.singleInt("SELECT COUNT(*) FROM exercise_muscle_groups"),
+        )
+        assertEquals(
+            expectedRelationCount,
+            database.singleInt("SELECT COUNT(*) FROM exercise_equipment"),
+        )
+        assertEquals(1, database.singleInt("SELECT COUNT(*) FROM muscle_groups"))
+        assertEquals(1, database.singleInt("SELECT COUNT(*) FROM equipment"))
+
+        if (startVersion >= 8) {
+            database.query(
+                """SELECT name, is_user_created, category, instructions, account_id,
+                    server_revision, local_generation, sync_state, deleted_at_millis
+                    FROM exercises WHERE id = 'custom-exercise'""",
+            ).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals("Legacy Custom", cursor.getString(0))
+                assertEquals(1, cursor.getInt(1))
+                assertEquals("strength", cursor.getString(2))
+                assertEquals("[\"Custom step\"]", cursor.getString(3))
+                assertTrue(cursor.isNull(4))
+                assertTrue(cursor.isNull(5))
+                assertEquals(0L, cursor.getLong(6))
+                assertEquals("local_only", cursor.getString(7))
+                assertTrue(cursor.isNull(8))
+            }
+        }
 
         if (startVersion >= 2) {
             database.query(
@@ -207,6 +286,7 @@ class GymDatabaseMigrationTest {
                 assertEquals(1, cursor.getInt(3))
                 if (startVersion >= 5) assertEquals(55, cursor.getInt(4)) else assertTrue(cursor.isNull(4))
             }
+            assertRootDefaults(database, "workouts", "id = 'workout'")
         } else {
             assertEquals(0, database.singleInt("SELECT COUNT(*) FROM workouts"))
         }
@@ -229,8 +309,32 @@ class GymDatabaseMigrationTest {
                 assertTrue(cursor.isNull(4))
                 assertEquals(37.5, cursor.getDouble(5), 0.0)
             }
+            assertRootDefaults(database, "routines", "id = 'routine'")
         } else {
             assertEquals(0, database.singleInt("SELECT COUNT(*) FROM routines"))
+        }
+
+        assertEquals(0, database.singleInt("SELECT COUNT(*) FROM sync_outbox"))
+        assertEquals(0, database.singleInt("SELECT COUNT(*) FROM sync_state"))
+        assertEquals(0, database.singleInt("SELECT COUNT(*) FROM sync_device_state"))
+        assertEquals(0, database.singleInt("SELECT COUNT(*) FROM catalogue_state"))
+    }
+
+    private fun assertRootDefaults(
+        database: SupportSQLiteDatabase,
+        table: String,
+        predicate: String,
+    ) {
+        database.query(
+            """SELECT account_id, server_revision, local_generation, sync_state,
+                deleted_at_millis FROM $table WHERE $predicate""",
+        ).use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertTrue(cursor.isNull(0))
+            assertTrue(cursor.isNull(1))
+            assertEquals(0L, cursor.getLong(2))
+            assertEquals("local_only", cursor.getString(3))
+            assertTrue(cursor.isNull(4))
         }
     }
 

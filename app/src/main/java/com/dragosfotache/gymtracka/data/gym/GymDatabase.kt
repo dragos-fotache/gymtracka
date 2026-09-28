@@ -21,8 +21,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RoutineEntity::class,
         RoutineExerciseEntity::class,
         RoutineSetEntity::class,
+        SyncOutboxEntity::class,
+        SyncStateEntity::class,
+        SyncDeviceStateEntity::class,
+        CatalogueStateEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
 )
 @TypeConverters(GymTypeConverters::class)
@@ -32,6 +36,8 @@ abstract class GymDatabase : RoomDatabase() {
     abstract fun exerciseDao(): ExerciseDao
     abstract fun workoutDao(): WorkoutDao
     abstract fun routineDao(): RoutineDao
+    abstract fun syncDao(): SyncDao
+    abstract fun syncCaptureDao(): SyncCaptureDao
 
     companion object {
         private const val DATABASE_NAME = "gym.db"
@@ -194,6 +200,106 @@ abstract class GymDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `workouts` ADD COLUMN `account_id` TEXT")
+                db.execSQL("ALTER TABLE `workouts` ADD COLUMN `server_revision` INTEGER")
+                db.execSQL(
+                    "ALTER TABLE `workouts` ADD COLUMN `local_generation` INTEGER NOT NULL DEFAULT 0",
+                )
+                db.execSQL(
+                    "ALTER TABLE `workouts` ADD COLUMN `sync_state` TEXT NOT NULL DEFAULT 'local_only'",
+                )
+                db.execSQL("ALTER TABLE `workouts` ADD COLUMN `deleted_at_millis` INTEGER")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_workouts_account_id_deleted_at_millis`" +
+                        " ON `workouts` (`account_id`, `deleted_at_millis`)",
+                )
+                db.execSQL("ALTER TABLE `routines` ADD COLUMN `account_id` TEXT")
+                db.execSQL("ALTER TABLE `routines` ADD COLUMN `server_revision` INTEGER")
+                db.execSQL(
+                    "ALTER TABLE `routines` ADD COLUMN `local_generation` INTEGER NOT NULL DEFAULT 0",
+                )
+                db.execSQL(
+                    "ALTER TABLE `routines` ADD COLUMN `sync_state` TEXT NOT NULL DEFAULT 'local_only'",
+                )
+                db.execSQL("ALTER TABLE `routines` ADD COLUMN `deleted_at_millis` INTEGER")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_routines_account_id_deleted_at_millis`" +
+                        " ON `routines` (`account_id`, `deleted_at_millis`)",
+                )
+                db.execSQL("ALTER TABLE `exercises` ADD COLUMN `account_id` TEXT")
+                db.execSQL("ALTER TABLE `exercises` ADD COLUMN `server_revision` INTEGER")
+                db.execSQL(
+                    "ALTER TABLE `exercises` ADD COLUMN `local_generation` INTEGER NOT NULL DEFAULT 0",
+                )
+                db.execSQL(
+                    "ALTER TABLE `exercises` ADD COLUMN `sync_state` TEXT NOT NULL DEFAULT 'local_only'",
+                )
+                db.execSQL("ALTER TABLE `exercises` ADD COLUMN `deleted_at_millis` INTEGER")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_exercises_account_id_deleted_at_millis`" +
+                        " ON `exercises` (`account_id`, `deleted_at_millis`)",
+                )
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `sync_outbox` (
+                        `sequence` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `mutation_id` TEXT NOT NULL,
+                        `account_id` TEXT NOT NULL,
+                        `aggregate_type` TEXT NOT NULL,
+                        `aggregate_id` TEXT NOT NULL,
+                        `mutation_type` TEXT NOT NULL,
+                        `local_generation` INTEGER NOT NULL,
+                        `payload_version` INTEGER NOT NULL DEFAULT 1,
+                        `payload_json` TEXT NOT NULL,
+                        `state` TEXT NOT NULL DEFAULT 'pending',
+                        `attempt_count` INTEGER NOT NULL DEFAULT 0,
+                        `retry_after_millis` INTEGER,
+                        `error_code` TEXT,
+                        `error_message` TEXT
+                    )""",
+                )
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_sync_outbox_mutation_id`" +
+                        " ON `sync_outbox` (`mutation_id`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_sync_outbox_account_id_sequence`" +
+                        " ON `sync_outbox` (`account_id`, `sequence`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS" +
+                        " `index_sync_outbox_account_id_aggregate_type_aggregate_id`" +
+                        " ON `sync_outbox` (`account_id`, `aggregate_type`, `aggregate_id`)",
+                )
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `sync_state` (
+                        `account_id` TEXT NOT NULL,
+                        `cursor` TEXT,
+                        `last_success_millis` INTEGER,
+                        PRIMARY KEY(`account_id`)
+                    )""",
+                )
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `sync_device_state` (
+                        `id` INTEGER NOT NULL,
+                        `active_account_id` TEXT,
+                        `cached_account_id` TEXT,
+                        `session_generation` INTEGER NOT NULL DEFAULT 0,
+                        `cache_state` TEXT NOT NULL DEFAULT 'local_only',
+                        PRIMARY KEY(`id`)
+                    )""",
+                )
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS `catalogue_state` (
+                        `id` INTEGER NOT NULL,
+                        `version` TEXT,
+                        PRIMARY KEY(`id`)
+                    )""",
+                )
+            }
+        }
+
         internal val MIGRATIONS: Array<Migration> = arrayOf(
             MIGRATION_1_2,
             MIGRATION_2_3,
@@ -202,6 +308,7 @@ abstract class GymDatabase : RoomDatabase() {
             MIGRATION_5_6,
             MIGRATION_6_7,
             MIGRATION_7_8,
+            MIGRATION_8_9,
         )
 
     }
