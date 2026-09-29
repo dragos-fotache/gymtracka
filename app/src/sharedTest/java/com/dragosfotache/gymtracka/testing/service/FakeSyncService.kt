@@ -3,6 +3,7 @@ package com.dragosfotache.gymtracka.testing.service
 import com.dragosfotache.gymtracka.data.sync.model.AggregateType
 import com.dragosfotache.gymtracka.data.sync.model.CanonicalRecord
 import com.dragosfotache.gymtracka.data.sync.model.ChangeOperation
+import com.dragosfotache.gymtracka.data.sync.model.ChildExerciseBinding
 import com.dragosfotache.gymtracka.data.sync.model.CustomExerciseInputModel
 import com.dragosfotache.gymtracka.data.sync.model.CustomExerciseRecordModel
 import com.dragosfotache.gymtracka.data.sync.model.DurableRequestModel
@@ -18,6 +19,7 @@ import com.dragosfotache.gymtracka.data.sync.model.PushResultModel
 import com.dragosfotache.gymtracka.data.sync.model.RoutineExerciseModel
 import com.dragosfotache.gymtracka.data.sync.model.RoutineInputModel
 import com.dragosfotache.gymtracka.data.sync.model.RoutineRecordModel
+import com.dragosfotache.gymtracka.data.sync.model.RoutineSetModel
 import com.dragosfotache.gymtracka.data.sync.model.SyncBatchModel
 import com.dragosfotache.gymtracka.data.sync.model.SyncChangeModel
 import com.dragosfotache.gymtracka.data.sync.model.SyncModelException
@@ -25,9 +27,12 @@ import com.dragosfotache.gymtracka.data.sync.model.WorkoutExerciseModel
 import com.dragosfotache.gymtracka.data.sync.model.WorkoutImportModel
 import com.dragosfotache.gymtracka.data.sync.model.WorkoutInputModel
 import com.dragosfotache.gymtracka.data.sync.model.WorkoutRecordModel
+import com.dragosfotache.gymtracka.data.sync.model.WorkoutSetModel
 import com.dragosfotache.gymtracka.data.sync.model.validateCustomExerciseRecordModel
 import com.dragosfotache.gymtracka.data.sync.model.validatePushResult
+import com.dragosfotache.gymtracka.data.sync.model.validateRoutineRecordModel
 import com.dragosfotache.gymtracka.data.sync.model.validateSyncBatch
+import com.dragosfotache.gymtracka.data.sync.model.validateWorkoutRecordModel
 import java.util.UUID
 
 /**
@@ -37,9 +42,13 @@ import java.util.UUID
  *
  * Assignment 016 (M4b) implements the seven basic aggregate commands:
  * `workout.start`, `workout.upsert`, `routine.upsert`, `routine.save`,
- * `customExercise.upsert`, `aggregate.import`, and `aggregate.delete`. The ten
- * remaining semantic commands reject explicitly with
- * [UNSUPPORTED_MUTATION_KIND]; `pull`/`snapshot` stay explicit
+ * `customExercise.upsert`, `aggregate.import`, and `aggregate.delete`.
+ * Assignment 017a adds `workout.finish`. Assignment 017b1 adds
+ * `workout.performAgain`. Assignment 017b2 adds `routine.startWorkout` and
+ * `workout.saveAsRoutine`. Assignment 017c adds `workout.addExercises`.
+ * Assignment 017d adds `workout.replaceExercise`, `workout.deleteExercise`,
+ * `workout.deleteSet`, `routine.deleteExercise`, and `routine.deleteSet`;
+ * every typed semantic command is now implemented. `pull`/`snapshot` stay explicit
  * [UnsupportedOperationException] stubs on the account adapter, and mutation
  * deduplication replay stays Assignment 018 (outcomes are recorded but a
  * repeated mutation ID re-executes; no stable retry semantics are claimed).
@@ -82,7 +91,13 @@ import java.util.UUID
  * reparented across exercises, or reused across root/child levels),
  * [INVALID_ROUTINE_STATE] (saved-routine demotion, blank-name or
  * exercise-less promotion), [CUSTOM_EXERCISE_REFERENCED] (delete blocked by a
- * retained workout/routine reference), and [UNSUPPORTED_MUTATION_KIND].
+ * retained workout/routine reference), [NO_COMPLETED_SETS] (finish without a
+ * valid completed set), [INVALID_FINISH_TIME] (finish time before the workout
+ * start), [SOURCE_NOT_FINISHED] (clone/copy from an unfinished source),
+ * [CHILD_BINDING_MISMATCH] (clone/copy plan does not match the current
+ * source children in exact order), [HISTORY_SHAPE_CHANGED] (add-exercises
+ * plan supplies a different set-ID count than the current derived history
+ * shape), and [UNSUPPORTED_MUTATION_KIND].
  */
 class FakeSyncService(
     val clockMillis: () -> Long = System::currentTimeMillis,
@@ -94,15 +109,20 @@ class FakeSyncService(
     /** Global root identity: aggregate type plus ID, owned by one account. */
     data class RootKey(val aggregateType: AggregateType, val aggregateId: String)
 
-    /** Permanent per-mutation rejection codes for the seven basic commands. */
+    /** Permanent per-mutation rejection codes for the seventeen implemented commands. */
     companion object {
         const val OWNED_ROOT_MISSING = "owned_root_missing"
         const val ROOT_ALREADY_EXISTS = "root_already_exists"
         const val IMMUTABLE_FINISHED = "immutable_finished"
         const val INVALID_REFERENCE = "invalid_reference"
         const val CHILD_COLLISION = "child_collision"
+        const val CHILD_BINDING_MISMATCH = "child_binding_mismatch"
+        const val HISTORY_SHAPE_CHANGED = "history_shape_changed"
+        const val SOURCE_NOT_FINISHED = "source_not_finished"
         const val INVALID_ROUTINE_STATE = "invalid_routine_state"
         const val CUSTOM_EXERCISE_REFERENCED = "custom_exercise_referenced"
+        const val NO_COMPLETED_SETS = "no_completed_sets"
+        const val INVALID_FINISH_TIME = "invalid_finish_time"
         const val UNSUPPORTED_MUTATION_KIND = "unsupported_mutation_kind"
     }
 
@@ -338,17 +358,63 @@ class FakeSyncService(
                 stageImport(accountId, (envelope.payload as MutationPayload.AggregateImport).record)
             MutationKind.AGGREGATE_DELETE ->
                 stageDelete(accountId, envelope.aggregateType, envelope.aggregateId)
-            MutationKind.WORKOUT_FINISH,
-            MutationKind.WORKOUT_PERFORM_AGAIN,
-            MutationKind.ROUTINE_START_WORKOUT,
-            MutationKind.WORKOUT_SAVE_AS_ROUTINE,
-            MutationKind.WORKOUT_ADD_EXERCISES,
-            MutationKind.WORKOUT_REPLACE_EXERCISE,
-            MutationKind.WORKOUT_DELETE_EXERCISE,
-            MutationKind.WORKOUT_DELETE_SET,
-            MutationKind.ROUTINE_DELETE_EXERCISE,
-            MutationKind.ROUTINE_DELETE_SET,
-            -> throw FakeRejection(UNSUPPORTED_MUTATION_KIND)
+            MutationKind.WORKOUT_FINISH ->
+                stageWorkoutFinish(
+                    accountId,
+                    envelope.aggregateId,
+                    (envelope.payload as MutationPayload.WorkoutFinish).finishedAtMillis,
+                )
+            MutationKind.WORKOUT_PERFORM_AGAIN ->
+                stageWorkoutPerformAgain(
+                    accountId,
+                    envelope.payload as MutationPayload.WorkoutPerformAgain,
+                )
+            MutationKind.ROUTINE_START_WORKOUT ->
+                stageRoutineStartWorkout(
+                    accountId,
+                    envelope.payload as MutationPayload.RoutineStartWorkout,
+                )
+            MutationKind.WORKOUT_SAVE_AS_ROUTINE ->
+                stageWorkoutSaveAsRoutine(
+                    accountId,
+                    envelope.payload as MutationPayload.WorkoutSaveAsRoutine,
+                )
+            MutationKind.WORKOUT_ADD_EXERCISES ->
+                stageWorkoutAddExercises(
+                    accountId,
+                    envelope.aggregateId,
+                    envelope.payload as MutationPayload.WorkoutAddExercises,
+                )
+            MutationKind.WORKOUT_REPLACE_EXERCISE ->
+                stageWorkoutReplaceExercise(
+                    accountId,
+                    envelope.aggregateId,
+                    envelope.payload as MutationPayload.WorkoutReplaceExercise,
+                )
+            MutationKind.WORKOUT_DELETE_EXERCISE ->
+                stageWorkoutDeleteExercise(
+                    accountId,
+                    envelope.aggregateId,
+                    envelope.payload as MutationPayload.WorkoutDeleteExercise,
+                )
+            MutationKind.WORKOUT_DELETE_SET ->
+                stageWorkoutDeleteSet(
+                    accountId,
+                    envelope.aggregateId,
+                    envelope.payload as MutationPayload.WorkoutDeleteSet,
+                )
+            MutationKind.ROUTINE_DELETE_EXERCISE ->
+                stageRoutineDeleteExercise(
+                    accountId,
+                    envelope.aggregateId,
+                    envelope.payload as MutationPayload.RoutineDeleteExercise,
+                )
+            MutationKind.ROUTINE_DELETE_SET ->
+                stageRoutineDeleteSet(
+                    accountId,
+                    envelope.aggregateId,
+                    envelope.payload as MutationPayload.RoutineDeleteSet,
+                )
         }
 
     private fun stageWorkoutStart(accountId: String, start: MutationPayload.WorkoutStart): StagedEffects {
@@ -458,6 +524,676 @@ class FakeSyncService(
         )
     }
 
+    /**
+     * Finishes the caller's live active workout atomically. Only valid
+     * completed sets (complete with present repetitions and weight) survive;
+     * unfinished sets and newly empty exercises are removed, survivors at both
+     * levels are renumbered consecutively from zero with IDs, notes,
+     * configured rest, nullable inputs, and recorded rest preserved, then the
+     * status and finish time are set. The known revision and client clocks
+     * never affect the result; the next per-root revision is assigned.
+     */
+    private fun stageWorkoutFinish(accountId: String, workoutId: String, finishedAtMillis: Long): StagedEffects {
+        val key = RootKey(AggregateType.WORKOUT, workoutId)
+        val stored = liveOwnedRoot(accountId, key)
+        val record = stored.record as? CanonicalRecord.Workout
+            ?: throw SyncModelException("fake invariant violated: workout root holds another record type")
+        if (record.record.status != "active") throw FakeRejection(IMMUTABLE_FINISHED)
+        if (finishedAtMillis < record.record.startedAtMillis) throw FakeRejection(INVALID_FINISH_TIME)
+        val survivors = record.record.exercises.mapNotNull { entry ->
+            val kept = entry.sets.filter { it.isCompleted && it.repetitions != null && it.weightKg != null }
+            if (kept.isEmpty()) null else entry to kept
+        }
+        if (survivors.isEmpty()) throw FakeRejection(NO_COMPLETED_SETS)
+        val exercises = survivors.mapIndexed { exerciseIndex, (entry, kept) ->
+            entry.copy(
+                position = exerciseIndex,
+                sets = kept.mapIndexed { setIndex, set -> set.copy(position = setIndex) },
+            )
+        }
+        val revision = stored.revision + 1L
+        val next = validateWorkoutRecordModel(
+            record.record.copy(
+                status = "finished",
+                finishedAtMillis = finishedAtMillis,
+                revision = revision,
+                exercises = exercises,
+            ),
+        )
+        return StagedEffects(
+            changes = listOf(
+                SyncChangeModel(
+                    aggregateType = AggregateType.WORKOUT,
+                    aggregateId = workoutId,
+                    operation = ChangeOperation.UPSERT,
+                    revision = revision,
+                    record = CanonicalRecord.Workout(next),
+                ),
+            ),
+            putRoots = mapOf(key to stored.copy(record = CanonicalRecord.Workout(next), revision = revision)),
+            // Removed child IDs stay registered to this root as collision
+            // evidence: they can be restored by a later replacement but never
+            // silently reparented into another root.
+            removeExerciseIds = emptySet(),
+            putExerciseOwners = exercises.associate { it.id to key },
+            removeSetIds = emptySet(),
+            putSetParents = exercises.flatMap { entry -> entry.sets.map { it.id to entry.id } }.toMap(),
+            activeDelta = if (activeWorkouts[accountId] == workoutId) ActiveDelta.Clear else ActiveDelta.Keep,
+        )
+    }
+
+    /**
+     * Creates a fresh active copy of the caller's finished workout. Every
+     * planned binding must cover the current source children exactly, in
+     * order: exercise count, each exercise's source ID, set count, and each
+     * set's source ID. Target IDs are the supplied values only. The new
+     * workout copies the source name, exercise references, order, notes,
+     * configured rest, and set weight/repetitions; every copied set is
+     * incomplete with null recorded rest. A prior active workout is tombstoned
+     * in the same ordered DELETE-then-UPSERT batch. The source is unchanged.
+     * The known revision and client clock never affect the result.
+     */
+    private fun stageWorkoutPerformAgain(accountId: String, command: MutationPayload.WorkoutPerformAgain): StagedEffects {
+        val sourceKey = RootKey(AggregateType.WORKOUT, command.sourceWorkoutId)
+        val stored = liveOwnedRoot(accountId, sourceKey)
+        val source = stored.record as? CanonicalRecord.Workout
+            ?: throw SyncModelException("fake invariant violated: workout root holds another record type")
+        if (source.record.status != "finished") throw FakeRejection(SOURCE_NOT_FINISHED)
+        requireCloneBindings(
+            command.childIds,
+            source.record.exercises.map { it.id },
+            source.record.exercises.map { entry -> entry.sets.map { it.id } },
+        )
+        val targetKey = RootKey(AggregateType.WORKOUT, command.id)
+        requireFreshRoot(targetKey, command.id)
+        checkWorkoutChildren(
+            targetKey,
+            command.id,
+            accountId,
+            command.childIds.map { binding ->
+                Triple(binding.id, source.record.exercises.first { it.id == binding.sourceExerciseId }.exerciseId, binding.sets.map { it.id })
+            },
+        )
+        val exercises = command.childIds.mapIndexed { exerciseIndex, binding ->
+            val sourceEntry = source.record.exercises[exerciseIndex]
+            WorkoutExerciseModel(
+                id = binding.id,
+                exerciseId = sourceEntry.exerciseId,
+                position = exerciseIndex,
+                notes = sourceEntry.notes,
+                restDurationSeconds = sourceEntry.restDurationSeconds,
+                sets = binding.sets.mapIndexed { setIndex, setBinding ->
+                    val sourceSet = sourceEntry.sets[setIndex]
+                    WorkoutSetModel(
+                        id = setBinding.id,
+                        position = setIndex,
+                        repetitions = sourceSet.repetitions,
+                        weightKg = sourceSet.weightKg,
+                        isCompleted = false,
+                        restSeconds = null,
+                    )
+                },
+                exerciseName = resolveExerciseName(sourceEntry.exerciseId, accountId),
+            )
+        }
+        val canonical = validateWorkoutRecordModel(
+            WorkoutRecordModel(
+                id = command.id,
+                name = source.record.name,
+                status = "active",
+                startedAtMillis = command.startedAtMillis,
+                finishedAtMillis = null,
+                revision = 1L,
+                exercises = exercises,
+            ),
+        )
+        val changes = mutableListOf<SyncChangeModel>()
+        val putRoots = HashMap<RootKey, StoredRoot>()
+        val priorActive = activeWorkouts[accountId]
+        if (priorActive != null) {
+            val oldKey = RootKey(AggregateType.WORKOUT, priorActive)
+            val oldRoot = roots[oldKey]
+            if (oldRoot == null || oldRoot.deleted || oldRoot.owner != accountId) {
+                throw SyncModelException("fake invariant violated: stale sole-active pointer")
+            }
+            val oldRevision = oldRoot.revision + 1L
+            changes += SyncChangeModel(
+                aggregateType = AggregateType.WORKOUT,
+                aggregateId = priorActive,
+                operation = ChangeOperation.DELETE,
+                revision = oldRevision,
+                record = null,
+            )
+            putRoots[oldKey] = oldRoot.copy(record = null, revision = oldRevision, deleted = true)
+        }
+        changes += SyncChangeModel(
+            aggregateType = AggregateType.WORKOUT,
+            aggregateId = command.id,
+            operation = ChangeOperation.UPSERT,
+            revision = 1L,
+            record = CanonicalRecord.Workout(canonical),
+        )
+        putRoots[targetKey] = StoredRoot(owner = accountId, record = CanonicalRecord.Workout(canonical), revision = 1L, deleted = false)
+        return StagedEffects(
+            changes = changes,
+            putRoots = putRoots,
+            // Source child reservations stay untouched; new child IDs are
+            // registered to the new root as their own collision evidence.
+            removeExerciseIds = emptySet(),
+            putExerciseOwners = exercises.associate { it.id to targetKey },
+            removeSetIds = emptySet(),
+            putSetParents = exercises.flatMap { entry -> entry.sets.map { it.id to entry.id } }.toMap(),
+            activeDelta = ActiveDelta.Set(command.id),
+        )
+    }
+
+    /**
+     * Starts a fresh active workout from the caller's saved routine. The
+     * source must be saved (`isDraft=false`) with a nonblank name and at
+     * least one exercise; a saved routine that became blank or empty through
+     * autosave is ineligible. Every planned binding must cover the current
+     * source children exactly, in order: exercise count, each exercise's
+     * source ID, set count, and each set's source ID. Target IDs are the
+     * supplied values only. The new workout copies the routine name,
+     * exercise references, order, configured rest, and set
+     * weight/repetitions with the normal empty workout notes; every new set
+     * is incomplete with null recorded rest. A prior active workout is
+     * tombstoned in the same ordered DELETE-then-UPSERT batch. The source is
+     * unchanged. The known revision and client clock never affect the result.
+     */
+    private fun stageRoutineStartWorkout(accountId: String, command: MutationPayload.RoutineStartWorkout): StagedEffects {
+        val sourceKey = RootKey(AggregateType.ROUTINE, command.sourceRoutineId)
+        val stored = liveOwnedRoot(accountId, sourceKey)
+        val source = stored.record as? CanonicalRecord.Routine
+            ?: throw SyncModelException("fake invariant violated: routine root holds another record type")
+        if (source.record.isDraft) throw FakeRejection(INVALID_ROUTINE_STATE)
+        if (source.record.name.isBlank()) throw FakeRejection(INVALID_ROUTINE_STATE)
+        if (source.record.exercises.isEmpty()) throw FakeRejection(INVALID_ROUTINE_STATE)
+        requireCloneBindings(
+            command.childIds,
+            source.record.exercises.map { it.id },
+            source.record.exercises.map { entry -> entry.sets.map { it.id } },
+        )
+        val targetKey = RootKey(AggregateType.WORKOUT, command.id)
+        requireFreshRoot(targetKey, command.id)
+        checkWorkoutChildren(
+            targetKey,
+            command.id,
+            accountId,
+            command.childIds.map { binding ->
+                Triple(binding.id, source.record.exercises.first { it.id == binding.sourceExerciseId }.exerciseId, binding.sets.map { it.id })
+            },
+        )
+        val exercises = command.childIds.mapIndexed { exerciseIndex, binding ->
+            val sourceEntry = source.record.exercises[exerciseIndex]
+            WorkoutExerciseModel(
+                id = binding.id,
+                exerciseId = sourceEntry.exerciseId,
+                position = exerciseIndex,
+                notes = "",
+                restDurationSeconds = sourceEntry.restDurationSeconds,
+                sets = binding.sets.mapIndexed { setIndex, setBinding ->
+                    val sourceSet = sourceEntry.sets[setIndex]
+                    WorkoutSetModel(
+                        id = setBinding.id,
+                        position = setIndex,
+                        repetitions = sourceSet.repetitions,
+                        weightKg = sourceSet.weightKg,
+                        isCompleted = false,
+                        restSeconds = null,
+                    )
+                },
+                exerciseName = resolveExerciseName(sourceEntry.exerciseId, accountId),
+            )
+        }
+        val canonical = validateWorkoutRecordModel(
+            WorkoutRecordModel(
+                id = command.id,
+                name = source.record.name,
+                status = "active",
+                startedAtMillis = command.startedAtMillis,
+                finishedAtMillis = null,
+                revision = 1L,
+                exercises = exercises,
+            ),
+        )
+        val changes = mutableListOf<SyncChangeModel>()
+        val putRoots = HashMap<RootKey, StoredRoot>()
+        val priorActive = activeWorkouts[accountId]
+        if (priorActive != null) {
+            val oldKey = RootKey(AggregateType.WORKOUT, priorActive)
+            val oldRoot = roots[oldKey]
+            if (oldRoot == null || oldRoot.deleted || oldRoot.owner != accountId) {
+                throw SyncModelException("fake invariant violated: stale sole-active pointer")
+            }
+            val oldRevision = oldRoot.revision + 1L
+            changes += SyncChangeModel(
+                aggregateType = AggregateType.WORKOUT,
+                aggregateId = priorActive,
+                operation = ChangeOperation.DELETE,
+                revision = oldRevision,
+                record = null,
+            )
+            putRoots[oldKey] = oldRoot.copy(record = null, revision = oldRevision, deleted = true)
+        }
+        changes += SyncChangeModel(
+            aggregateType = AggregateType.WORKOUT,
+            aggregateId = command.id,
+            operation = ChangeOperation.UPSERT,
+            revision = 1L,
+            record = CanonicalRecord.Workout(canonical),
+        )
+        putRoots[targetKey] = StoredRoot(owner = accountId, record = CanonicalRecord.Workout(canonical), revision = 1L, deleted = false)
+        return StagedEffects(
+            changes = changes,
+            putRoots = putRoots,
+            // Source child reservations stay untouched; new child IDs are
+            // registered to the new root as their own collision evidence.
+            removeExerciseIds = emptySet(),
+            putExerciseOwners = exercises.associate { it.id to targetKey },
+            removeSetIds = emptySet(),
+            putSetParents = exercises.flatMap { entry -> entry.sets.map { it.id to entry.id } }.toMap(),
+            activeDelta = ActiveDelta.Set(command.id),
+        )
+    }
+
+    /**
+     * Saves a copy of the caller's finished workout as a new saved routine
+     * under the supplied nonblank name. Every planned binding must cover the
+     * current source children exactly, in order. The new routine copies
+     * exercise references, order, configured rest, and set
+     * weight/repetitions with `isDraft=false`; routine sets carry only
+     * nullable weight/repetitions. The finished source and the active pointer
+     * are unchanged. The known revision and client clock never affect the
+     * result.
+     */
+    private fun stageWorkoutSaveAsRoutine(accountId: String, command: MutationPayload.WorkoutSaveAsRoutine): StagedEffects {
+        val sourceKey = RootKey(AggregateType.WORKOUT, command.sourceWorkoutId)
+        val stored = liveOwnedRoot(accountId, sourceKey)
+        val source = stored.record as? CanonicalRecord.Workout
+            ?: throw SyncModelException("fake invariant violated: workout root holds another record type")
+        if (source.record.status != "finished") throw FakeRejection(SOURCE_NOT_FINISHED)
+        if (command.name.isBlank()) throw FakeRejection(INVALID_ROUTINE_STATE)
+        requireCloneBindings(
+            command.childIds,
+            source.record.exercises.map { it.id },
+            source.record.exercises.map { entry -> entry.sets.map { it.id } },
+        )
+        val targetKey = RootKey(AggregateType.ROUTINE, command.id)
+        requireFreshRoot(targetKey, command.id)
+        checkRoutineChildren(
+            targetKey,
+            command.id,
+            command.childIds.map { binding -> binding.id to binding.sets.map { it.id } },
+        )
+        val exercises = command.childIds.mapIndexed { exerciseIndex, binding ->
+            val sourceEntry = source.record.exercises[exerciseIndex]
+            RoutineExerciseModel(
+                id = binding.id,
+                exerciseId = sourceEntry.exerciseId,
+                position = exerciseIndex,
+                restDurationSeconds = sourceEntry.restDurationSeconds,
+                sets = binding.sets.mapIndexed { setIndex, setBinding ->
+                    val sourceSet = sourceEntry.sets[setIndex]
+                    RoutineSetModel(
+                        id = setBinding.id,
+                        position = setIndex,
+                        repetitions = sourceSet.repetitions,
+                        weightKg = sourceSet.weightKg,
+                    )
+                },
+                exerciseName = resolveExerciseName(sourceEntry.exerciseId, accountId),
+            )
+        }
+        val canonical = validateRoutineRecordModel(
+            RoutineRecordModel(
+                id = command.id,
+                name = command.name,
+                isDraft = false,
+                revision = 1L,
+                exercises = exercises,
+            ),
+        )
+        return StagedEffects(
+            changes = listOf(
+                SyncChangeModel(
+                    aggregateType = AggregateType.ROUTINE,
+                    aggregateId = command.id,
+                    operation = ChangeOperation.UPSERT,
+                    revision = 1L,
+                    record = CanonicalRecord.Routine(canonical),
+                ),
+            ),
+            putRoots = mapOf(targetKey to StoredRoot(owner = accountId, record = CanonicalRecord.Routine(canonical), revision = 1L, deleted = false)),
+            // Source child reservations stay untouched; new child IDs are
+            // registered to the new root as their own collision evidence.
+            removeExerciseIds = emptySet(),
+            putExerciseOwners = exercises.associate { it.id to targetKey },
+            removeSetIds = emptySet(),
+            putSetParents = exercises.flatMap { entry -> entry.sets.map { it.id to entry.id } }.toMap(),
+            activeDelta = ActiveDelta.Keep,
+        )
+    }
+
+    /**
+     * Appends caller-visible exercises to the caller's live active workout
+     * atomically. Each addition selects one occurrence from current
+     * caller-owned finished history: highest finished time, then highest
+     * workout UUID, then lowest workout-exercise position. Configured rest
+     * and completed set inputs copy from that same occurrence in set order;
+     * every new set is incomplete with null recorded rest and new entries
+     * start with empty notes. An occurrence with no completed sets still
+     * supplies its configured rest alongside exactly one empty set; with no
+     * occurrence at all the rest defaults to 30 seconds. The supplied set-ID
+     * count must match the derived shape exactly. Repeated catalogue
+     * references are allowed, but every new entry/set ID must be fresh:
+     * reuse of the target root ID, any retained root/child ID, or an ID
+     * already owned by the target root collides. All additions validate
+     * before one staged commit; a rejection changes nothing.
+     */
+    private fun stageWorkoutAddExercises(
+        accountId: String,
+        workoutId: String,
+        command: MutationPayload.WorkoutAddExercises,
+    ): StagedEffects {
+        val key = RootKey(AggregateType.WORKOUT, workoutId)
+        val stored = liveOwnedRoot(accountId, key)
+        val record = stored.record as? CanonicalRecord.Workout
+            ?: throw SyncModelException("fake invariant violated: workout root holds another record type")
+        if (record.record.status != "active") throw FakeRejection(IMMUTABLE_FINISHED)
+        val plannedIds = command.additions.flatMap { listOf(it.id) + it.setIds }
+        if (plannedIds.contains(workoutId) || plannedIds.toSet().size != plannedIds.size) {
+            throw FakeRejection(CHILD_COLLISION)
+        }
+        for (id in plannedIds) {
+            if (exerciseOwners.containsKey(id) || setParents.containsKey(id) || isKnownRootId(id)) {
+                throw FakeRejection(CHILD_COLLISION)
+            }
+        }
+        val newEntries = command.additions.mapIndexed { additionIndex, addition ->
+            val exerciseName = resolveExerciseName(addition.exerciseId, accountId)
+            val occurrence = selectHistoryOccurrence(accountId, addition.exerciseId)
+            val completed = occurrence?.sets.orEmpty()
+                .filter { it.isCompleted && it.repetitions != null && it.weightKg != null }
+            val copiedInputs: List<Pair<Int?, Double?>> =
+                if (completed.isEmpty()) listOf(null to null) else completed.map { it.repetitions to it.weightKg }
+            if (addition.setIds.size != copiedInputs.size) throw FakeRejection(HISTORY_SHAPE_CHANGED)
+            WorkoutExerciseModel(
+                id = addition.id,
+                exerciseId = addition.exerciseId,
+                position = record.record.exercises.size + additionIndex,
+                notes = "",
+                restDurationSeconds = occurrence?.restDurationSeconds ?: 30,
+                sets = addition.setIds.mapIndexed { setIndex, setId ->
+                    val (repetitions, weightKg) = copiedInputs[setIndex]
+                    WorkoutSetModel(
+                        id = setId,
+                        position = setIndex,
+                        repetitions = repetitions,
+                        weightKg = weightKg,
+                        isCompleted = false,
+                        restSeconds = null,
+                    )
+                },
+                exerciseName = exerciseName,
+            )
+        }
+        checkWorkoutChildren(
+            key,
+            workoutId,
+            accountId,
+            newEntries.map { Triple(it.id, it.exerciseId, it.sets.map { set -> set.id }) },
+        )
+        val revision = stored.revision + 1L
+        val next = validateWorkoutRecordModel(
+            record.record.copy(
+                revision = revision,
+                exercises = record.record.exercises + newEntries,
+            ),
+        )
+        return StagedEffects(
+            changes = listOf(
+                SyncChangeModel(
+                    aggregateType = AggregateType.WORKOUT,
+                    aggregateId = workoutId,
+                    operation = ChangeOperation.UPSERT,
+                    revision = revision,
+                    record = CanonicalRecord.Workout(next),
+                ),
+            ),
+            putRoots = mapOf(key to stored.copy(record = CanonicalRecord.Workout(next), revision = revision)),
+            // Retained child reservations stay untouched; new child IDs are
+            // registered to this root as their own collision evidence.
+            removeExerciseIds = emptySet(),
+            putExerciseOwners = newEntries.associate { it.id to key },
+            removeSetIds = emptySet(),
+            putSetParents = newEntries.flatMap { entry -> entry.sets.map { it.id to entry.id } }.toMap(),
+            activeDelta = ActiveDelta.Keep,
+        )
+    }
+
+    /**
+     * Replaces one workout-exercise reference on the caller's live active
+     * workout atomically. The target entry must belong to the current child
+     * structure of the envelope root; unknown, foreign, wrong-parent, and
+     * already-removed IDs reject without disclosing which case applied.
+     * Only the catalogue reference and its canonical display name change:
+     * the workout-exercise ID, position, notes, configured rest, and every
+     * set with its ID/inputs/completion/recorded rest are preserved. The new
+     * reference must be caller-visible (seeded bundled or live owned
+     * custom). Finished workouts are immutable.
+     */
+    private fun stageWorkoutReplaceExercise(
+        accountId: String,
+        workoutId: String,
+        command: MutationPayload.WorkoutReplaceExercise,
+    ): StagedEffects {
+        val key = RootKey(AggregateType.WORKOUT, workoutId)
+        val stored = liveOwnedRoot(accountId, key)
+        val record = stored.record as? CanonicalRecord.Workout
+            ?: throw SyncModelException("fake invariant violated: workout root holds another record type")
+        if (record.record.status != "active") throw FakeRejection(IMMUTABLE_FINISHED)
+        val index = record.record.exercises.indexOfFirst { it.id == command.workoutExerciseId }
+        if (index < 0) throw FakeRejection(OWNED_ROOT_MISSING)
+        val exerciseName = resolveExerciseName(command.exerciseId, accountId)
+        val exercises = record.record.exercises.toMutableList()
+        exercises[index] = exercises[index].copy(exerciseId = command.exerciseId, exerciseName = exerciseName)
+        val revision = stored.revision + 1L
+        val next = validateWorkoutRecordModel(
+            record.record.copy(revision = revision, exercises = exercises),
+        )
+        return StagedEffects(
+            changes = listOf(
+                SyncChangeModel(
+                    aggregateType = AggregateType.WORKOUT,
+                    aggregateId = workoutId,
+                    operation = ChangeOperation.UPSERT,
+                    revision = revision,
+                    record = CanonicalRecord.Workout(next),
+                ),
+            ),
+            putRoots = mapOf(key to stored.copy(record = CanonicalRecord.Workout(next), revision = revision)),
+            // No child identity changes, so no ownership updates are staged.
+            removeExerciseIds = emptySet(),
+            putExerciseOwners = emptyMap(),
+            removeSetIds = emptySet(),
+            putSetParents = emptyMap(),
+            activeDelta = ActiveDelta.Keep,
+        )
+    }
+
+    /**
+     * Deletes one workout exercise with its sets from the caller's live
+     * active workout atomically. The target must belong to the current
+     * child structure of the envelope root; unknown, foreign, wrong-parent,
+     * and already-removed IDs reject without disclosing which case applied.
+     * Surviving exercises are renumbered consecutively from zero in current
+     * order. Removed child IDs stay registered as collision evidence.
+     * Finished workouts are immutable.
+     */
+    private fun stageWorkoutDeleteExercise(
+        accountId: String,
+        workoutId: String,
+        command: MutationPayload.WorkoutDeleteExercise,
+    ): StagedEffects {
+        val key = RootKey(AggregateType.WORKOUT, workoutId)
+        val stored = liveOwnedRoot(accountId, key)
+        val record = stored.record as? CanonicalRecord.Workout
+            ?: throw SyncModelException("fake invariant violated: workout root holds another record type")
+        if (record.record.status != "active") throw FakeRejection(IMMUTABLE_FINISHED)
+        if (record.record.exercises.none { it.id == command.workoutExerciseId }) {
+            throw FakeRejection(OWNED_ROOT_MISSING)
+        }
+        val exercises = record.record.exercises
+            .filter { it.id != command.workoutExerciseId }
+            .mapIndexed { exerciseIndex, entry -> entry.copy(position = exerciseIndex) }
+        val revision = stored.revision + 1L
+        val next = validateWorkoutRecordModel(
+            record.record.copy(revision = revision, exercises = exercises),
+        )
+        return StagedEffects(
+            changes = listOf(
+                SyncChangeModel(
+                    aggregateType = AggregateType.WORKOUT,
+                    aggregateId = workoutId,
+                    operation = ChangeOperation.UPSERT,
+                    revision = revision,
+                    record = CanonicalRecord.Workout(next),
+                ),
+            ),
+            putRoots = mapOf(key to stored.copy(record = CanonicalRecord.Workout(next), revision = revision)),
+            // Removed child IDs stay registered to this root as collision
+            // evidence: they can be restored by a later replacement but never
+            // silently reparented into another root.
+            removeExerciseIds = emptySet(),
+            putExerciseOwners = exercises.associate { it.id to key },
+            removeSetIds = emptySet(),
+            putSetParents = exercises.flatMap { entry -> entry.sets.map { it.id to entry.id } }.toMap(),
+            activeDelta = ActiveDelta.Keep,
+        )
+    }
+
+    /**
+     * Deletes one workout set from the caller's live active workout
+     * atomically. The target set must belong to the current child structure
+     * of the envelope root; unknown, foreign, wrong-parent, and
+     * already-removed IDs reject without disclosing which case applied. The
+     * parent exercise is retained even when its last set is removed, and its
+     * surviving sets are renumbered consecutively from zero. Removed set IDs
+     * stay registered as collision evidence. Finished workouts are
+     * immutable.
+     */
+    private fun stageWorkoutDeleteSet(
+        accountId: String,
+        workoutId: String,
+        command: MutationPayload.WorkoutDeleteSet,
+    ): StagedEffects {
+        val key = RootKey(AggregateType.WORKOUT, workoutId)
+        val stored = liveOwnedRoot(accountId, key)
+        val record = stored.record as? CanonicalRecord.Workout
+            ?: throw SyncModelException("fake invariant violated: workout root holds another record type")
+        if (record.record.status != "active") throw FakeRejection(IMMUTABLE_FINISHED)
+        val parentIndex = record.record.exercises.indexOfFirst { entry ->
+            entry.sets.any { it.id == command.workoutSetId }
+        }
+        if (parentIndex < 0) throw FakeRejection(OWNED_ROOT_MISSING)
+        val exercises = record.record.exercises.mapIndexed { exerciseIndex, entry ->
+            if (exerciseIndex != parentIndex) {
+                entry
+            } else {
+                entry.copy(
+                    sets = entry.sets
+                        .filter { it.id != command.workoutSetId }
+                        .mapIndexed { setIndex, set -> set.copy(position = setIndex) },
+                )
+            }
+        }
+        val revision = stored.revision + 1L
+        val next = validateWorkoutRecordModel(
+            record.record.copy(revision = revision, exercises = exercises),
+        )
+        return StagedEffects(
+            changes = listOf(
+                SyncChangeModel(
+                    aggregateType = AggregateType.WORKOUT,
+                    aggregateId = workoutId,
+                    operation = ChangeOperation.UPSERT,
+                    revision = revision,
+                    record = CanonicalRecord.Workout(next),
+                ),
+            ),
+            putRoots = mapOf(key to stored.copy(record = CanonicalRecord.Workout(next), revision = revision)),
+            // Removed child IDs stay registered to this root as collision
+            // evidence: they can be restored by a later replacement but never
+            // silently reparented into another root.
+            removeExerciseIds = emptySet(),
+            putExerciseOwners = exercises.associate { it.id to key },
+            removeSetIds = emptySet(),
+            putSetParents = exercises.flatMap { entry -> entry.sets.map { it.id to entry.id } }.toMap(),
+            activeDelta = ActiveDelta.Keep,
+        )
+    }
+
+    /**
+     * Selects the current caller-owned finished occurrence of an exercise
+     * reference: highest finished time, then highest workout UUID as the
+     * stable tie breaker, then the first workout-exercise position in that
+     * workout. Returns null when no finished history references it.
+     */
+    private fun selectHistoryOccurrence(accountId: String, exerciseId: String): WorkoutExerciseModel? {
+        data class Candidate(val finishedAtMillis: Long, val workoutId: String, val entry: WorkoutExerciseModel)
+        val candidates = mutableListOf<Candidate>()
+        for ((rootKey, stored) in roots) {
+            if (rootKey.aggregateType != AggregateType.WORKOUT) continue
+            if (stored.deleted || stored.owner != accountId) continue
+            val workout = stored.record as? CanonicalRecord.Workout ?: continue
+            if (workout.record.status != "finished") continue
+            val finishedAt = workout.record.finishedAtMillis ?: continue
+            for (entry in workout.record.exercises) {
+                if (entry.exerciseId == exerciseId) candidates += Candidate(finishedAt, workout.record.id, entry)
+            }
+        }
+        return candidates.sortedWith(
+            compareByDescending<Candidate> { it.finishedAtMillis }
+                .thenByDescending { it.workoutId }
+                .thenBy { it.entry.position },
+        ).firstOrNull()?.entry
+    }
+
+    /**
+     * Requires the planned clone/copy bindings to cover the current source
+     * children completely, in exact order: same exercise count with matching
+     * source IDs at each position, and same set count with matching source
+     * set IDs at each nested position.
+     */
+    private fun requireCloneBindings(
+        childIds: List<ChildExerciseBinding>,
+        sourceExerciseIds: List<String>,
+        sourceSetIds: List<List<String>>,
+    ) {
+        if (childIds.size != sourceExerciseIds.size) throw FakeRejection(CHILD_BINDING_MISMATCH)
+        childIds.forEachIndexed { exerciseIndex, binding ->
+            if (binding.sourceExerciseId != sourceExerciseIds[exerciseIndex]) {
+                throw FakeRejection(CHILD_BINDING_MISMATCH)
+            }
+            val expectedSets = sourceSetIds[exerciseIndex]
+            if (binding.sets.size != expectedSets.size) throw FakeRejection(CHILD_BINDING_MISMATCH)
+            binding.sets.forEachIndexed { setIndex, setBinding ->
+                if (setBinding.sourceSetId != expectedSets[setIndex]) {
+                    throw FakeRejection(CHILD_BINDING_MISMATCH)
+                }
+            }
+        }
+    }
+
+    /** Requires a create-only target root with no retained root or child collision. */
+    private fun requireFreshRoot(key: RootKey, rootId: String) {
+        if (rootOwners.containsKey(key) || roots.containsKey(key)) throw FakeRejection(ROOT_ALREADY_EXISTS)
+        if (exerciseOwners.containsKey(rootId) || setParents.containsKey(rootId)) {
+            throw FakeRejection(CHILD_COLLISION)
+        }
+    }
+
     private fun stageRoutineUpsert(accountId: String, input: RoutineInputModel): StagedEffects {
         val key = RootKey(AggregateType.ROUTINE, input.id)
         val known = rootOwners.containsKey(key) || roots.containsKey(key)
@@ -565,6 +1301,115 @@ class FakeSyncService(
             putExerciseOwners = emptyMap(),
             removeSetIds = emptySet(),
             putSetParents = emptyMap(),
+            activeDelta = ActiveDelta.Keep,
+        )
+    }
+
+    /**
+     * Deletes one routine exercise with its sets from the caller's live
+     * routine atomically. Draft and saved routines are both eligible; a
+     * saved routine stays saved even when its last exercise is removed. The
+     * target must belong to the current child structure of the envelope
+     * root; unknown, foreign, wrong-parent, and already-removed IDs reject
+     * without disclosing which case applied. Surviving exercises are
+     * renumbered consecutively from zero in current order. Removed child IDs
+     * stay registered as collision evidence.
+     */
+    private fun stageRoutineDeleteExercise(
+        accountId: String,
+        routineId: String,
+        command: MutationPayload.RoutineDeleteExercise,
+    ): StagedEffects {
+        val key = RootKey(AggregateType.ROUTINE, routineId)
+        val stored = liveOwnedRoot(accountId, key)
+        val existing = stored.record as? CanonicalRecord.Routine
+            ?: throw SyncModelException("fake invariant violated: routine root holds another record type")
+        if (existing.record.exercises.none { it.id == command.routineExerciseId }) {
+            throw FakeRejection(OWNED_ROOT_MISSING)
+        }
+        val exercises = existing.record.exercises
+            .filter { it.id != command.routineExerciseId }
+            .mapIndexed { exerciseIndex, entry -> entry.copy(position = exerciseIndex) }
+        val revision = stored.revision + 1L
+        val next = validateRoutineRecordModel(
+            existing.record.copy(revision = revision, exercises = exercises),
+        )
+        return StagedEffects(
+            changes = listOf(
+                SyncChangeModel(
+                    aggregateType = AggregateType.ROUTINE,
+                    aggregateId = routineId,
+                    operation = ChangeOperation.UPSERT,
+                    revision = revision,
+                    record = CanonicalRecord.Routine(next),
+                ),
+            ),
+            putRoots = mapOf(key to stored.copy(record = CanonicalRecord.Routine(next), revision = revision)),
+            // Removed child IDs stay registered to this root as collision
+            // evidence, exactly like workout replacement.
+            removeExerciseIds = emptySet(),
+            putExerciseOwners = exercises.associate { it.id to key },
+            removeSetIds = emptySet(),
+            putSetParents = exercises.flatMap { entry -> entry.sets.map { it.id to entry.id } }.toMap(),
+            activeDelta = ActiveDelta.Keep,
+        )
+    }
+
+    /**
+     * Deletes one routine set from the caller's live routine atomically.
+     * Draft and saved routines are both eligible; a saved routine stays
+     * saved even when emptied. The target set must belong to the current
+     * child structure of the envelope root; unknown, foreign, wrong-parent,
+     * and already-removed IDs reject without disclosing which case applied.
+     * The parent exercise is retained even when its last set is removed,
+     * and its surviving sets are renumbered consecutively from zero.
+     * Removed set IDs stay registered as collision evidence.
+     */
+    private fun stageRoutineDeleteSet(
+        accountId: String,
+        routineId: String,
+        command: MutationPayload.RoutineDeleteSet,
+    ): StagedEffects {
+        val key = RootKey(AggregateType.ROUTINE, routineId)
+        val stored = liveOwnedRoot(accountId, key)
+        val existing = stored.record as? CanonicalRecord.Routine
+            ?: throw SyncModelException("fake invariant violated: routine root holds another record type")
+        val parentIndex = existing.record.exercises.indexOfFirst { entry ->
+            entry.sets.any { it.id == command.routineSetId }
+        }
+        if (parentIndex < 0) throw FakeRejection(OWNED_ROOT_MISSING)
+        val exercises = existing.record.exercises.mapIndexed { exerciseIndex, entry ->
+            if (exerciseIndex != parentIndex) {
+                entry
+            } else {
+                entry.copy(
+                    sets = entry.sets
+                        .filter { it.id != command.routineSetId }
+                        .mapIndexed { setIndex, set -> set.copy(position = setIndex) },
+                )
+            }
+        }
+        val revision = stored.revision + 1L
+        val next = validateRoutineRecordModel(
+            existing.record.copy(revision = revision, exercises = exercises),
+        )
+        return StagedEffects(
+            changes = listOf(
+                SyncChangeModel(
+                    aggregateType = AggregateType.ROUTINE,
+                    aggregateId = routineId,
+                    operation = ChangeOperation.UPSERT,
+                    revision = revision,
+                    record = CanonicalRecord.Routine(next),
+                ),
+            ),
+            putRoots = mapOf(key to stored.copy(record = CanonicalRecord.Routine(next), revision = revision)),
+            // Removed child IDs stay registered to this root as collision
+            // evidence, exactly like workout replacement.
+            removeExerciseIds = emptySet(),
+            putExerciseOwners = exercises.associate { it.id to key },
+            removeSetIds = emptySet(),
+            putSetParents = exercises.flatMap { entry -> entry.sets.map { it.id to entry.id } }.toMap(),
             activeDelta = ActiveDelta.Keep,
         )
     }

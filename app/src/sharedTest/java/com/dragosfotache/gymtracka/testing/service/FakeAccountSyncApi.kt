@@ -14,7 +14,7 @@ import com.dragosfotache.gymtracka.data.sync.model.SnapshotResultModel
  * [FakeSyncService]. The account is bound through the constructor, exactly
  * like the future authenticated adapter: wire methods accept no
  * owner-controlled account fields. Every call records its opaque arguments
- * verbatim. Push executes the seven basic fake commands in order through the
+ * verbatim. Push executes the seventeen implemented fake commands in order through the
  * service after the approved envelope validation; pull and snapshot remain
  * explicit [UnsupportedOperationException] stubs owned by later assignments.
  */

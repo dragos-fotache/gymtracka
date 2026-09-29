@@ -43,16 +43,16 @@ import org.junit.Test
  * Boundary tests for the sync transport surface: the approved push
  * envelope over real valid distinct durable requests, OpenAPI page limits,
  * verbatim opaque argument recording, cancellation propagation, and fixed
- * failure text with bounded retry hints. Push executes the seven basic fake
- * commands; pull, snapshot, and the remaining semantic commands stay later
- * tasks, and these tests pin that boundary behavior.
+ * failure text with bounded retry hints. Push executes the seventeen implemented
+ * fake commands; pull and snapshot stay later tasks, and these tests pin
+ * that boundary behavior.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SyncApiBoundaryTest {
     companion object {
         const val ACCOUNT_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
         const val ROOT_1 = "11111111-1111-1111-1111-111111111111"
-        const val FINISHED_AT = 1_700_000_000_000L
+        const val SET_1 = "66666666-6666-6666-6666-666666666661"
     }
 
     private fun validRequest(index: Int): DurableRequestModel {
@@ -60,12 +60,12 @@ class SyncApiBoundaryTest {
         return captureDurableRequest(
             MutationEnvelopeModel(
                 mutationId = mutationId,
-                kind = MutationKind.WORKOUT_FINISH,
+                kind = MutationKind.WORKOUT_DELETE_SET,
                 aggregateType = AggregateType.WORKOUT,
                 aggregateId = ROOT_1,
                 localGeneration = 1L,
                 knownServerRevision = null,
-                payload = MutationPayload.WorkoutFinish(FINISHED_AT),
+                payload = MutationPayload.WorkoutDeleteSet(SET_1),
             ),
             listOf(AffectedRootModel(AggregateType.WORKOUT, ROOT_1, 1L)),
         )
@@ -87,13 +87,13 @@ class SyncApiBoundaryTest {
     fun pushAcceptsOneHundredDistinctValidRequests() = runTest {
         val service = FakeSyncService()
         val api = FakeAccountSyncApi(ACCOUNT_A, service)
-        // Structurally valid finish commands execute and reject explicitly:
-        // finish belongs to a later assignment, not the seven basic kinds.
+        // Structurally valid delete-set commands execute and reject explicitly:
+        // the envelope root is unknown, so the lookup fails closed.
         val result = api.push(List(MAX_PUSH_REQUESTS) { validRequest(it) })
         assertEquals(MAX_PUSH_REQUESTS, result.results.size)
         for (outcome in result.results) {
             assertEquals(MutationStatus.REJECTED, outcome.status)
-            assertEquals(FakeSyncService.UNSUPPORTED_MUTATION_KIND, outcome.errorCode)
+            assertEquals(FakeSyncService.OWNED_ROOT_MISSING, outcome.errorCode)
             assertNull(outcome.batch)
         }
         assertEquals(listOf(100), api.pushSizes)

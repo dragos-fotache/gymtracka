@@ -14,7 +14,6 @@ import com.dragosfotache.gymtracka.data.sync.model.CanonicalRecord
 import com.dragosfotache.gymtracka.data.sync.model.ChangeOperation
 import com.dragosfotache.gymtracka.data.sync.model.CustomExerciseRecordModel
 import com.dragosfotache.gymtracka.data.sync.model.DurableRequestModel
-import com.dragosfotache.gymtracka.data.sync.model.ExerciseAddition
 import com.dragosfotache.gymtracka.data.sync.model.ImportRecord
 import com.dragosfotache.gymtracka.data.sync.model.MutationEnvelopeModel
 import com.dragosfotache.gymtracka.data.sync.model.MutationKind
@@ -43,9 +42,9 @@ import org.junit.Test
 
 /**
  * Independent tests for the fake `aggregate.import` and `aggregate.delete`
- * commands, the ten explicitly unsupported kinds, account isolation, and
- * state-aliasing defenses. Expected records and batches are constructed by
- * hand from the specification.
+ * commands, the 017d replacement/deletion kinds against unknown roots,
+ * account isolation, and state-aliasing defenses. Expected records and
+ * batches are constructed by hand from the specification.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class FakeImportDeleteCommandTest {
@@ -592,19 +591,19 @@ class FakeImportDeleteCommandTest {
     }
 
     @Test
-    fun unsupported_allTenKindsRejectWithoutEffectsAndReadsStillThrow() = runTest {
+    fun implementedDeleteReplaceKinds_rejectUnknownRootsWithoutEffectsAndReadsStillThrow() = runTest {
         val harness = FakeSyncHarness()
-        val requests = unsupportedRequests(harness)
-        assertEquals(10, requests.size)
+        val requests = deleteReplaceRequests(harness)
+        assertEquals(5, requests.size)
 
         val state = harness.captureState()
         val result = harness.pushA(*requests.toTypedArray())
-        assertEquals(10, result.results.size)
+        assertEquals(5, result.results.size)
         val mutationIds = result.results.map { it.mutationId }
         assertEquals(mutationIds.toSet().size, mutationIds.size)
         result.results.forEach { outcome ->
             assertEquals(MutationStatus.REJECTED, outcome.status)
-            assertEquals(FakeSyncService.UNSUPPORTED_MUTATION_KIND, outcome.errorCode)
+            assertEquals(FakeSyncService.OWNED_ROOT_MISSING, outcome.errorCode)
             assertNull(outcome.batch)
         }
         state.assertUnchanged()
@@ -755,7 +754,7 @@ class FakeImportDeleteCommandTest {
         )
     }
 
-    private fun unsupportedRequests(harness: FakeSyncHarness): List<DurableRequestModel> {
+    private fun deleteReplaceRequests(harness: FakeSyncHarness): List<DurableRequestModel> {
         fun envelope(
             kind: MutationKind,
             type: AggregateType,
@@ -775,38 +774,6 @@ class FakeImportDeleteCommandTest {
                 listOf(AffectedRootModel(type, id, 1L)),
             )
         return listOf(
-            envelope(
-                MutationKind.WORKOUT_FINISH,
-                AggregateType.WORKOUT,
-                W1,
-                MutationPayload.WorkoutFinish(FINISHED_AT),
-            ),
-            envelope(
-                MutationKind.WORKOUT_PERFORM_AGAIN,
-                AggregateType.WORKOUT,
-                W2,
-                MutationPayload.WorkoutPerformAgain(W1, W2, STARTED_AT, emptyList()),
-            ),
-            envelope(
-                MutationKind.ROUTINE_START_WORKOUT,
-                AggregateType.WORKOUT,
-                W2,
-                MutationPayload.RoutineStartWorkout(R1, W2, STARTED_AT, emptyList()),
-            ),
-            envelope(
-                MutationKind.WORKOUT_SAVE_AS_ROUTINE,
-                AggregateType.ROUTINE,
-                R1,
-                MutationPayload.WorkoutSaveAsRoutine(W1, R1, "Saved Plan", emptyList()),
-            ),
-            envelope(
-                MutationKind.WORKOUT_ADD_EXERCISES,
-                AggregateType.WORKOUT,
-                W1,
-                MutationPayload.WorkoutAddExercises(
-                    listOf(ExerciseAddition(E1, BUNDLED_PUSH_UP, listOf(S1))),
-                ),
-            ),
             envelope(
                 MutationKind.WORKOUT_REPLACE_EXERCISE,
                 AggregateType.WORKOUT,

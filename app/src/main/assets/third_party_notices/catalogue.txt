@@ -1,0 +1,22 @@
+GymTracka bundled exercise catalogue
+Catalogue version: gymtracka-catalogue-v1 (English)
+
+The bundled databases/gym.db was derived from the English JSON dataset at:
+https://github.com/kinetic-place/exercises-db
+Verified matching source commit: 1783421f145e546fa168c591a0e4d11cae6f23df
+https://github.com/kinetic-place/exercises-db/tree/1783421f145e546fa168c591a0e4d11cae6f23df/en
+
+Copyright (c) 2026 Kinetic.place
+Licensed under the MIT License; see kinetic-place-MIT.txt in this directory
+for the complete original copyright, permission and warranty notice.
+
+Kinetic.place acknowledges wrkout/exercises.json as its foundational exercise list:
+https://github.com/wrkout/exercises.json
+That project is released under the Unlicense. Its complete notice is preserved
+in wrkout-Unlicense.txt, from license reference commit:
+5994bea047eee4d39a2c0872be3dd8fdd258ba31
+This reference pins the inspected license, not Kinetic.place's historical import.
+
+These notices concern the bundled catalogue, not user-created workouts or
+other GymTracka application code. Shared seed files, checksums, import mapping
+and the read-only compatibility verifier are maintained in shared-docs/catalogue/.

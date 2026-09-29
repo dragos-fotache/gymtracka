@@ -4,8 +4,10 @@ import com.dragosfotache.gymtracka.data.sync.codec.captureDurableRequest
 import com.dragosfotache.gymtracka.data.sync.model.AffectedRootModel
 import com.dragosfotache.gymtracka.data.sync.model.AggregateType
 import com.dragosfotache.gymtracka.data.sync.model.CanonicalRecord
+import com.dragosfotache.gymtracka.data.sync.model.ChildExerciseBinding
 import com.dragosfotache.gymtracka.data.sync.model.CustomExerciseInputModel
 import com.dragosfotache.gymtracka.data.sync.model.DurableRequestModel
+import com.dragosfotache.gymtracka.data.sync.model.ExerciseAddition
 import com.dragosfotache.gymtracka.data.sync.model.ImportRecord
 import com.dragosfotache.gymtracka.data.sync.model.MutationEnvelopeModel
 import com.dragosfotache.gymtracka.data.sync.model.MutationKind
@@ -202,6 +204,153 @@ class FakeSyncHarness(batchUuidCount: Int = 32) {
             routineId,
             MutationPayload.RoutineSave(name),
         )
+
+    fun finishRequest(
+        workoutId: String,
+        finishedAt: Long = FakeSyncFixtures.FINISHED_AT,
+        generation: Long = 1L,
+        knownServerRevision: Long? = null,
+    ) = capture(
+        MutationKind.WORKOUT_FINISH,
+        AggregateType.WORKOUT,
+        workoutId,
+        MutationPayload.WorkoutFinish(finishedAt),
+        generation,
+        knownServerRevision,
+    )
+
+    fun performAgainRequest(
+        sourceWorkoutId: String,
+        id: String,
+        startedAt: Long = FakeSyncFixtures.STARTED_AT,
+        childIds: List<ChildExerciseBinding>,
+        generation: Long = 1L,
+        knownServerRevision: Long? = null,
+    ) = capture(
+        MutationKind.WORKOUT_PERFORM_AGAIN,
+        AggregateType.WORKOUT,
+        id,
+        MutationPayload.WorkoutPerformAgain(sourceWorkoutId, id, startedAt, childIds),
+        generation,
+        knownServerRevision,
+    )
+
+    fun startRoutineWorkoutRequest(
+        sourceRoutineId: String,
+        id: String,
+        startedAt: Long = FakeSyncFixtures.STARTED_AT,
+        childIds: List<ChildExerciseBinding>,
+        generation: Long = 1L,
+        knownServerRevision: Long? = null,
+    ) = capture(
+        MutationKind.ROUTINE_START_WORKOUT,
+        AggregateType.WORKOUT,
+        id,
+        MutationPayload.RoutineStartWorkout(sourceRoutineId, id, startedAt, childIds),
+        generation,
+        knownServerRevision,
+    )
+
+    fun saveAsRoutineRequest(
+        sourceWorkoutId: String,
+        id: String,
+        name: String,
+        childIds: List<ChildExerciseBinding>,
+        generation: Long = 1L,
+        knownServerRevision: Long? = null,
+    ) = capture(
+        MutationKind.WORKOUT_SAVE_AS_ROUTINE,
+        AggregateType.ROUTINE,
+        id,
+        MutationPayload.WorkoutSaveAsRoutine(sourceWorkoutId, id, name, childIds),
+        generation,
+        knownServerRevision,
+    )
+
+    fun addExercisesRequest(
+        workoutId: String,
+        additions: List<ExerciseAddition>,
+        generation: Long = 1L,
+        knownServerRevision: Long? = null,
+    ) = capture(
+        MutationKind.WORKOUT_ADD_EXERCISES,
+        AggregateType.WORKOUT,
+        workoutId,
+        MutationPayload.WorkoutAddExercises(additions),
+        generation,
+        knownServerRevision,
+    )
+
+    fun replaceExerciseRequest(
+        workoutId: String,
+        workoutExerciseId: String,
+        exerciseId: String,
+        generation: Long = 1L,
+        knownServerRevision: Long? = null,
+    ) = capture(
+        MutationKind.WORKOUT_REPLACE_EXERCISE,
+        AggregateType.WORKOUT,
+        workoutId,
+        MutationPayload.WorkoutReplaceExercise(workoutExerciseId, exerciseId),
+        generation,
+        knownServerRevision,
+    )
+
+    fun deleteWorkoutExerciseRequest(
+        workoutId: String,
+        workoutExerciseId: String,
+        generation: Long = 1L,
+        knownServerRevision: Long? = null,
+    ) = capture(
+        MutationKind.WORKOUT_DELETE_EXERCISE,
+        AggregateType.WORKOUT,
+        workoutId,
+        MutationPayload.WorkoutDeleteExercise(workoutExerciseId),
+        generation,
+        knownServerRevision,
+    )
+
+    fun deleteWorkoutSetRequest(
+        workoutId: String,
+        workoutSetId: String,
+        generation: Long = 1L,
+        knownServerRevision: Long? = null,
+    ) = capture(
+        MutationKind.WORKOUT_DELETE_SET,
+        AggregateType.WORKOUT,
+        workoutId,
+        MutationPayload.WorkoutDeleteSet(workoutSetId),
+        generation,
+        knownServerRevision,
+    )
+
+    fun deleteRoutineExerciseRequest(
+        routineId: String,
+        routineExerciseId: String,
+        generation: Long = 1L,
+        knownServerRevision: Long? = null,
+    ) = capture(
+        MutationKind.ROUTINE_DELETE_EXERCISE,
+        AggregateType.ROUTINE,
+        routineId,
+        MutationPayload.RoutineDeleteExercise(routineExerciseId),
+        generation,
+        knownServerRevision,
+    )
+
+    fun deleteRoutineSetRequest(
+        routineId: String,
+        routineSetId: String,
+        generation: Long = 1L,
+        knownServerRevision: Long? = null,
+    ) = capture(
+        MutationKind.ROUTINE_DELETE_SET,
+        AggregateType.ROUTINE,
+        routineId,
+        MutationPayload.RoutineDeleteSet(routineSetId),
+        generation,
+        knownServerRevision,
+    )
 
     fun customUpsertRequest(input: CustomExerciseInputModel) =
         capture(
