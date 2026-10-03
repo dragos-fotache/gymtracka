@@ -62,11 +62,25 @@ internal fun validateRoutineRecordExercises(
 
 fun validateRoutineInputModel(input: RoutineInputModel): RoutineInputModel {
     requireWorkoutUuid(input.id, "id")
-    return input.copy(exercises = validateRoutineInputExercises(input.exercises))
+    val exercises = validateRoutineInputExercises(input.exercises)
+    requireAggregateFamilyDistinct(
+        input.id,
+        exercises.map { it.id },
+        exercises.flatMap { entry -> entry.sets.map { it.id } },
+        "Routine",
+    )
+    return input.copy(exercises = exercises)
 }
 
 fun validateRoutineRecordModel(record: RoutineRecordModel): RoutineRecordModel {
     requireWorkoutUuid(record.id, "id")
     requirePositiveRevision(record.revision, "Routine record")
-    return record.copy(exercises = validateRoutineRecordExercises(record.exercises))
+    val exercises = validateRoutineRecordExercises(record.exercises)
+    requireAggregateFamilyDistinct(
+        record.id,
+        exercises.map { it.id },
+        exercises.flatMap { entry -> entry.sets.map { it.id } },
+        "Routine",
+    )
+    return record.copy(exercises = exercises)
 }

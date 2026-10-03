@@ -12,6 +12,9 @@ import com.dragosfotache.gymtracka.data.sync.api.MIN_SNAPSHOT_LIMIT
 import com.dragosfotache.gymtracka.data.sync.api.SyncApiException
 import com.dragosfotache.gymtracka.data.sync.api.boundedPullLimit
 import com.dragosfotache.gymtracka.data.sync.api.boundedSnapshotLimit
+import com.dragosfotache.gymtracka.data.sync.backend.HttpGymSyncApi
+import com.dragosfotache.gymtracka.data.sync.backend.SyncHttpResponse
+import com.dragosfotache.gymtracka.data.sync.backend.SyncHttpTransport
 import com.dragosfotache.gymtracka.data.sync.codec.captureDurableRequest
 import com.dragosfotache.gymtracka.data.sync.model.AffectedRootModel
 import com.dragosfotache.gymtracka.data.sync.model.AggregateType
@@ -24,14 +27,13 @@ import com.dragosfotache.gymtracka.data.sync.model.PullResultModel
 import com.dragosfotache.gymtracka.data.sync.model.PushResultModel
 import com.dragosfotache.gymtracka.data.sync.model.SnapshotResultModel
 import com.dragosfotache.gymtracka.data.sync.model.SyncModelException
-import com.dragosfotache.gymtracka.testing.service.FakeAccountSyncApi
-import com.dragosfotache.gymtracka.testing.service.FakeSyncService
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -43,16 +45,56 @@ import org.junit.Test
  * Boundary tests for the sync transport surface: the approved push
  * envelope over real valid distinct durable requests, OpenAPI page limits,
  * verbatim opaque argument recording, cancellation propagation, and fixed
- * failure text with bounded retry hints. Push executes the seventeen implemented
- * fake commands; pull and snapshot stay later tasks, and these tests pin
- * that boundary behavior.
+ * failure text with bounded retry hints. Pushes run through the test-only
+ * HTTP adapter against a scripted transport; pull and snapshot return canned
+ * valid pages so recording assertions execute without a backend.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SyncApiBoundaryTest {
     companion object {
-        const val ACCOUNT_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        const val ACCOUNT_TOKEN = "boundary-test-token"
         const val ROOT_1 = "11111111-1111-1111-1111-111111111111"
         const val SET_1 = "66666666-6666-6666-6666-666666666661"
+    }
+
+    private data class RecordedCall(
+        val method: String,
+        val path: String,
+        val query: Map<String, String>,
+        val body: String?,
+        val authorization: String,
+    )
+
+    private class ScriptedTransport(val handler: (RecordedCall) -> SyncHttpResponse) : SyncHttpTransport {
+        val calls = mutableListOf<RecordedCall>()
+        var transported = false
+
+        override suspend fun exchange(
+            method: String,
+            path: String,
+            query: Map<String, String>,
+            headers: Map<String, String>,
+            body: String?,
+            authorization: String,
+        ): SyncHttpResponse {
+            transported = true
+            val call = RecordedCall(method, path, query.toMap(), body, authorization)
+            calls += call
+            return handler(call)
+        }
+    }
+
+    private fun api(transport: ScriptedTransport) = HttpGymSyncApi(transport, ACCOUNT_TOKEN)
+
+    /** Rejected outcomes echo the submitted IDs so count/order checks execute. */
+    private fun rejectedResults(call: RecordedCall): String {
+        val body = call.body ?: throw AssertionError("push requires a body")
+        val array = JSONObject(body).getJSONArray("mutations")
+        val outcomes = List(array.length()) { index ->
+            val id = array.getJSONObject(index).getString("mutationId")
+            "{\"mutationId\":\"$id\",\"status\":\"rejected\",\"errorCode\":\"not_found\",\"batch\":null}"
+        }
+        return "{\"results\":[" + outcomes.joinToString(",") + "]}"
     }
 
     private fun validRequest(index: Int): DurableRequestModel {
@@ -73,68 +115,64 @@ class SyncApiBoundaryTest {
 
     @Test
     fun pushAcceptsEmptyBatchEnvelope() = runTest {
-        // Empty is valid per encodePushMutationsBody/OpenAPI (no minItems);
-        // execution returns an empty result with no state changes.
-        val service = FakeSyncService()
-        val api = FakeAccountSyncApi(ACCOUNT_A, service)
-        val result = api.push(emptyList())
+        // Empty is valid per encodePushMutationsBody/OpenAPI (no minItems).
+        val transport = ScriptedTransport { SyncHttpResponse(200, emptyMap(), "{\"results\":[]}") }
+        val result = api(transport).push(emptyList())
         assertTrue(result.results.isEmpty())
-        assertEquals(listOf(0), api.pushSizes)
-        assertTrue(service.loggedBatches(ACCOUNT_A).isEmpty())
+        assertEquals("{\"mutations\":[]}", transport.calls.single().body)
+        assertEquals("Bearer $ACCOUNT_TOKEN", transport.calls.single().authorization)
     }
 
     @Test
     fun pushAcceptsOneHundredDistinctValidRequests() = runTest {
-        val service = FakeSyncService()
-        val api = FakeAccountSyncApi(ACCOUNT_A, service)
-        // Structurally valid delete-set commands execute and reject explicitly:
-        // the envelope root is unknown, so the lookup fails closed.
-        val result = api.push(List(MAX_PUSH_REQUESTS) { validRequest(it) })
+        val transport = ScriptedTransport { call -> SyncHttpResponse(200, emptyMap(), rejectedResults(call)) }
+        // Structurally valid requests pass client validation and reach the
+        // transport; per-mutation outcomes arrive in submitted order.
+        val result = api(transport).push(List(MAX_PUSH_REQUESTS) { validRequest(it) })
         assertEquals(MAX_PUSH_REQUESTS, result.results.size)
         for (outcome in result.results) {
             assertEquals(MutationStatus.REJECTED, outcome.status)
-            assertEquals(FakeSyncService.OWNED_ROOT_MISSING, outcome.errorCode)
+            assertEquals("not_found", outcome.errorCode)
             assertNull(outcome.batch)
         }
-        assertEquals(listOf(100), api.pushSizes)
         assertEquals(100, MAX_PUSH_REQUESTS)
-        assertTrue(service.loggedBatches(ACCOUNT_A).isEmpty())
+        assertTrue(transport.calls.single().body!!.contains("\"mutations\":["))
     }
 
     @Test
     fun pushRejectsOverOneHundredDistinctValidRequests() = runTest {
-        val api = FakeAccountSyncApi(ACCOUNT_A, FakeSyncService())
+        val transport = ScriptedTransport { SyncHttpResponse(200, emptyMap(), "{\"results\":[]}") }
         try {
-            api.push(List(MAX_PUSH_REQUESTS + 1) { validRequest(it) })
+            api(transport).push(List(MAX_PUSH_REQUESTS + 1) { validRequest(it) })
             fail("Expected a 101-request push batch to be rejected")
         } catch (e: SyncModelException) {
             assertTrue(e.message!!.contains("100"))
         }
-        assertTrue(api.pushSizes.isEmpty())
+        assertFalse(transport.transported)
     }
 
     @Test
     fun pushRejectsDuplicateMutationIds() = runTest {
-        val api = FakeAccountSyncApi(ACCOUNT_A, FakeSyncService())
+        val transport = ScriptedTransport { SyncHttpResponse(200, emptyMap(), "{\"results\":[]}") }
         try {
-            api.push(listOf(validRequest(7), validRequest(7)))
+            api(transport).push(listOf(validRequest(7), validRequest(7)))
             fail("Expected duplicate mutation IDs to be rejected")
         } catch (e: SyncModelException) {
             assertTrue(e.message!!.contains("duplicate"))
         }
-        assertTrue(api.pushSizes.isEmpty())
+        assertFalse(transport.transported)
     }
 
     @Test
     fun pushRejectsMalformedWrapper() = runTest {
-        val api = FakeAccountSyncApi(ACCOUNT_A, FakeSyncService())
+        val transport = ScriptedTransport { SyncHttpResponse(200, emptyMap(), "{\"results\":[]}") }
         val tampered = validRequest(3).copy(requestJson = "{\"tampered\":true}")
         try {
-            api.push(listOf(tampered))
+            api(transport).push(listOf(tampered))
             fail("Expected a text-mismatched wrapper to be rejected")
         } catch (_: SyncModelException) {
         }
-        assertTrue(api.pushSizes.isEmpty())
+        assertFalse(transport.transported)
     }
 
     @Test
@@ -155,49 +193,39 @@ class SyncApiBoundaryTest {
 
     @Test
     fun opaquePullArgumentsAreRecordedVerbatim() = runTest {
-        val api = FakeAccountSyncApi(ACCOUNT_A, FakeSyncService())
+        val transport = ScriptedTransport {
+            SyncHttpResponse(200, emptyMap(), "{\"batches\":[],\"nextCursor\":\"n\",\"hasMore\":false}")
+        }
         val opaque = "opaque::99/batches?x=1"
-        try {
-            api.pull(opaque, 5)
-            fail("Expected fake pull to be explicitly stubbed")
-        } catch (e: UnsupportedOperationException) {
-            assertTrue(e.message!!.contains("later assignment"))
-        }
-        try {
-            api.pull(null)
-            fail("Expected fake pull to be explicitly stubbed")
-        } catch (_: UnsupportedOperationException) {
-        }
+        api(transport).pull(opaque, 5)
+        api(transport).pull(null)
         assertEquals(
             listOf(
-                FakeAccountSyncApi.PullCall(opaque, 5),
-                FakeAccountSyncApi.PullCall(null, DEFAULT_PULL_LIMIT),
+                RecordedCall("GET", "/v1/sync/pull", mapOf("cursor" to opaque, "limit" to "5"), null, "Bearer $ACCOUNT_TOKEN"),
+                RecordedCall("GET", "/v1/sync/pull", mapOf("limit" to DEFAULT_PULL_LIMIT.toString()), null, "Bearer $ACCOUNT_TOKEN"),
             ),
-            api.pullCalls,
+            transport.calls,
         )
     }
 
     @Test
     fun opaqueSnapshotArgumentsAreRecordedVerbatim() = runTest {
-        val api = FakeAccountSyncApi(ACCOUNT_A, FakeSyncService())
+        val transport = ScriptedTransport {
+            SyncHttpResponse(
+                200,
+                emptyMap(),
+                "{\"records\":[],\"baselineCursor\":\"b\",\"nextPageToken\":null,\"hasMore\":false}",
+            )
+        }
         val opaque = "snapshot-token::7"
-        try {
-            api.snapshot(opaque, 7)
-            fail("Expected fake snapshot to be explicitly stubbed")
-        } catch (e: UnsupportedOperationException) {
-            assertTrue(e.message!!.contains("later assignment"))
-        }
-        try {
-            api.snapshot(null)
-            fail("Expected fake snapshot to be explicitly stubbed")
-        } catch (_: UnsupportedOperationException) {
-        }
+        api(transport).snapshot(opaque, 7)
+        api(transport).snapshot(null)
         assertEquals(
             listOf(
-                FakeAccountSyncApi.SnapshotCall(opaque, 7),
-                FakeAccountSyncApi.SnapshotCall(null, DEFAULT_SNAPSHOT_LIMIT),
+                RecordedCall("GET", "/v1/sync/snapshot", mapOf("pageToken" to opaque, "limit" to "7"), null, "Bearer $ACCOUNT_TOKEN"),
+                RecordedCall("GET", "/v1/sync/snapshot", mapOf("limit" to DEFAULT_SNAPSHOT_LIMIT.toString()), null, "Bearer $ACCOUNT_TOKEN"),
             ),
-            api.snapshotCalls,
+            transport.calls,
         )
     }
 
@@ -242,10 +270,10 @@ class SyncApiBoundaryTest {
             SyncApiException.Transient() to
                 ("transient" to "transient sync failure; retry with bounded backoff"),
             SyncApiException.AuthenticationRequired() to
-                ("authentication_required" to "foreground reauthentication required"),
+                ("authentication_required" to "service access authentication required"),
             SyncApiException.CursorExpired() to
                 ("cursor_expired" to "change cursor expired; full resync required"),
-            SyncApiException.RequestRejected("owned_root_missing") to
+            SyncApiException.RequestRejected("not_found") to
                 ("request_rejected" to "permanent top-level request rejection"),
             SyncApiException.MalformedResponse() to
                 ("malformed_response" to "malformed or inconsistent protocol response"),
@@ -261,7 +289,7 @@ class SyncApiBoundaryTest {
             }
         }
         assertEquals(
-            "owned_root_missing",
+            "not_found",
             (failures[3].first as SyncApiException.RequestRejected).errorCode,
         )
     }

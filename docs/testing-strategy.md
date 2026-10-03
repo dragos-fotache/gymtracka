@@ -71,8 +71,8 @@ python3 -B -m unittest discover -s shared-docs/catalogue -p 'test_*.py'
 
 ## Current baseline — simulator retired (2026-10-02)
 
-This records the retirement baseline. The newer R02a gate below raises the offline JVM total to 200 and adds six
-filtered Android smoke tests; it is not a new full instrumentation or real-backend pass.
+This records the retirement baseline. R02a added six filtered Android smoke tests and raised offline coverage to 200;
+R02b raised it to 216 and R02c to 283. The newer model/failure slices add no device or real-backend pass.
 
 - **183 offline JVM tests**, including 29 HTTP-adapter tests, 23 pure fixture-configuration tests, and the 10 retained
   sync-boundary tests. They need no backend or external configuration. A local loopback HTTP stub tests cancellation
@@ -144,6 +144,52 @@ than expanding this slice into a new raw grammar. See the [shared specification]
 
 No real backend, Google OAuth, phone/laptop journey, hosted CI, Room migration or full device regression was executed
 for R02a. The 46 real-backend and 11 Python launcher tests remain earlier evidence, not fresh passes.
+
+## R02b — family identity rules (2026-10-03)
+
+The [R02b coordinator review](remaining-work/R02b-review.md) accepts the supplied-ID model/codec slice:
+
+- **216 offline JVM tests in 28 suites**, executed in the forced coordinator gate with zero failures/errors/skips.
+  This includes all prior 200 tests and 16 independently authored, table-driven methods in
+  `FamilyIdentityValidationTest` and `CopyIdentityValidationTest`.
+- Identity tests cover aggregate role aliases across active/finished/draft/saved/import forms, independent catalogue/
+  mutation IDs, position sorting/null fidelity, both canonical protocol record families and durable byte preservation.
+  Copy tables cover source/target internal uniqueness, same-family all-role overlap refusal, legal cross-family UUID
+  reuse, empty/ordered bindings and unchanged addition-root guards. Positive controls vary only the identity under test.
+- Worker production compilation and QA's two focused runs passed; coordinator independently passed production and
+  Android-test Kotlin compilation, full offline JVM, assembly and lint. Only existing build/compiler/lint warnings remain.
+- Temporary coordinator-only oracle probes on final compiled code classified 738 copy bodies (109 valid accepted,
+  629 forbidden rejected) and 561 aggregate/import bodies (191 valid accepted, 370 forbidden rejected), with zero
+  mismatches. These are supplementary stateless diagnostics, not maintained suites or backend verification.
+
+QA retained production-source isolation while correcting fixture arity/comparison/parenthesis issues, root-context
+assertions, incomplete variant coverage and formatting after coordinator review. No old test was changed or removed.
+The source guard operates on supplied IDs only; real-service ownership/lifetime reservations and Room publication remain
+later gates. R02b did not run a device, Room/migration or backend gate; R02a's six platform smoke tests and M3's full
+161-test device run remain prior evidence. See the [specification](remaining-work/R02b-task.md).
+
+## R02c — typed failure distinctions (2026-10-03)
+
+The [R02c coordinator review](remaining-work/R02c-review.md) accepts the SDK failure vocabulary and JVM-only adapter
+alignment, not a production transport/recovery engine:
+
+- **283 offline JVM tests in 30 suites**, all executed in the forced coordinator gate, zero failures/errors/skips.
+  This includes the prior 216 and 67 independent methods: 24 in `ServiceFailureTypesTest`, 43 in
+  `HttpFailureCategoriesTest`. Count is not the acceptance criterion; the routing/constructor tables and observations are.
+- Tests distinguish access-auth/foreground reauth and invalid/expired tokens, all ten fixed category/code/message rows,
+  closed causes, capped hints, unknown long SDK code retention, status/operation precedence, malformed/error redaction,
+  original transport cancellation on all three operations, normal rejected HTTP 200 outcomes and exact single-send
+  frozen request bytes, including 413 errors. All new transport inputs are scripted without network/backend state.
+- Worker production compile, coordinator test-adapter compilation and QA focused execution passed; coordinator then
+  independently forced full offline JVM, production/Android-test compilation, debug assembly and lint. Only existing
+  warnings remain. Contributors used bounded unavailable/indexing mcpls attempts rather than configuration changes.
+- Coordinator updated legacy access-auth/snapshot expectations and unknown-code coverage, plus three invalid-token
+  catch/assert expectations in the Android-owned real-backend isolation suite. Those external-state tests COMPILED but
+  were not run; the 46-test real-backend baseline is not a new pass.
+
+No device, Room/migration, Google OAuth, production HTTP/engine, hosted CI or personal laptop journey was executed.
+R02a's six platform tests and M3's full 161-device-test gate remain prior evidence. Existing JVM adapter extraction
+constraints are test-only; production response parsing and recovery remain R03 onward. See [spec](remaining-work/R02c-task.md).
 
 ## Historical baseline before simulator retirement
 
@@ -424,7 +470,8 @@ appropriate full layer before marking a milestone complete.
 ## Sync test expansion
 
 The [remaining-work roadmap](remaining-work-roadmap.md) assigns per-task acceptance outcomes and separate engine
-convergence, live/device and future-public audit gates. R02a is accepted; all other implementation slices remain pending.
+convergence, live/device and future-public audit gates. R02a, R02b and R02c are accepted; later implementation slices
+remain pending and require separate authorization.
 [R01 planning](remaining-work/R01-task.md) and its [invariant/test matrix](remaining-work/R01-design.md) were approved by
 the owner on 2026-10-03. These planning updates add no test
 pass or implemented capability. The current target is the owner's phone and personal laptop-hosted service: core

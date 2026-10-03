@@ -14,6 +14,7 @@ coroutines = "1.11.0"
 json = "20260719"
 serialization = "1.11.0"
 desugarJdkLibs = "2.1.5"
+postgresql = "42.7.13"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -41,6 +42,7 @@ json = { group = "org.json", name = "json", version.ref = "json" }
 kotlinx-serialization-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-core", version.ref = "serialization" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugarJdkLibs" }
+postgresql = { group = "org.postgresql", name = "postgresql", version.ref = "postgresql" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

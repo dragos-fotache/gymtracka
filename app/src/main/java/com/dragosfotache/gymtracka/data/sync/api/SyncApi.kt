@@ -7,9 +7,9 @@ import com.dragosfotache.gymtracka.data.sync.model.PushResultModel
 import com.dragosfotache.gymtracka.data.sync.model.SnapshotResultModel
 
 /**
- * SDK-independent sync transport boundary. Implemented by the future HTTP
- * adapter and by the test-only fake service; never by Room, engine, UI, or
- * worker code. No Android, Room, Google, or HTTP types appear here.
+ * SDK-independent sync transport boundary. Implemented by the future production
+ * HTTP adapter and by the test-only HTTP adapter; never by Room, engine, UI,
+ * or worker code. No Android, Room, Google, or HTTP types appear here.
  *
  * The instance binds the authenticated account and session through its
  * adapter: wire methods never accept owner-controlled account fields, and the
@@ -36,21 +36,34 @@ interface GymSyncApi {
      * Submits frozen durable requests in outbox order. Input uses the approved
      * frozen request objects: wire text and IDs stay unchanged across retries,
      * and the returned batches are complete and atomic. Per-mutation rejection
-     * remains a [PushResultModel] outcome, never an exception.
+     * remains a [PushResultModel] outcome, never an exception. Top-level
+     * failures throw SyncApiException subtypes (transient, access
+     * authentication, reauthentication, request-too-large, request-rejected,
+     * or malformed-response categories); cancellation propagates unchanged.
      */
     suspend fun push(requests: List<DurableRequestModel>): PushResultModel
 
     /**
      * Reads ordered account change batches after [cursor]. A null cursor reads
      * from the start; callers without a persisted account cursor bootstrap
-     * from a full snapshot instead of retained incremental history.
+     * from a full snapshot instead of retained incremental history. An
+     * unknown, foreign, or malformed cursor throws `InvalidCursor` (never an
+     * expiry shortcut); a cursor older than retained history throws
+     * `CursorExpired` and requires a full resync. A read-token code on the
+     * wrong operation or an ordinary wrong 4xx status stays a permanent
+     * request rejection; 401/413/429 and retryable 5xx keep their own
+     * categories. Cancellation propagates unchanged.
      */
     suspend fun pull(cursor: String?, limit: Int = DEFAULT_PULL_LIMIT): PullResultModel
 
     /**
      * Pages current non-deleted aggregates for a full resync. A null
      * [pageToken] starts the snapshot; the token binds one stable snapshot
-     * and its authenticated account.
+     * and its authenticated account. An unknown, foreign, or malformed token
+     * throws `InvalidSnapshotToken` (never an expiry shortcut); an
+     * authentically expired token throws `SnapshotExpired`, discarding staged
+     * pages and restarting without the token. Cancellation propagates
+     * unchanged.
      */
     suspend fun snapshot(pageToken: String?, limit: Int = DEFAULT_SNAPSHOT_LIMIT): SnapshotResultModel
 }

@@ -87,9 +87,12 @@ interface GoogleIdentityProvider {
  * refresh, and logout operations. Exchange and refresh take an explicit
  * caller-supplied stable idempotency key so lost-response retries replay
  * the original grant instead of minting a second one; refresh must never
- * change the account identity. Logout revokes the refresh-token session and
- * is idempotent for an already-revoked token; local sign-out itself always
- * succeeds offline and is handled outside this interface.
+ * change the account identity. An expired, revoked, or otherwise invalid
+ * refresh credential fails with `reauthentication_required` and requires
+ * foreground reauthentication without deleting local domain data. Logout
+ * revokes the refresh-token session and is idempotent for an already-revoked
+ * token; local sign-out itself always succeeds offline and is handled outside
+ * this interface.
  */
 interface ServiceAuthApi {
     suspend fun challenge(): ServiceChallenge
@@ -101,7 +104,13 @@ interface ServiceAuthApi {
     suspend fun logout(refreshToken: OpaqueToken)
 }
 
-/** Account/session-bound provider of the opaque service bearer credential. */
+/**
+ * Account/session-bound provider of the opaque service bearer credential.
+ * Access denial permits one serialized refresh-and-unchanged-retry; an
+ * explicit `reauthentication_required` requires foreground reauthentication
+ * instead of another automatic refresh. Neither authorizes account or cache
+ * deletion.
+ */
 interface AccessTokenProvider {
     suspend fun accessToken(): OpaqueToken
 }

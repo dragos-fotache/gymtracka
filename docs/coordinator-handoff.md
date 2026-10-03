@@ -7,7 +7,7 @@ this repository's top-level `docs/`, alongside `shared-docs/`. Shared product be
 artifacts remain in `shared-docs/`. Start with root [AGENTS.md](../AGENTS.md) and this handoff; follow the current roadmap,
 not the archived execution instructions. Create detailed R01/subtask plans under `docs/remaining-work/`.
 
-**Current delivery:** R01 planning/design and **R02a implementation are accepted** (2026-10-03).
+**Current delivery:** R01 planning/design and **R02a/R02b/R02c implementations are accepted** (2026-10-03).
 Read the [R01 audit/task](remaining-work/R01-task.md), [integration design](remaining-work/R01-design.md),
 [planning verification](remaining-work/R01-review.md), [R02a shared specification](remaining-work/R02a-task.md) and
 [R02a coordinator review](remaining-work/R02a-review.md). R02a adds the focused iterative original-text duplicate-member
@@ -18,10 +18,29 @@ Actual R02a gates: **200 offline JVM tests in 26 suites**, **6 filtered Android 
 production and Android-test Kotlin compilation, debug assembly and lint passed; zero test failures/errors/skips.
 No full instrumentation, real-backend, OAuth or personal phone/laptop pass is added. The owner authorized the final
 R02a delivery commit, including affected existing Android docs; unrelated dirty-tree and nested shared-docs work stays
-outside it. No pushes, backend/configuration changes or next-slice execution are authorized.
+outside it. No pushes or backend/configuration changes are authorized.
 
-**Next task:** prepare a bounded R02b identity-namespace plan only after explicit authorization. Do not automatically
-continue all R02 or revive assignment 018. R01 itself remains a planning-only gate, not a build/device claim.
+**R02b result:** see the [shared specification](remaining-work/R02b-task.md) and
+[coordinator review](remaining-work/R02b-review.md). Root/entry/set family aliases now reject for full aggregates/imports;
+copy plans enforce internal source/target uniqueness and same-family disjointness while permitting independent
+workout/routine UUID overlap. **216 offline JVM tests in 28 suites**, Kotlin and Android-test compilation, assembly and
+lint passed with zero test failures/errors/skips. No new device/backend/Room/migration pass is claimed. Delivery commit
+is covered by the later owner authorization below.
+
+**R02c result:** see its [shared specification](remaining-work/R02c-task.md) and
+[coordinator review](remaining-work/R02c-review.md). Five SDK failure types now distinguish foreground reauthentication,
+invalid/expired read tokens and request size rejection; access-auth text is corrected. API interfaces changed only in
+KDoc. Coordinator aligned the JVM-only error mapper and legacy test expectations, including three Android-owned
+real-backend invalid-token catches (compiled, not executed). **283 offline JVM tests in 30 suites**, compilation,
+assembly and lint passed with zero failures/errors/skips; no new device/backend gate is claimed.
+
+**Delivery commit:** the owner requested committing the changes and selected **all Android changes**, including the
+existing retirement/HTTP/build/scripts/local-doc baseline, so the delivery is self-contained. See the
+[commit review](remaining-work/R02bc-commit-review.md) and Android git history after `2a93c56`. Nested shared-docs is
+preserved exactly and is not committed/pushed. This authorizes the Android delivery commit only, not another slice.
+
+**Next proposed task:** a bounded R02d sign-in challenge/auth-codec/exact-body-boundary plan, only after explicit owner
+authorization. No push, R02d–e, transport, configuration or assignment 018 is authorized.
 
 The proposed integration stores canonical records/deletion evidence separately and conservatively protects the entire
 visible account projection while any local outbox intent remains. Clean complete-cache publication requires finite-edit
@@ -41,8 +60,8 @@ R01 pickup HEADs were Android `25bdfd66f1424e7deb06a5fedc585d49fa1f3ab3` and sha
 The user completed the separate Java backend and authorized **removing the Android simulator first**. That task is
 implemented: the two simulator classes, fixtures, 12 fake-only test classes (92 methods), and unused `sharedTest`
 wiring are removed. Production interfaces, wire codecs, Room/capture tests, feature states, and UI regressions remain.
-The current test layers are 200 offline JVM tests, 46 separate real-backend JVM tests, and 11 Python supervisor tests.
-Only the offline suite and six new Android smoke tests were rerun for R02a; backend/Python counts are earlier evidence.
+The current test layers are 283 offline JVM tests, 46 separate real-backend JVM tests, and 11 Python supervisor tests.
+R02b/R02c reran offline/build gates only; R02a's six Android smoke tests and backend/Python counts are earlier evidence.
 See the [coverage ledger](fake-retirement-coverage.md), [retirement review](fake-retirement-review.md), and
 [testing strategy](testing-strategy.md#current-baseline--simulator-retired-2026-10-02) for actual gates and limits.
 Assignment 018 remains paused; do not implement or recreate the simulator.
@@ -61,8 +80,9 @@ sync/account flows are not proved by the local HTTP task. The last full device g
 
 **Current contributor workflow (owner instruction):** coordinator owns design/planning and independent full review;
 `gym-worker` and `gym-qa` are Pi agents using `meta/muse-spark-1.3-contributor` at high reasoning. R02a rediscovered
-coordinator `w4:p7`, Worker `w4:pJ`, QA `w4:pK`; both roles finished R02a and are now idle. Start fresh contributor
-sessions for a later authorized slice; do not assume these identities/processes remain unchanged.
+coordinator `w4:p7`, Worker `w4:pJ`, QA `w4:pK`; R02b and R02c rediscovered the live panes/models and used fresh native
+`/new` sessions for each slice. Both roles completed R02c and are idle. Rediscover/start fresh sessions for another
+authorized slice; do not assume these identities/processes remain unchanged.
 Rediscover live identities/processes before reuse and preserve user focus. Worker must never inspect tests/fixtures/
 reports or QA work; QA must never inspect production code/diffs/decompiled sources or Worker work. Both receive the
 same normative spec/API contract with disjoint allowlists, use Kotlin mcpls navigation restricted to their own code,
@@ -71,8 +91,9 @@ Coordinator supplies missing API/harness facts and reviews both layers, scheduli
 Coordinator resolved a bounded QA escape-fixture editing blocker without granting cross-role source access, then
 returned focused execution to the same QA session. Contributor-session mcpls was unavailable/indexing; coordinator
 navigation/diagnostics and actual compilation/tests supplied the gate. No agent changed global configuration.
-R02a is complete; only its coordinator-owned final delivery commit is authorized. No next implementation or push is
-scheduled. Preserve the existing uncommitted simulator-retirement/HTTP/build/AGENTS and nested-doc changes.
+R02a is committed as `2a93c56`; the subsequent owner-authorized Android delivery includes R02b/R02c and the prior
+retirement/HTTP/build/AGENTS/local-doc baseline. Nested-doc changes remain separate and untouched. No next slice or
+push is authorized.
 
 The remainder is the **archived pre-pivot baseline and 018 proposal**. Its old pending statuses, dirty-tree/pane
 identifiers, imperative instructions, and delegation gates are historical, not current authorization.

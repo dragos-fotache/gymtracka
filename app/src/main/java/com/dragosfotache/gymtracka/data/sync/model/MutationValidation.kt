@@ -21,6 +21,12 @@ fun validateWorkoutImportModel(snapshot: WorkoutImportModel): WorkoutImportModel
     }
     val finished = snapshot.status == "finished"
     val exercises = validateInputExercises(snapshot.exercises, finished)
+    requireAggregateFamilyDistinct(
+        snapshot.id,
+        exercises.map { it.id },
+        exercises.flatMap { entry -> entry.sets.map { it.id } },
+        "Workout",
+    )
     if (finished && exercises.none { exercise -> exercise.sets.any { it.isCompleted } }) {
         throw SyncModelException("Finished workout import requires at least one completed set")
     }
@@ -53,18 +59,36 @@ fun validateMutationPayload(payload: MutationPayload): MutationPayload {
             requireWorkoutUuid(payload.sourceWorkoutId, "sourceWorkoutId")
             requireWorkoutUuid(payload.id, "id")
             requireWireMillis(payload.startedAtMillis, "startedAt")
-            validateChildPlan(payload.childIds, payload.id, "performAgain")
+            validateChildPlan(
+                payload.childIds,
+                payload.sourceWorkoutId,
+                payload.id,
+                "performAgain",
+                sameFamily = true,
+            )
         }
         is MutationPayload.RoutineStartWorkout -> {
             requireWorkoutUuid(payload.sourceRoutineId, "sourceRoutineId")
             requireWorkoutUuid(payload.id, "id")
             requireWireMillis(payload.startedAtMillis, "startedAt")
-            validateChildPlan(payload.childIds, payload.id, "startWorkout")
+            validateChildPlan(
+                payload.childIds,
+                payload.sourceRoutineId,
+                payload.id,
+                "startWorkout",
+                sameFamily = false,
+            )
         }
         is MutationPayload.WorkoutSaveAsRoutine -> {
             requireWorkoutUuid(payload.sourceWorkoutId, "sourceWorkoutId")
             requireWorkoutUuid(payload.id, "id")
-            validateChildPlan(payload.childIds, payload.id, "saveAsRoutine")
+            validateChildPlan(
+                payload.childIds,
+                payload.sourceWorkoutId,
+                payload.id,
+                "saveAsRoutine",
+                sameFamily = false,
+            )
         }
         is MutationPayload.WorkoutAddExercises -> validateAdditions(payload.additions)
         is MutationPayload.WorkoutReplaceExercise -> {
@@ -102,14 +126,20 @@ fun validateImportRecord(record: ImportRecord): ImportRecord {
 
 /**
  * Validates a clone/copy child-ID plan: lowercase UUIDs, unique sources and targets,
- * no target aliasing a source ID of the same type, and no target reusing the new
- * root ID. Order is preserved, never sorted; empty plans and empty set bindings
- * are valid shapes and source membership stays server-side.
+ * a source family (source root plus every source child) distinct across all roles,
+ * a target family (new root plus every target child) distinct across all roles, and —
+ * for same-family copies only — no UUID shared between the two families in any role.
+ * Order is preserved, never sorted; empty plans and empty set bindings are valid
+ * shapes and source membership stays server-side. Cross-family commands reuse the
+ * independent routine/workout namespace, so source/target overlap is allowed there
+ * when each side remains internally valid.
  */
 internal fun validateChildPlan(
     childIds: List<ChildExerciseBinding>,
-    rootId: String,
+    sourceRootId: String,
+    targetRootId: String,
     where: String,
+    sameFamily: Boolean,
 ): List<ChildExerciseBinding> {
     childIds.forEach {
         requireWorkoutUuid(it.sourceExerciseId, "$where sourceExerciseId")
@@ -133,14 +163,20 @@ internal fun validateChildPlan(
     if (allTargets.toSet().size != allTargets.size) {
         throw SyncModelException("$where has duplicate target IDs")
     }
-    if (targetExercises.any { it in sourceExercises }) {
-        throw SyncModelException("$where target reuses a source exercise ID")
-    }
-    if (targetSets.any { it in sourceSets }) {
-        throw SyncModelException("$where target reuses a source set ID")
-    }
-    if (allTargets.contains(rootId)) {
+    requireCopySourceFamilyDistinct(sourceRootId, sourceExercises, sourceSets, where)
+    if (allTargets.contains(targetRootId)) {
         throw SyncModelException("$where target reuses the new root ID")
+    }
+    if (sameFamily) {
+        requireNoSameFamilyOverlap(
+            sourceRootId,
+            sourceExercises,
+            sourceSets,
+            targetRootId,
+            targetExercises,
+            targetSets,
+            where,
+        )
     }
     return childIds
 }
@@ -213,17 +249,11 @@ fun validateMutationEnvelope(envelope: MutationEnvelopeModel): MutationEnvelopeM
             val command = payload as? MutationPayload.RoutineStartWorkout
                 ?: throw SyncModelException("Mutation kind does not match payload")
             requireMatchingTarget(envelope, AggregateType.WORKOUT, command.id)
-            if (command.id == command.sourceRoutineId) {
-                throw SyncModelException("New root ID must differ from source")
-            }
         }
         MutationKind.WORKOUT_SAVE_AS_ROUTINE -> {
             val command = payload as? MutationPayload.WorkoutSaveAsRoutine
                 ?: throw SyncModelException("Mutation kind does not match payload")
             requireMatchingTarget(envelope, AggregateType.ROUTINE, command.id)
-            if (command.id == command.sourceWorkoutId) {
-                throw SyncModelException("New root ID must differ from source")
-            }
         }
         MutationKind.WORKOUT_ADD_EXERCISES -> {
             val command = payload as? MutationPayload.WorkoutAddExercises

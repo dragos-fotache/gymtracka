@@ -138,6 +138,12 @@ fun validateWorkoutInputModel(input: WorkoutInputModel): WorkoutInputModel {
     if (input.status != "active") throw SyncModelException("WorkoutInput status must be 'active'")
     requireWireMillis(input.startedAtMillis, "startedAt")
     val exercises = validateInputExercises(input.exercises, finished = false)
+    requireAggregateFamilyDistinct(
+        input.id,
+        exercises.map { it.id },
+        exercises.flatMap { entry -> entry.sets.map { it.id } },
+        "Workout",
+    )
     return input.copy(exercises = exercises)
 }
 
@@ -157,6 +163,12 @@ fun validateWorkoutRecordModel(record: WorkoutRecordModel): WorkoutRecordModel {
     }
     val finished = record.status == "finished"
     val exercises = validateRecordExercises(record.exercises, finished)
+    requireAggregateFamilyDistinct(
+        record.id,
+        exercises.map { it.id },
+        exercises.flatMap { entry -> entry.sets.map { it.id } },
+        "Workout",
+    )
     if (finished && exercises.none { exercise -> exercise.sets.any { it.isCompleted } }) {
         throw SyncModelException("Finished workout record requires at least one completed set")
     }

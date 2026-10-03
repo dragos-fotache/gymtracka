@@ -243,6 +243,39 @@ represented numeric fields reject them through typed readers. R02a does not intr
 See the [R02a coordinator review](remaining-work/R02a-review.md) for independent tests and actual build/device gates.
 Room stays v9, the asset stays v1, and no HTTP/auth/engine/UI capability was activated.
 
+## R02b family identity validation — implemented
+
+The workout/routine validators now reject aliases across the complete root/entry/set identity set, including children
+under different entries. This covers input/canonical records and import snapshots; existing codecs and pure Room
+mappings inherit the checks through their validator delegation. Catalogue `exerciseId` references and mutation IDs
+remain independent, and aggregate position sorting is unchanged.
+
+Copy plans validate the source root plus all source children and the target root plus all target children independently.
+`workout.performAgain` rejects any UUID overlap across those same-family sides, including off-diagonal roles and roots.
+`routine.startWorkout` and `workout.saveAsRoutine` allow cross-family reuse when each side is internally valid, including
+equal roots and children. Binding order and valid durable v1 bytes are preserved. New collision messages do not echo IDs.
+
+These are stateless checks of supplied identifiers, not an account-lifetime reservation store or source eligibility
+lookup. Storage/canonical publication still must refuse global Room PK collisions under R05/R09. No schema/capture/
+transport/UI changes were made. See the [R02b review](remaining-work/R02b-review.md) for actual verification.
+
+## R02c failure vocabulary — implemented
+
+`data/sync/api/SyncApiFailures.kt` now distinguishes service access authentication from explicit foreground
+reauthentication, invalid pull cursors from expired cursors, invalid snapshot tokens from expired snapshots, and request
+size rejection from transient failure. Five zero-argument types were added: `ReauthenticationRequired`, `InvalidCursor`,
+`InvalidSnapshotToken`, `SnapshotExpired` and `RequestTooLarge`. Existing constructors/codes, unmodified opaque
+`RequestRejected.errorCode` and the five-minute transient hint cap remain; all display text is fixed and causes are closed.
+
+`GymSyncApi` and service-auth interfaces received contract KDoc only. The JVM-only adapter now routes known errors by
+status AND operation, with authoritative authentication/size/throttling/server status precedence; wrong-context token
+codes cannot become expiry. Its pre-existing test-only error-code extraction guard remains, not a production parsing
+policy. No production HTTP classifier/client, refresh loop, staging cleanup or retry/recovery state was added. These
+category meanings guide future adapters/engine work and never establish account-deletion authority.
+
+See the [R02c review](remaining-work/R02c-review.md) for actual scripted/JVM and build gates. Room, assets, scopes,
+request versions and app activation remain unchanged.
+
 ## Proposed integration design — not implemented
 
 R01 planning/design was approved by the owner on 2026-10-03; see [the audit](remaining-work/R01-task.md) and
