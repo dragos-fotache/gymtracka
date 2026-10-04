@@ -6,9 +6,9 @@ for a bounded slice; [the roadmap](../remaining-work-roadmap.md) owns status and
 
 The original R01 design was approved on 2026-10-03. Existing model, transport, vault and refresh primitives now implement
 parts of this foundation, including inert startup recovery seams; [sync implementation](implementation.md) describes their
-actual boundaries. R05a now supplies independent canonical storage and transactional capture watermarks; canonical
-record/batch application and projection, engine, snapshots, the durable Room-authority adapter/journal, account transitions
-and cross-feature publication barriers remain planned. Stored vault phases and explicit refresh leases alone never
+actual boundaries. R05a supplies independent canonical storage and transactional capture watermarks; R05b now adds inert fenced canonical
+record/batch application. Visible projection, engine, snapshots, the durable Room-authority adapter/journal, account
+transitions and cross-feature publication barriers remain planned. Stored vault phases and explicit refresh leases alone never
 authorize activation. Preserve the unresolved
 [legacy auth replay limitation](implementation.md#legacy-auth-replay-limitation) in all recovery work.
 
@@ -75,8 +75,10 @@ intent. Frozen requests remain commands, not a recipe to reconstruct all local d
 
 Room storage boundaries below retain the approved design. R05a has delivered the canonical ledger and a separate
 `sync_account_cache` in v10; exact current fields/capture/migration behavior are owned by
-[the implementation reference](implementation.md#canonical-ledger-and-capture-watermarks). Canonical writers and
-publication are not delivered. Snapshot/journal additions remain future specifications:
+[the implementation reference](implementation.md#canonical-ledger-and-capture-watermarks). R05b adds
+[fenced canonical batch writers](implementation.md#fenced-canonical-batches), preserving watermarks and marking dirty
+without incrementing cache epochs or changing visible data. Publication and snapshot/journal additions remain future
+specifications:
 
 | Storage | Required logical fields and constraints |
 |---|---|
@@ -337,7 +339,7 @@ barrier; app integration must not silently replace it with a no-op while composi
 ## 8. Migration boundaries and acceptance matrix
 
 R05a delivered the **data-preserving v9→v10 migration** for canonical ledger/publication state and capture watermarks.
-Plan separate coherent migrations at R08a (staging) and R09a (transition journal/device phases); their exact SQL/schema
+R05b canonical batches reuse v10 without entity/schema changes. Plan separate coherent migrations at R08a (staging) and R09a (transition journal/device phases); their exact SQL/schema
 versions are assigned only after checking the current branch on pickup. Combine adjoining changes only if they are one
 reviewed deliverable, not to avoid migration
 coverage. No entity change without KSP/export, preserved snapshots, all supported starts and copied v1 asset tests.

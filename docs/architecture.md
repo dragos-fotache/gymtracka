@@ -22,7 +22,7 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/`.
 | `ui/activeworkout/` | Active screen, compact exercise/set controls, timer UI and feature state |
 | `ui/util/WorkoutFormatters.kt` | Shared derived calculations and locale-aware parsing/formatting |
 | `data/gym/GymRepository.kt` | Application-facing persistence, UUID creation, transactional edits and sync capture |
-| `data/sync/` | Models/codecs, fenced capture, unused HTTP/session components; [details](sync/implementation.md) |
+| `data/sync/` | Models/codecs, fenced capture/canonical batches, unused HTTP/session components; [details](sync/implementation.md) |
 
 `FeatureRepositories.kt` exposes narrow interfaces to state holders; reusable/leaf composables receive values and callbacks.
 `ui/GymRepositoryProvider.kt` supplies `rememberGymRepository()` and optional internal `LocalGymRepositoryOverride` for
@@ -101,8 +101,11 @@ future canonical publication must not overwrite another scope on collision.
 - All existing repository mutation families use in-transaction session fencing and local capture. Default signed-out
   edits create no upload work or canonical/cache rows and use hard deletion. Account-bound internal paths advance
   independent generation watermarks and dirty publication bookkeeping together with domain/outbox writes. The ledger
-  survives physical root removal; generations advance beyond both domain and ledger values. This is storage/capture,
-  not remote application or a delivered account UI. See [capture boundaries](sync/implementation.md#room-and-local-capture).
+  survives physical root removal; generations advance beyond both domain and ledger values. The inert canonical batch
+  writer separately applies complete revisioned observations under account/session/cache-epoch fences, without changing
+  visible domain data or outbox/cursor state. No protected publication or account UI is delivered. See
+  [capture boundaries](sync/implementation.md#room-and-local-capture) and
+  [canonical batches](sync/implementation.md#fenced-canonical-batches).
 - `ActiveWorkoutState.awaitPendingEdits()` tracks finite accepted edits with retained failures, rather than joining the
   endless elapsed-time ticker. The screen registers its workout/owner-specific drain with `GymAppState`; finish request
   and confirmation both wait, and disposal detaches only the matching registration.

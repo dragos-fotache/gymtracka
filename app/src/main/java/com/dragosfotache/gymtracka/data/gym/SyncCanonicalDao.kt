@@ -60,4 +60,40 @@ abstract class SyncCanonicalDao {
 
     @Query("UPDATE sync_account_cache SET projection_dirty = 1 WHERE account_id = :accountId")
     internal abstract suspend fun markProjectionDirty(accountId: String): Int
+
+    @Query(
+        """INSERT INTO sync_canonical_roots
+            (account_id, aggregate_type, aggregate_id, server_revision, canonical_state,
+                canonical_json, local_generation_watermark, cache_epoch)
+            VALUES (:accountId, :aggregateType, :aggregateId, :serverRevision, :canonicalState,
+                :canonicalJson, :watermark, :cacheEpoch)""",
+    )
+    internal abstract suspend fun insertCanonicalRoot(
+        accountId: String,
+        aggregateType: String,
+        aggregateId: String,
+        serverRevision: Long?,
+        canonicalState: String,
+        canonicalJson: String?,
+        watermark: Long,
+        cacheEpoch: Long,
+    )
+
+    /** Replaces revision/state/body/epoch; the watermark column stays intact. */
+    @Query(
+        """UPDATE sync_canonical_roots
+            SET server_revision = :serverRevision, canonical_state = :canonicalState,
+                canonical_json = :canonicalJson, cache_epoch = :cacheEpoch
+            WHERE account_id = :accountId AND aggregate_type = :aggregateType
+                AND aggregate_id = :aggregateId""",
+    )
+    internal abstract suspend fun updateCanonicalBody(
+        accountId: String,
+        aggregateType: String,
+        aggregateId: String,
+        serverRevision: Long?,
+        canonicalState: String,
+        canonicalJson: String?,
+        cacheEpoch: Long,
+    ): Int
 }

@@ -32,6 +32,7 @@ Enduring Android design is maintained in [the active integration design](../sync
 | R04b refresh/leases | [Spec](remaining-work/R04b-task.md) | [Review](remaining-work/R04b-review.md) |
 | R04c startup/recovery seams | [Spec](remaining-work/R04c-task.md) | [Review](remaining-work/R04c-review.md) |
 | R05a canonical storage/watermarks | [Spec](remaining-work/R05a-task.md) | [Review](remaining-work/R05a-review.md) |
+| R05b fenced canonical batches | [Spec](remaining-work/R05b-task.md) | [Review](remaining-work/R05b-review.md) |
 
 [R03 split](remaining-work/R03-task.md) and [R04 split](remaining-work/R04-task.md) are historical planning records;
 outstanding lifecycle and durable account-integration requirements remain in the active roadmap. The

@@ -1,7 +1,7 @@
 # Implemented Android sync components
 
 These components exist, but the production app remains signed-out/local-only. **Implemented is not activated.**
-No running engine, canonical publication, staged bootstrap, durable account transition, Google UI, or scheduler is wired
+No running engine, visible canonical publication, staged bootstrap, durable account transition, Google UI, or scheduler is wired
 into the app. The [roadmap](../remaining-work-roadmap.md) owns delivery status; the
 [integration design](integration-design.md) owns approved future coordination. The
 [shared contract](../../shared-docs/docs/backend-contract/README.md) remains the service authority.
@@ -60,9 +60,32 @@ in domain rows, never promoted to canonical JSON/revisions without a server reco
 incomplete, conservatively dirty bookkeeping even with old cursors/device cache labels. Signed-out/asset upgrades leave
 both new tables empty. No local-only or bundled row is seeded as canonical.
 
-Canonical storage exists, but no remote record/deletion writer, revision arbitration, batch application, projection,
-claim/ack engine, staging, or vault/Room journal exists yet. Global physical Room primary-key collisions must be refused
-at future publication, never overwritten or remapped.
+### Fenced canonical batches
+
+R05b adds inert `CanonicalStore`/`CanonicalTransaction` writers over the existing v10 ledger; no migration is needed.
+A nonnull account/positive repository generation and caller-supplied cache epoch are checked inside Room. Direct calls
+deep-own the whole typed batch before suspension; composed capabilities recheck fences and reject closed/outside-
+transaction use. Batch writes and dirty marking roll back together on failure/cancellation, including composed callbacks.
+
+- Unknown-root DELETE persists revision evidence without a fake domain row. Older observations are no-ops; newer ones
+  replace the complete canonical operation/body. Equal revisions must agree on authoritative fields/operation, ignoring
+  only workout/routine exerciseName and unrepresented additive data. Equal no-ops preserve stored JSON/labels exactly.
+- Retained evidence validates state/body/revision/type/identity, nonnegative counters and epoch bounds. Original JSON
+  duplicate members, scalar grammar/type fidelity and literal controls are checked using the existing strict boundary;
+  malformed evidence becomes a safe retained storage failure, never repaired. Valid quoted/escaped strings remain intact.
+- Every retained family root reserves its role, including unobserved/delete/snapshot_absent; prior and selected child
+  bindings reject role/root/parent changes even when deleting the old root in the batch. Checks include all-no-op batches.
+  Account and workout/routine namespaces remain independent. This is current known evidence, not lifetime removed-child
+  reservation storage.
+- Selected writes preserve exact local-generation watermarks, use but do not increment the account cache epoch, and mark
+  projection dirty. Baseline-complete/materialized epoch, domain graph/metadata, outbox bytes/order/errors, device identity
+  and cursor/last-success remain unchanged. The writer never calls repository capture or emits upload work.
+- Unresolved references, multiple intermediate active roots and physical local/foreign/bundled PK collisions can be stored
+  independently; complete graph and global physical collision checks are required before future visible publication.
+  Existing snapshot_absent evidence blocks lower/equal restoration; R05b does not create absence or invent delete revisions.
+
+No visible projection, exact claim/ack/checkpoint engine, staging, or vault/Room journal exists yet. Global physical Room
+primary-key collisions must be refused at future publication, never overwritten or remapped.
 
 ## Models, codecs, and durable identity
 
@@ -81,8 +104,8 @@ configured versus actual rest remain distinct. Bundled exercises are not uploada
 - Durable retry wrappers preserve original mutation JSON byte-for-byte, including whitespace/order/escapes/numeric
   spelling. Unsupported versions/corruption are retained failures, not reinterpretation, repair, or deletion authority.
 - Shared parser normalization is not a universal lexical-type guarantee: represented domain fields use typed readers.
-  Auth/error boundaries additionally reject unquoted scalars, literal string controls, and numeric overflow becoming a
-  string. Do not assume every old generic raw route has those additional auth/error guards.
+  Auth/error boundaries and the retained canonical reader additionally reject unquoted scalars, literal string controls,
+  and numeric overflow becoming a string. Do not assume every old generic raw route has those additional guards.
 - `ServiceAuthCodec` represents four challenge purposes, closed auth requests, additive responses, complete grants and
   logout bodies. Expiry constructor/copy paths validate inclusive wire-millisecond bounds, not freshness/lifetime/order.
   Arbitrarily long lossless fractional zero tails are allowed; nonzero submillisecond precision and malformed fractions
