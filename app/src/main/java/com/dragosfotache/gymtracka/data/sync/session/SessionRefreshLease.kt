@@ -4,6 +4,9 @@ import com.dragosfotache.gymtracka.data.sync.api.SyncApiException
 import com.dragosfotache.gymtracka.data.sync.http.ServiceSessionBinding
 import com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 /**
  * Explicit internal authorization seam for one authorized activation: the
@@ -22,6 +25,7 @@ internal class SessionRefreshLease(
     val binding: ServiceSessionBinding,
     val operationId: String,
     val phase: VaultSessionPhase,
+    private val authorizationCheck: suspend () -> Unit = {},
 ) {
     private val state = AtomicInteger(USABLE)
 
@@ -62,6 +66,44 @@ internal class SessionRefreshLease(
 
     /** True once invalidated; permanent and dominant. */
     internal fun isInvalidated(): Boolean = state.get() == INVALIDATED
+
+    /**
+     * Process-local Room authorization recheck for the R04c startup seam.
+     * Verifies caller activity, permanent invalidation, invokes the bound
+     * predicate, then rechecks activity and invalidation on return and on
+     * error. Independent of the reauth latch so late safe failures keep
+     * their identity. Injected cancellation stays cancellation; an explicit
+     * [SessionRefreshException] keeps its closed category; any other
+     * predicate failure maps to unavailable. No raw causes escape.
+     */
+    internal suspend fun checkAuthorization() {
+        currentCoroutineContext().ensureActive()
+        if (isInvalidated()) {
+            throw SessionRefreshException(SessionRefreshFailure.STALE_SESSION)
+        }
+        try {
+            authorizationCheck()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (e: SessionRefreshException) {
+            currentCoroutineContext().ensureActive()
+            if (isInvalidated()) {
+                throw SessionRefreshException(SessionRefreshFailure.STALE_SESSION)
+            }
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            if (isInvalidated()) {
+                throw SessionRefreshException(SessionRefreshFailure.STALE_SESSION)
+            }
+            throw SessionRefreshException(SessionRefreshFailure.UNAVAILABLE)
+        }
+        currentCoroutineContext().ensureActive()
+        if (isInvalidated()) {
+            throw SessionRefreshException(SessionRefreshFailure.STALE_SESSION)
+        }
+    }
 
     /**
      * Records foreground reauthentication without clearing vault, account, or

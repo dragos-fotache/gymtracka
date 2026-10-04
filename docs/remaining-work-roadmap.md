@@ -19,7 +19,7 @@ snapshot publication. Accepted personal slices never imply completion of their d
 
 ## Status and dependencies
 
-Statuses below reflect accepted delivery through R04b. “Pending” requires specific authorization and a pickup spec;
+Statuses below reflect accepted delivery through R05a. “Pending” requires specific authorization and a pickup spec;
 “deferred” remains required for its later milestone. Historical M-series assignments are not a second execution plan.
 
 | Package | Status / outstanding scope | Dependencies |
@@ -27,8 +27,8 @@ Statuses below reflect accepted delivery through R04b. “Pending” requires sp
 | R01 integration design | Accepted; maintained in the design reference | Existing foundations |
 | R02 models/API | a–d accepted; **e lifecycle/proof/export/delete/status models deferred** | R01; e with lifecycle features |
 | R03 HTTP | a primitive, b sync, c auth accepted; **d lifecycle/export streaming deferred** | Relevant R02 slices; d needs e |
-| R04 session recovery | a vault, b refresh accepted; **c startup/session recovery seams pending** | R03a/c; c uses a/b |
-| R05 canonical Room / local intent | Pending | R02b and approved integration design |
+| R04 session recovery | a vault, b refresh, c startup/session recovery seams accepted; durable Room integration remains R09 | R03a/c; c uses a/b |
+| R05 canonical Room / local intent | **a storage/capture watermarks accepted**; b canonical batches and c protected publication pending | R02b and approved integration design |
 | R06 durable push | Pending | R03b, R04, R05 |
 | R07 incremental pull | Pending | R06 |
 | R08 bootstrap/full resync | Pending | R05–R07 |
@@ -50,22 +50,19 @@ Dependencies are capability gates, not a mandate to implement every independent 
   may inject controllable barriers; the live app must never substitute a no-op while screens accept edits.
 - Initial sign-in needs R08's complete snapshot; null-cursor incremental pull is not bootstrap. Core R10 must pass before
   user-facing activation. R09 journal tests can precede R12a, but visible activation cannot.
-- Room v9, existing mutation capture, all 17 kinds, codecs, transport, vault and refresh are foundations to reuse, not
-  tasks to recreate. The retired simulator is not a prerequisite or backlog item.
+- Room v10, existing mutation capture/watermarks, all 17 kinds, codecs, transport, vault, refresh and inert recovery seams are
+  foundations to reuse, not tasks to recreate. The retired simulator is not a prerequisite or backlog item.
 
 ## Outstanding acceptance outcomes
 
 These are capability requirements, not detailed assignments. Split further when authorized; specify concrete APIs/schema,
 independent tests, allowed files and stop conditions before implementation. Tests belong inside every slice, not only R10/R17.
 
-### R04c — Startup/session recovery seams
-
-Define startup privacy/fencing and recovery contracts over accepted vault/refresh machinery, including restart, missing/
-unreadable/mismatched storage, stale grant and logout races. Test storage/network boundaries and preserve exact uncertain
-attempts plus the legacy replay limitation. Stored phase/lease cannot independently authorize account visibility. Room
-journal/transitions remain R09; no incidental app activation. R04a/b storage/refresh fault tests remain regression gates.
-
 ### R05 — Canonical Room application and protected intent
+
+R05a storage and capture watermarks are accepted; see the
+[scoped review](archive/remaining-work/R05a-review.md). Next proposed slice is R05b canonical batches, followed by
+R05c protected publication; each needs owner authorization and a bounded specification.
 
 Implement account-keyed canonical records/deletion evidence, generation watermarks and protected projection from the
 approved design. Preserve whole ordered identities and references; atomic multi-root batches must reject stale sessions,
@@ -73,7 +70,7 @@ retain unknown-root deletion revisions, prevent older resurrection and never ech
 intent while outbox work remains; no field/child merge. Publication must refuse global physical PK collisions.
 
 **Gate:** real Room root/batch/revision/dependency/rollback/newer-intent tests; schema changes need migration/KSP/export and
-all-start/asset coverage. Suggested slices: storage/capture watermarks, canonical batches, protected publication.
+all-start/asset coverage. Remaining slices: canonical batches, protected publication.
 
 ### R06 — Durable push
 

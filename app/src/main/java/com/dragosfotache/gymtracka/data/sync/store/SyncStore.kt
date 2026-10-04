@@ -38,7 +38,9 @@ data class CaptureOutcome(
  * inspect the global tail, reuse a qualifying tail mutation ID or mint a fresh one,
  * build the typed envelope with that exact ID, capture the durable v1 wrapper with
  * all computed effects, and replace the qualifying tail wrapper or append a new row.
- * Any failure rolls back the domain edit, all metadata, and outbox together.
+ * Account capture also advances independent generation watermarks and marks the
+ * projection dirty without changing canonical data. Any failure rolls back the
+ * domain edit, all metadata, watermarks/publication bookkeeping, and outbox together.
  *
  * @param newMutationId stable ID supplier for appended outbox rows. Defaults to
  * production random UUIDs; tests inject deterministic values (still valid UUIDs).
@@ -147,6 +149,17 @@ class SyncTransaction internal constructor(
         }
     }
 
+    private suspend fun nextGeneration(root: RootState): Long {
+        val watermark = accountId?.let { account ->
+            database.syncCanonicalDao().getRoot(account, root.type.wireValue, root.id)
+                ?.localGenerationWatermark
+        } ?: 0L
+        if (watermark < 0) throw SyncModelException("Aggregate ${root.id} has a negative watermark")
+        val current = maxOf(root.generation, watermark)
+        if (current == Long.MAX_VALUE) throw SyncModelException("Aggregate ${root.id} generation overflow")
+        return current + 1
+    }
+
     private suspend fun advanceMetadata(root: RootState, generation: Long) {
         val state = if (accountId == null) "local_only" else "pending"
         val capture = database.syncCaptureDao()
@@ -155,13 +168,20 @@ class SyncTransaction internal constructor(
             AggregateType.ROUTINE -> capture.updateRoutineMetadata(root.id, generation, state)
             AggregateType.CUSTOM_EXERCISE -> capture.updateExerciseMetadata(root.id, generation, state)
         }
+        accountId?.let { account ->
+            val canonical = database.syncCanonicalDao()
+            canonical.insertReservation(account, root.type.wireValue, root.id, generation)
+            val updated = canonical.advanceWatermark(account, root.type.wireValue, root.id, generation)
+            if (updated != 1) throw IllegalStateException("Canonical watermark changed during capture")
+        }
     }
 
     /**
      * Captures the caller's domain edit, which must already have run inside this same
      * transaction. When [changed] is false nothing happens and null is returned. A
-     * changed root advances its generation exactly once and is marked pending (or
-     * local_only when signed out); signed-out captures create no outbox work and never
+     * changed root advances beyond both its domain generation and account ledger
+     * watermark and is marked pending (or local_only when signed out). Signed-out
+     * captures create no ledger/cache/outbox rows and never
      * evaluate [newPayload], so legacy arbitrary IDs need no DTO or UUID validation.
      * Account captures reuse a qualifying tail mutation ID or mint a fresh one, build
      * the typed envelope with that exact ID, and persist the durable v1 wrapper JSON
@@ -193,15 +213,21 @@ class SyncTransaction internal constructor(
             throw SyncModelException("Capture roots contain a duplicate aggregate")
         }
 
-        val newGeneration = main.generation + 1
-        advanceMetadata(main, newGeneration)
+        val newGeneration = nextGeneration(main)
         val extraGenerations = extras.map { extra ->
-            val generation = extra.generation + 1
-            advanceMetadata(extra, generation)
-            AffectedRootModel(extra.type, extra.id, generation)
+            AffectedRootModel(extra.type, extra.id, nextGeneration(extra))
+        }
+        advanceMetadata(main, newGeneration)
+        extras.zip(extraGenerations).forEach { (extra, effect) ->
+            advanceMetadata(extra, effect.localGeneration)
         }
 
         val account = accountId ?: return CaptureOutcome(null, coalesced = false, sequence = null)
+        val canonical = database.syncCanonicalDao()
+        canonical.insertAccountCache(account)
+        if (canonical.markProjectionDirty(account) != 1) {
+            throw IllegalStateException("Account cache changed during capture")
+        }
 
         val capture = database.syncCaptureDao()
         val coalescibleKind = kind == MutationKind.WORKOUT_UPSERT ||

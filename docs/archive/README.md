@@ -30,9 +30,11 @@ Enduring Android design is maintained in [the active integration design](../sync
 | R03c auth HTTP | [Spec](remaining-work/R03c-task.md) | [Review / precision limitation](remaining-work/R03c-review.md) |
 | R04a encrypted vault | [Spec](remaining-work/R04a-task.md) | [Review](remaining-work/R04a-review.md) |
 | R04b refresh/leases | [Spec](remaining-work/R04b-task.md) | [Review](remaining-work/R04b-review.md) |
+| R04c startup/recovery seams | [Spec](remaining-work/R04c-task.md) | [Review](remaining-work/R04c-review.md) |
+| R05a canonical storage/watermarks | [Spec](remaining-work/R05a-task.md) | [Review](remaining-work/R05a-review.md) |
 
 [R03 split](remaining-work/R03-task.md) and [R04 split](remaining-work/R04-task.md) are historical planning records;
-outstanding R03d/R04c requirements have been retained in the active roadmap. The
+outstanding lifecycle and durable account-integration requirements remain in the active roadmap. The
 [R02b/c delivery record](remaining-work/R02bc-commit-review.md) is a historical commit-scope receipt, not new permission.
 
 ## Earlier foundations and retired simulator

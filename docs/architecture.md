@@ -27,13 +27,15 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/`.
 `FeatureRepositories.kt` exposes narrow interfaces to state holders; reusable/leaf composables receive values and callbacks.
 `ui/GymRepositoryProvider.kt` supplies `rememberGymRepository()` and optional internal `LocalGymRepositoryOverride` for
 real-Room app-flow tests. With no override, it remembers `GymRepository(applicationContext)`. Production construction
-still binds the original signed-out session; no account/session rebinding is wired into the app.
+still binds the original signed-out session; no account/session rebinding is wired into the app. The unused
+[startup recovery seams](sync/implementation.md#startup-recovery-seams) require a future durable Room-authority adapter;
+they do not alter production startup or authorize cached-account presentation.
 
 ## Room database
 
 `app/src/main/assets/databases/gym.db` is the unchanged **version-1 source catalogue**. Room copies it into app-private
 storage and migrates the runtime database. Never add user-data tables to the asset or use destructive migration fallback.
-Runtime `GymDatabase` is **version 9**; exported versions 1–9 are retained in `app/schemas/`.
+Runtime `GymDatabase` is **version 10**; exported versions 1–10 are retained in `app/schemas/`.
 
 ### Catalogue and custom exercises
 
@@ -85,6 +87,7 @@ blank/empty autosaves are distinct from save/start eligibility validation.
 | 6 → 7 | Routine tables |
 | 7 → 8 | `exercises.is_user_created`, default false |
 | 8 → 9 | Root account/revision/generation/state/deletion metadata and indexes; outbox, account cursor, device/session and catalogue state tables |
+| 9 → 10 | Independent account/type/root canonical ledger and separate account publication bookkeeping; unobserved generation reservations backfilled without fabricating canonical records/baselines |
 
 Each future entity change requires a version bump, data-preserving migration, schema export/KSP, all supported starting
 versions, and a copied real v1 asset test. Domain table UUID primary keys remain global within each physical table;
@@ -96,8 +99,10 @@ future canonical publication must not overwrite another scope on collision.
   custom-editor drafts remain presentation state. Ordered writes and refresh-generation guards prevent stale loads
   from replacing newer accepted edits.
 - All existing repository mutation families use in-transaction session fencing and local capture. Default signed-out
-  edits create no upload work and use hard deletion. Account-bound internal paths retain tombstones/publication evidence;
-  their existence is not a delivered account UI. See [capture boundaries](sync/implementation.md#room-and-local-capture).
+  edits create no upload work or canonical/cache rows and use hard deletion. Account-bound internal paths advance
+  independent generation watermarks and dirty publication bookkeeping together with domain/outbox writes. The ledger
+  survives physical root removal; generations advance beyond both domain and ledger values. This is storage/capture,
+  not remote application or a delivered account UI. See [capture boundaries](sync/implementation.md#room-and-local-capture).
 - `ActiveWorkoutState.awaitPendingEdits()` tracks finite accepted edits with retained failures, rather than joining the
   endless elapsed-time ticker. The screen registers its workout/owner-specific drain with `GymAppState`; finish request
   and confirmation both wait, and disposal detaches only the matching registration.

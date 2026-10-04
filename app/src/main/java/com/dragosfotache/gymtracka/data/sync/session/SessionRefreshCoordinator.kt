@@ -375,6 +375,8 @@ internal class SessionRefreshCoordinator(
      */
     private suspend fun checkAdmission(lease: SessionRefreshLease) {
         currentCoroutineContext().ensureActive()
+        lease.checkAuthorization()
+        currentCoroutineContext().ensureActive()
         lease.checkAdmission()
     }
 
@@ -423,6 +425,8 @@ internal class SessionRefreshCoordinator(
      * identity.
      */
     private suspend fun postSeam(lease: SessionRefreshLease) {
+        currentCoroutineContext().ensureActive()
+        lease.checkAuthorization()
         currentCoroutineContext().ensureActive()
         if (lease.isInvalidated()) {
             throw SessionRefreshException(SessionRefreshFailure.STALE_SESSION)

@@ -10,7 +10,7 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/data/
 
 ## Room and local capture
 
-Room v9 root metadata includes nullable account/server revision/deletion time, local generation, and sync state
+Room v10 retains the v9 root metadata: nullable account/server revision/deletion time, local generation, and sync state
 (default `local_only`). `sync_outbox` stores explicit sequence order, immutable mutation identity/version/payload and
 local affected-root bindings; `sync_state` stores account cursor state; `sync_device_state` distinguishes active and
 privately cached account; `catalogue_state` stores catalogue metadata. These storage fields do not implement sign-out.
@@ -36,8 +36,33 @@ privately cached account; `catalogue_state` stores catalogue metadata. These sto
   sanitize to null; configured rest clamps nonnegative. Invalid selections fail atomically before inserts. Completion
   returns an actual transition result for UI/timer coordination.
 
-No canonical/deletion shadow store, remote-apply path, claim/ack engine, staging, or vault/Room journal exists yet.
-Global physical Room primary-key collisions must be refused at future publication, never overwritten or remapped.
+### Canonical ledger and capture watermarks
+
+R05a adds `sync_canonical_roots`, keyed by `(account_id, aggregate_type, aggregate_id)` independently of domain FKs.
+It stores nullable server revision/canonical JSON, state (initially `unobserved`), local-generation watermark and cache
+epoch. An unobserved reservation is local bookkeeping, not an observed server record or deletion. The public DAO is
+read-only; internal reservation updates touch only the watermark and never replace canonical fields.
+
+Separate `sync_account_cache` holds incomplete-baseline, cache epoch, projection-dirty and materialized-epoch fields.
+It is not Room/vault authorization. Keeping it separate from `sync_state` prevents the existing cursor replacement API
+from resetting publication bookkeeping. No caller marks a real baseline complete or publishes remote data yet.
+
+Changed account captures use checked `max(domain generation, ledger watermark) + 1` for the target and every affected
+root. Domain metadata, ledger reservation/advance, account dirty marker and outbox commit in the same fenced transaction;
+failures/cancellation roll all effects back. No-op and signed-out capture create no ledger/cache rows. Coalescing remains
+never-sent tail autosave only; semantic/frozen predecessors retain their original identities.
+
+Migration 9→10 preserves existing tables and exact requests, seeding only unobserved nonnegative maximum watermarks from
+owned roots (including tombstones) and supported outbox column targets. Valid v1 row/wrapper identities additionally
+recover extra effects, including vanished roots. Corrupt/unsupported rows remain untouched and their extra effects are
+not guessed; supported original target metadata still reserves its generation. Existing domain server revisions remain
+in domain rows, never promoted to canonical JSON/revisions without a server record. Discovered account identities receive
+incomplete, conservatively dirty bookkeeping even with old cursors/device cache labels. Signed-out/asset upgrades leave
+both new tables empty. No local-only or bundled row is seeded as canonical.
+
+Canonical storage exists, but no remote record/deletion writer, revision arbitration, batch application, projection,
+claim/ack engine, staging, or vault/Room journal exists yet. Global physical Room primary-key collisions must be refused
+at future publication, never overwritten or remapped.
 
 ## Models, codecs, and durable identity
 
@@ -143,8 +168,37 @@ not APK components. No URL, OAuth configuration, account construction, or adapte
   already-admitted bytes or undo an in-progress synchronous vault commit; dead leases cannot admit credentials/results.
   No independently constructed concurrent coordinators or duplicate activation leases are supported.
 
-No startup reconciliation, Room journal, sign-in/out orchestration, engine, account UI, Google adapter, or scheduler is
-constructed by these classes. R04c/R09 must coordinate both stores rather than interpreting lease invalidation as sign-out.
+The refresh lease also accepts an optional suspending authorization predicate. Admission and post-seam checks invoke it
+independently of the reauth latch, preserving cancellation precedence and closed failures. The empty default is only a
+primitive compatibility path; recovered sessions always supply their bound authority check.
+
+### Startup recovery seams
+
+`SessionRecoveryCoordinator` is an inert, reads-only reconciler. Its required `SessionRecoveryAuthority` supplies immutable
+nonsecret observations of revision, session generation, private cached identity, activation operation, phase and complete
+baseline. **No real Room adapter is implemented**, and the app constructs none of this machinery.
+
+- Starts privacy-locked. Unconfigured use is local-only without I/O; signed-out observations never inspect/adopt orphan
+  vault credentials. Preparing/transitional state, incomplete baseline, missing/unreadable vault, changed origin or
+  mismatched account/generation/operation stay private. Matching prepared credentials require R09 promotion/recovery.
+- A complete active authority observation and matching active vault must survive authority/vault rereads unchanged before
+  one recovered handle is published. Reload comparison preserves semantic equality of separately restored pending
+  attempts while requiring their exact operation/key/body/token. Reconcile never writes, repairs, refreshes or reads clocks.
+- Fresh opaque operation tokens make newest reconciliation win. Synchronous invalidation kills old handles/leases without
+  waiting for reads or network. Observed cancellation leaves only the current operation privacy-locked; older completion,
+  fault or cancellation cannot reset a newer state. Injected cancellation remains identical inside an active caller.
+- The single shared refresh coordinator rechecks captured authority around credential seams and network admission/results.
+  Transport callbacks are checked before invocation and after success/error. Authority changes/faults permanently kill
+  the handle and lock visibility; authority-fault reason remains available even when lease invalidation surfaces stale.
+- Active is offline scope eligibility, not credential freshness or convergence. Expired credentials, transient/auth errors
+  and strict malformed legacy replay do not erase valid private cache or uncertain identity. Pending-first replay and at
+  most one access-401 retry still follow the accepted refresh rules.
+
+These observations and handles are not Room transaction authorization or durable sign-out. An already-started synchronous
+vault CAS may commit after invalidation; dead handles cannot use its result. R09 must implement the durable authority
+adapter/journal, generation changes, prepared promotion and two-store crash recovery; result application still rechecks
+inside Room transactions. R12 barriers, complete bootstrap and engine convergence precede app activation. No engine,
+sign-in/out orchestration, account UI, Google adapter, or scheduler is constructed by these classes.
 
 ## Legacy auth replay limitation
 

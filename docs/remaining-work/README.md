@@ -1,7 +1,7 @@
 # Active task specifications
 
-**No implementation task is currently open here.** R04b is accepted; R04c requires owner authorization and a new bounded
-specification. See [current pickup](../coordinator-handoff.md) and [the roadmap](../remaining-work-roadmap.md).
+**No implementation task is currently open here.** R05a is accepted; R05b requires specific owner authorization and a
+new bounded specification. See [current pickup](../coordinator-handoff.md) and [the roadmap](../remaining-work-roadmap.md).
 
 Create `RNN-task.md` (or subtask equivalent) only when that planning slice is authorized. Include the concrete contract,
 allowlists, independent acceptance tests, and stop condition from [coordinator workflow](../coordinator-workflow.md).

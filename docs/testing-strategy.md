@@ -28,12 +28,12 @@ review; [recorded verification](#recorded-verification) below is a compact evide
 | Area | Existing coverage / expansion boundary |
 |---|---|
 | Domain persistence | Finish cleanup/renumbering/rollback, cascades, history defaults, replacement identity, cloning, routines/custom guards |
-| Room v9 and capture | Supported migrations and real asset; outbox order/identity/coalescing, atomic generation+capture, session-scoped reads, all repository mutation families |
+| Room v10 and capture | Every v1–9 start and real asset; outbox order/identity/coalescing, scoped mutation families, independent generation ledger/cache bookkeeping, exact-byte migration preservation, rollback/cancellation/overflow and restart |
 | Pure logic and feature state | Locale formatting, naming/filtering, validation, ordered autosave, failure/cancellation and stale-load guards |
 | App/timer | Active discovery/replacement/finish/discard, finite edit drains, serial terminal writes, ownership/at-most-once persistence, clock and hardware behavior |
 | Compose/app flows | Catalogue/picker/editor/routine/set/history controls; actual startup, custom edit/add, workout finish/history, routine start and perform-again journeys |
 | Wire/HTTP | Raw duplicates, family identities, durable exact bytes, auth scalar/expiry validation, operation-aware errors, fixed-origin TLS/redirect/retry refusal, framing/UTF-8/cancellation |
-| Vault/refresh | Real codec/CAS restart, JCA crypto, Android Keystore/file/backup placement, pending-first durable-before-send rotation, unchanged 401 retry, leases and cancellation races |
+| Vault/refresh/recovery | Real codec/CAS restart, JCA crypto, Android Keystore/file/backup placement, pending-first durable-before-send rotation, unchanged request retry, startup authority/visibility precedence, recovered-handle fencing and cancellation races |
 | Real service | All 17 kinds/imports, complete canonical results, no-effect rejection, replay/account isolation/pull/snapshot, challenge/refresh/logout and invalid Google-proof rejection |
 | Still outstanding | Canonical Room publication, engine convergence, journal/account flows, cross-feature barriers, actual Google, WorkManager and live deployment/lifecycle gates; see roadmap |
 
@@ -139,15 +139,15 @@ Hosted execution/API 35 runtime is not established by the recorded local API 37 
 
 ## Recorded verification
 
-These are **earlier scoped results**, not runs performed by this documentation reorganization or proof against every future
-checkout. Full evidence stays in the linked reviews; consult only when assessing coverage freshness or investigating a gate.
+These are **dated scoped results**, not proof against every future checkout or evidence of app activation. Full evidence
+stays in the linked reviews; consult only when assessing coverage freshness or investigating a gate.
 
 | Layer | Latest relevant recorded evidence | Limitation |
 |---|---|---|
-| Offline JVM/build | [R04b review](archive/remaining-work/R04b-review.md): 726 unique JVM cases / 45 suites, 99 focused; Kotlin/Android-test compilation, assembly/lint/APK checks | Unused refresh machinery; no new device/backend gate |
+| Offline JVM/build | [R05a review](archive/remaining-work/R05a-review.md): fresh 799 unique JVM cases / 47 suites; Kotlin/KSP and Android-test compilation, assembly/lint, scoped APK preservation checks | Storage/capture only; no engine/Room-authority adapter or new backend gate |
 | Vault device | [R04a review](archive/remaining-work/R04a-review.md): 27 filtered API 37 tests | Not full instrumentation, API 24, or live OEM/cloud transfer |
 | Auth/real service | [R03c review](archive/remaining-work/R03c-review.md): 6 filtered API 37 auth tests; unchanged auth 10/10 and broad HTTP 56/56 after service correction | Backend rerun was not a new offline/device run; legacy replay remains unresolved |
-| Full instrumentation | [M3 gate](archive/sync-implementation-plan.md#review-ledger): 161 unfiltered API 37 tests | Predates later transport/vault smoke additions; not today's full device suite |
+| Full instrumentation | [R05a review](archive/remaining-work/R05a-review.md): 236 unique unfiltered cases / 22 classes on isolated API 37 emulator; includes 27 R05a capture cases and 3 migration cases | No API 24, live phone/Google, hosted CI or engine-convergence evidence |
 | Launcher | [Retirement review](archive/fake-retirement-review.md): 11 Python launcher tests | Not freshly rerun by later session slices |
 
 API 24 runtime, hosted CI, successful real Google identity, Room/engine convergence and owner phone/laptop journeys remain

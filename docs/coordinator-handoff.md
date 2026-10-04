@@ -5,19 +5,21 @@
 
 ## Next proposed task and authority
 
-**R04c — startup/session recovery seams** is the next proposed implementation slice. R04a/b vault and refresh machinery
-are accepted, but no R04c specification or implementation has started. Obtain specific owner authorization before planning
-or implementing it. The current documentation reorganization authorizes no implementation or app activation.
+**R05b — canonical batches** is the next proposed slice. R04a/b/c session foundations and R05a canonical storage/capture
+watermarks are accepted; see the [R05a review](archive/remaining-work/R05a-review.md). No R05b specification or
+implementation has started. Obtain specific owner authorization before planning or implementing it. R05a authorizes
+no next slice, remote publication, delivery operation or app activation.
 
-R04c must define recovery/fencing seams and restart/logout-race tests without taking over R09's durable Room transitions.
-Use [existing session machinery](sync/implementation.md#encrypted-vault-and-refresh) and
-[the two-store design](sync/integration-design.md#6-vault-and-room-two-stores-recoverable-journal-no-fake-atomicity).
+Reuse [current capture](sync/implementation.md#room-and-local-capture) and the approved
+[canonical/protected-intent design](sync/integration-design.md#2-canonical-state-versus-local-intent-account-wide-protection-first).
 The [roadmap](remaining-work-roadmap.md#status-and-dependencies) owns complete task status and dependencies.
 
 ## Capability boundary
 
-The app remains signed-out/local-only in production. Local Room persistence, scoped mutation capture, strict wire codecs,
-secure sync/auth HTTP adapters, encrypted vault, and refresh coordination exist. The HTTP/session components are not
+The app remains signed-out/local-only in production. Room v10 persistence, scoped mutation capture with independent
+account generation watermarks/canonical storage, strict wire codecs,
+secure sync/auth HTTP adapters, encrypted vault, refresh coordination and inert startup recovery seams exist. The
+required durable Room-authority adapter/journal remains R09. The HTTP/session components are not
 constructed by the app. There is no running sync engine, remote Room publication, working account/Google UI, durable
 sign-out flow, or background scheduler. See [architecture](architecture.md) and [sync implementation](sync/implementation.md).
 
@@ -46,4 +48,5 @@ sign-out flow, or background scheduler. See [architecture](architecture.md) and 
    assumption. No automatic continuation, commit/push, private configuration, or deployment is authorized.
 
 Recorded test evidence and its limitations are summarized in [testing strategy](testing-strategy.md#recorded-verification).
-This documentation-only reorganization adds no build, test, device, or backend pass.
+Latest scoped client evidence is the [R05a review](archive/remaining-work/R05a-review.md), including unfiltered isolated
+API 37 instrumentation. It adds no API 24, backend, Google, engine-convergence or app-activation pass.

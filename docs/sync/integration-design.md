@@ -5,9 +5,11 @@ choices, not coordinator startup reading. The finalized shared v1 contract is un
 for a bounded slice; [the roadmap](../remaining-work-roadmap.md) owns status and dependencies.
 
 The original R01 design was approved on 2026-10-03. Existing model, transport, vault and refresh primitives now implement
-parts of this foundation; [sync implementation](implementation.md) describes their actual boundaries. Canonical storage,
-engine, snapshots, vault/Room journal, account transitions and cross-feature publication barriers remain planned. Stored
-vault phases and explicit refresh leases alone never authorize activation. Preserve the unresolved
+parts of this foundation, including inert startup recovery seams; [sync implementation](implementation.md) describes their
+actual boundaries. R05a now supplies independent canonical storage and transactional capture watermarks; canonical
+record/batch application and projection, engine, snapshots, the durable Room-authority adapter/journal, account transitions
+and cross-feature publication barriers remain planned. Stored vault phases and explicit refresh leases alone never
+authorize activation. Preserve the unresolved
 [legacy auth replay limitation](implementation.md#legacy-auth-replay-limitation) in all recovery work.
 
 Maintain approved decisions here in place; preserve their rationale and distinguish adopted refinements from proposals.
@@ -71,12 +73,15 @@ newer local aggregate. Keeping only old acknowledgment JSON in an outbox also lo
 Store canonical data independently; the existing domain tables remain the durable latest local projection and local
 intent. Frozen requests remain commands, not a recipe to reconstruct all local domain values.
 
-Proposed logical Room additions, to be translated into exact entity/SQL specs at R05 pickup:
+Room storage boundaries below retain the approved design. R05a has delivered the canonical ledger and a separate
+`sync_account_cache` in v10; exact current fields/capture/migration behavior are owned by
+[the implementation reference](implementation.md#canonical-ledger-and-capture-watermarks). Canonical writers and
+publication are not delivered. Snapshot/journal additions remain future specifications:
 
 | Storage | Required logical fields and constraints |
 |---|---|
 | `sync_canonical_roots` | PK `(account_id, aggregate_type, aggregate_id)`; nullable highest observed positive revision; state `unobserved`, `upsert`, `delete`, or `snapshot_absent`; validated complete canonical JSON only for upsert; local-generation watermark; cache epoch. No FK cascade from domain tables |
-| Account cache metadata (extend `sync_state` or separate reviewed table) | Account PK; existing opaque pull cursor/last success; complete-baseline flag; cache/publication epoch; projection-dirty flag; materialized epoch; run fencing token/epoch as needed by exact R06 design |
+| Account cache metadata (`sync_account_cache`, delivered R05a) | Account PK; complete-baseline flag; cache epoch; projection-dirty flag; materialized epoch. Existing opaque cursor/last success stay in `sync_state`; run fencing token/epoch remains subject to exact R06 design |
 | Snapshot session + records (R08) | Run/session/account/generation, fixed page limit, baseline, continuation and seen-token/progress state, download phase; record PK `(stage_id,type,id)` to reject duplicates. No visible-domain FKs |
 | Transition journal (R09) | Singleton current operation ID, phase, source/target account and generation, local choice, captured source generations/IDs, import preparation/completion state; original import snapshots/error context if needed. **No credentials/Google proofs** |
 
@@ -220,7 +225,9 @@ cache until this gate passes. An old unchanged root must be discoverable without
 
 The [implemented vault and refresh primitives](implementation.md#encrypted-vault-and-refresh) provide app-private
 `noBackupFilesDir`, Keystore AES/GCM, versioned atomic records, backup exclusions, and exact uncertain-refresh persistence.
-The remaining design below coordinates them with Room; it is not a replacement vault implementation. Vault records bind
+The [startup recovery seams](implementation.md#startup-recovery-seams) now supply read-only eligibility and runtime
+fencing over an explicit authority interface, but no real Room adapter. The remaining design below delivers durable
+coordination with Room, not a replacement vault implementation. Vault records bind
 service credentials, pending attempt, account/generation/operation and revision. Google ID tokens remain bounded
 foreground memory; no persistence across restart. The planned Room journal holds only nonsecret identity/transition state.
 Ordinary local backup need not be disabled to exclude credentials.
@@ -329,9 +336,10 @@ barrier; app integration must not silently replace it with a no-op while composi
 
 ## 8. Migration boundaries and acceptance matrix
 
-Plan **coherent data-preserving migrations** at R05a (canonical ledger/publication state and capture watermarks), R08a
-(staging), and R09a (transition journal/device phases). Exact SQL/schema version is assigned only after checking the
-current branch on pickup. Combine adjoining changes only if they are one reviewed deliverable, not to avoid migration
+R05a delivered the **data-preserving v9→v10 migration** for canonical ledger/publication state and capture watermarks.
+Plan separate coherent migrations at R08a (staging) and R09a (transition journal/device phases); their exact SQL/schema
+versions are assigned only after checking the current branch on pickup. Combine adjoining changes only if they are one
+reviewed deliverable, not to avoid migration
 coverage. No entity change without KSP/export, preserved snapshots, all supported starts and copied v1 asset tests.
 
 | Invariant / fault | Mandatory layer and gate |
