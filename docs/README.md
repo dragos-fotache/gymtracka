@@ -1,63 +1,54 @@
-# GymTracka Android documentation
+# Android documentation — start here
 
-This directory belongs to the Android repository. It contains Android-only implementation, test, planning and review
-records. The sibling `shared-docs/` checkout contains cross-project product behavior, backend/API contracts and the
-fixed catalogue package; the backend must not depend on these Android-local documents.
+> **Replace current state; append only to historical evidence.**
+> Active documentation is an operating guide, not a transcript or delivery journal.
 
-## Current documents
+## Documentation rules
 
-- [Architecture](architecture.md) — app structure, Room schema/migrations, repository/state boundaries and persistence
-  invariants.
-- [Testing strategy](testing-strategy.md) — coverage, executed gates, limitations and verification commands.
-- [Coordinator handoff](coordinator-handoff.md) — current baseline, scope and the next pickup boundary.
-- [Remaining-work roadmap](remaining-work-roadmap.md) — R01–R18 dependencies, personal-use priorities, deferred public
-  readiness, acceptance outcomes and per-task planning workflow.
-- [Sync implementation plan](sync-implementation-plan.md) — capability definitions, invariants and historical review
-  ledger. Its archived execution instructions do not override the current handoff/roadmap.
-- [Simulator retirement review](fake-retirement-review.md) and [coverage transfer ledger](fake-retirement-coverage.md)
-  — evidence for replacing the backend-sized fake with isolated real-HTTP tests.
-- [Historical sync assignments](sync-assignments/) — preserved task, contributor-plan and review records. Assignment
-  018 remains paused; do not recreate the simulator.
+1. **One home per fact.** Update the owning document below; link to it elsewhere instead of copying its narrative.
+2. **Keep current, planned, and historical separate.** Implemented does not mean activated; approved design does not
+   mean implemented; task acceptance does not authorize the next task.
+3. **Read progressively.** Start with the pickup route, then read only the references needed for the authorized task.
+   Do not recursively ingest `docs/` or use the archive as routine orientation.
+4. **Replace, do not prepend.** Rewrite stale status and remove superseded instructions. Do not accumulate “the owner
+   subsequently…” paragraphs or explanations that earlier current-state paragraphs are historical.
+5. **Preserve decisions, not session noise.** Keep invariants, design rationale, unresolved risks, and reproducible
+   verification procedures. Leave pane IDs, intermediate fixes, temporary paths, old dirty-tree inventories, and commit
+   receipts out of active docs. Discover live repository/agent state at pickup.
+6. **Evidence is scoped and dated.** Record actual commands, results, environment, and unverified gates in one acceptance
+   review. Never present an old/cached/filtered run as a new/full pass or copy test-count progressions into every document.
+7. **Close tasks deliberately.** Extract durable implementation/design facts and unresolved obligations before archiving
+   the completed specification/review. Keep incomplete and deferred slices in the roadmap. Do not update old records to
+   pretend they describe today.
+8. **Validate documentation changes.** Check relative links/anchors, new-file whitespace, and `git diff --check`; preserve
+   unrelated changes. Documentation cleanup does not authorize code, configuration, deployment, commits, or pushes.
 
-Detailed task/subtask plans and acceptance reviews belong under `docs/remaining-work/` in this repository,
-created on pickup. [R01 audit](remaining-work/R01-task.md), [design](remaining-work/R01-design.md) and
-[verification record](remaining-work/R01-review.md) record owner design approval on 2026-10-03, along with the next
-[R02a shared specification](remaining-work/R02a-task.md). R02a–d are now accepted; see the
-[R02b review](remaining-work/R02b-review.md), [R02c review](remaining-work/R02c-review.md),
-[R02d review](remaining-work/R02d-review.md) and
-[authorized Android delivery commit record](remaining-work/R02bc-commit-review.md). Live R03c pickup found R02d/R03a/b
-included in clean Android `6134a58`; their earlier uncommitted descriptions are historical.
-The owner's requested [R03 subtask split](remaining-work/R03-task.md) defines secure transport, sync, auth and deferred
-lifecycle/streaming gates. The owner subsequently authorized **R03a only**, delivered under the
-[detailed shared specification](remaining-work/R03a-task.md), now accepted; see the
-[R03a review](remaining-work/R03a-review.md). It supplies reusable secure HTTP I/O, not endpoint adapters or activation.
-R03b is also accepted; see its [specification](remaining-work/R03b-task.md) and [review](remaining-work/R03b-review.md).
-It adds the unused production sync adapter/shared errors with real-service interoperability through test TLS.
-The owner subsequently authorized R03c: see its [specification](remaining-work/R03c-task.md) and
-[acceptance review](remaining-work/R03c-review.md). Client gates pass (553 offline JVM/six API37 smoke/build/lint);
-after separate backend correction, unchanged auth10/10 and broad56/56 pass without decoder/test changes. R03c is accepted
-with historical incompatible accepted replay explicitly preserved/not counted repaired.
-The owner subsequently authorized **R04a only**: [R04 split](remaining-work/R04-task.md),
-[specification](remaining-work/R04a-task.md) and [review](remaining-work/R04a-review.md) record accepted UNUSED encrypted
-vault/storage,627 offline JVM/27 API37 vault tests and build/lint/security/preservation checks. No refresh/startup/account
-or Room activation flow in a. Owner subsequently authorized R04b; its [specification](remaining-work/R04b-task.md) and
-[accepted review](remaining-work/R04b-review.md) cover unused serialized exact-attempt refresh/atomic leases/one unchanged401
-retry.726 forced offline JVM/99 focused, compile/assembly/lint/APK/preservation passed; no new device/backend/account gate.
-R04c startup/session recovery is next ONLY after specific authorization; c/R03d/Room/account activation remain unauthorized.
-The owner subsequently committed Android R03c/R04a in `04f7ed2` and the shared auth-expiry issue resolution/index in
-`31c969f`; both trees were clean before the documentation-only receipt update. See
-[the verified full commit IDs](coordinator-handoff.md#owner-delivery-commits--verified-2026-10-04). Earlier dirty-tree text
-is historical; no new test/remote verification or subsequent task authorization is implied.
-No additional implementation is authorized by the roadmap or R01 plan. The near-term target is the owner's personal app
-against an always-on laptop-hosted service, not a public launch.
+## Reading routes
 
-## Shared references
+- **New coordinator:** root [AGENTS.md](../AGENTS.md) → [current handoff](coordinator-handoff.md) →
+  [roadmap summary](remaining-work-roadmap.md#status-and-dependencies). Read [workflow](coordinator-workflow.md) before
+  delegating; follow task-specific references after scope is authorized.
+- **Feature/persistence work:** [architecture](architecture.md), relevant shared
+  [product behavior](../shared-docs/docs/product-behavior.md), and [testing strategy](testing-strategy.md).
+- **Sync work:** [implemented sync components](sync/implementation.md), relevant sections of the approved
+  [integration design](sync/integration-design.md), and the full linked
+  [backend contract](../shared-docs/docs/backend-contract/README.md) as required by AGENTS.md.
+- **Historical investigation only:** [archive index](archive/README.md). No archived instruction grants current authority.
 
-- [Product behavior](../shared-docs/docs/product-behavior.md).
-- [Backend/sync contract](../shared-docs/docs/backend-contract/README.md), including its linked wire/domain/authentication
-  requirements.
-- [Fixed catalogue package](../shared-docs/catalogue/README.md).
+## Single sources of truth
 
-Update Android implementation/tests/plans here; update cross-project behavior and compatibility contracts in
-`shared-docs/`. Keep both git diffs in view, preserve existing uncommitted changes, and do not claim old verification
-as a fresh pass.
+| Question | Owning document |
+|---|---|
+| What should a coordinator pick up, and what blocks it? | [Coordinator handoff](coordinator-handoff.md) |
+| How do coordinator, Worker, and QA operate? | [Coordinator workflow](coordinator-workflow.md) |
+| What is implemented, and where are its boundaries? | [Architecture](architecture.md) and [sync implementation](sync/implementation.md) |
+| What Android integration decisions are approved but not yet delivered? | [Integration design](sync/integration-design.md) |
+| What remains, in what order, and for which milestone? | [Roadmap](remaining-work-roadmap.md) |
+| How should changes be verified? | [Testing strategy](testing-strategy.md) |
+| What exactly is the current assignment? | Its specification under [remaining-work/](remaining-work/README.md) |
+| What passed at a completed gate? | Its acceptance review, indexed in the [archive](archive/README.md) |
+
+Android code is the authority for implemented behavior. The shared contract is the authority for finalized cross-project
+requirements. This folder owns Android implementation, tests, and delivery planning; `shared-docs/` owns shared product,
+API/sync contracts, and the [fixed catalogue package](../shared-docs/catalogue/README.md). Do not duplicate those contracts
+here. Update only documents whose facts changed, not every document at every gate.
