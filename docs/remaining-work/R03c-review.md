@@ -4,7 +4,8 @@ Status: **R03c coordinator-accepted (2026-10-04)** after unchanged client intero
 independently reviewed backend correction. New issuance/rotation precision blocker is resolved; incompatible pre-fix
 accepted replay remains a documented legacy limitation, NOT a repaired case or relaxation of the contract.
 Owner authorized R03c only. Normative specification: [R03c task](R03c-task.md).
-No R04/R03d/R02e, commit/push, app activation, deployment or private configuration is authorized.
+At this gate, no R04/R03d/R02e, commit/push, app activation, deployment or private configuration was authorized.
+Later R04a acceptance and owner delivery commits are recorded below; current pickup follows the coordinator handoff.
 
 ## Delivered client boundary
 
@@ -146,7 +147,7 @@ client. Carry this limitation into future session/recovery design and release re
 ## Stop, preservation and pickup
 
 Both contributors are idle in the same fresh R03c sessions. Owned isolated launcher/service/container/config and emulator
-were stopped; no unrelated service/pane/device/configuration was changed. Android R03c changes remain uncommitted;
+were stopped; no unrelated service/pane/device/configuration was changed. At this gate, Android R03c changes were uncommitted;
 shared-docs was preserved at the code/test gate, then separately authorized issue documentation was published and
 owner-committed at d5d68d4; only the issue/result index is updated after this rerun. Backend's pinned shared checkout is
 untouched. Pickup was clean Android6134a58 / shared61fe3f9, superseding older dirty
@@ -158,6 +159,14 @@ After this verification, the owner requested a shared backend-facing issue. It i
 from the shared contract README. These subsequent documentation-only changes are authorized; the shared-tree preservation
 statement above describes the earlier R03c code/test gate, not this publication follow-up. That publication changed
 documentation only; Android performed no backend correction or commit/push.
+
+**Subsequent owner delivery (verified 2026-10-04):** Android
+`04f7ed24c39b4396122e6d60225942493ba500e2` (`sync work`, parent `6134a58`) commits accepted R03c and subsequent
+[R04a](R04a-review.md), including source/tests/harness/backup XML/local docs. Nested shared-docs
+`31c969f261bd3f0fe662e633c0dfffecb3c08393` (`sync work`, parent `d5d68d4`) commits the issue-resolution/index follow-up.
+Both trees, including untracked files, were clean before this documentation-only receipt update. No coordinator commit/
+push, new test run, remote/push verification or repair of legacy replay is claimed. Current next task/authorization is in
+[the handoff](../coordinator-handoff.md#owner-delivery-commits--verified-2026-10-04); the proposed R04 pickup below is historical.
 
 R03c is **accepted within its bounded unused auth-transport scope**, with the explicit legacy limitation above.
 Next proposed task is R04 encrypted session storage/refresh recovery, ONLY after separate owner authorization.

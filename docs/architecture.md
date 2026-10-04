@@ -379,12 +379,46 @@ ordinary backup remains enabled. No multiprocess, hardware-backed, flash/GC secu
 
 Codec/crypto/file work is on IO with owned-copy cleanup. Outer caller-activity checks preserve original cancellation
 identity across context recovery; cancellation after a commit is not rollback proof. Whole grant+pending state can be
-replaced atomically, but there is NO refresh HTTP orchestration, access provider, Room journal/startup reconciliation,
-account activation or sign-out flow yet. Prepared/active are stored labels, not permission to expose account data.
+replaced atomically. R04a itself adds no orchestration; R04b's unused refresh machinery is reviewed below. Room journal/
+startup reconciliation, account activation and sign-out flow remain absent. Prepared/active are stored labels, not
+permission to expose account data.
 
 [Review](remaining-work/R04a-review.md):627 forced offline JVM tests/27 filtered API37 vault tests and compile/build/lint/
 APK/preservation gates passed. Room9/asset1/domain/UI/build/manifest are unchanged. Legacy incompatible accepted replay
-remains UNREPAIRED; no rounding/new uncertain key/rewrite/revocation/data deletion. R04b/c require separate authorization.
+remains UNREPAIRED; no rounding/new uncertain key/rewrite/revocation/data deletion. R04b is accepted below; c needs
+separate authorization.
+
+## R04b refresh coordination — accepted, not activated
+
+`SessionRefreshCoordinator` serializes vault selection/rotation under an app-owned mutex; it is not constructed by the app.
+An explicit `SessionRefreshLease` must match service origin/account/positive generation/activation operation/phase. One
+shared lease per future authorized activation has single-snapshot atomic admission, process-local reauth latching and
+immediate permanent invalidation. Neither its creation nor stored phase proves Room authorization.
+
+Pending refresh is settled FIRST with exact retained operation/key/body/token even when old access seems live or the
+consumed predecessor's refresh expired. A fresh pair is captured once and whole-grant+pending CAS completes/reloads before
+HTTP; same-account returned grant+cleared pending CAS completes/reloads before use. Expired original access replay is
+persisted before one fresh current-token rotation. Scheduling uses returned expiry hints without skew/arithmetic extension;
+no automatic network/backoff loop or new uncertain key. Safe/storage/cancellation failures preserve recovery identity.
+
+`withAccessToken` admits pure transport callbacks outside the run mutex, fences late results/errors, and allows only one
+unchanged access401 retry; concurrent rejected old credentials reuse a newer committed grant. Repeated401/explicit reauth
+latches foreground recovery without deleting credentials/cache. `SessionRefreshingGymSyncApi` privately deep-owns validated
+push wrappers before suspension (original mutation text unchanged), preserves programming-error types before credential
+I/O, and delegates each attempt with a fixed tagged provider. Read tokens/queries and frozen mutation IDs/order/bytes remain
+unchanged. Production secure transport/default constructors remain available without adding app configuration.
+
+Actual caller cancellation precedes reauth latching; successful seams and pre-save/admission/post-result checks refuse
+invalidated leases, including direct access return. New errors close causes and suppression. Invalidation alone performs
+no durable sign-out/Room cleanup/logout; an already-in-progress synchronous vault commit may finish, but its dead lease
+cannot admit credentials. Later R04c/R09 must reconcile both stores and tombstone/fence transitions; already-admitted bytes
+cannot be recalled. No multiprocess or independently constructed concurrent coordinator/duplicate activation-lease claim.
+
+[Review](remaining-work/R04b-review.md):726 forced offline JVM tests/99 focused, production/Android-test compilation,
+assembly/lint/APK/asset/preservation passed. No new device/backend/Google/Room convergence gate. Room9/asset1/build/app/
+manifest/backup/XML/existing source/tests and shared checkout unchanged. Legacy incompatible accepted replay remains
+UNREPAIRED and preserved; no rounding/rewrite/new uncertain key/revocation/inferred cache deletion. R04c requires separate
+authorization. No startup/account/UI/engine/Google/scheduler activation or sign-out orchestration is delivered.
 
 ## Proposed integration design — not implemented
 

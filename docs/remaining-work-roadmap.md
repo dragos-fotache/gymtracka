@@ -4,7 +4,14 @@ Status: R01 planning/design approved and **R02a–d plus R03a–c accepted** (R0
 Owner subsequently authorized **R04a only**, now accepted (2026-10-04). See [R04 split](remaining-work/R04-task.md),
 [R04a specification](remaining-work/R04a-task.md) and [review](remaining-work/R04a-review.md): unused encrypted vault,
 627 offline JVM/27 API37 vault tests/build/lint/preservation passed, not refresh orchestration or activation.
-R04b/c and later slices, commit/push/deployment remain unauthorized; older no-R04 text is prior-gate history.
+Owner delivery commits are verified: Android `04f7ed2` (R03c/R04a) and shared-docs `31c969f` (auth-expiry issue
+resolution/index). Both trees were clean before this documentation-only follow-up; see
+[the full commit record](coordinator-handoff.md#owner-delivery-commits--verified-2026-10-04).
+Owner authorized **R04b** (“start work at R04b”), now [accepted](remaining-work/R04b-review.md) under its
+[specification](remaining-work/R04b-task.md): unused exact-attempt refresh/CAS/atomic leases/one unchanged401 retry.
+726 forced offline JVM/99 focused, Kotlin/Android-test compilation, assembly/lint/APK/preservation passed; no new device/
+backend/Room/account-activation gate. R04c requires separate authorization; legacy incompatible replay remains unrepaired.
+R04c/later slices, activation, additional agent commits/pushes/deployment remain unauthorized; older stop text is history.
 [R03c specification](remaining-work/R03c-task.md) and [review](remaining-work/R03c-review.md): 553 offline JVM/six API37
 smoke/build/lint gates pass; unchanged corrected-service auth10/10 and broad56/56 pass with all expiry-precision flags true.
 Historical incompatible accepted replay remains an explicit legacy limitation, not counted repaired.
@@ -46,7 +53,8 @@ previously passed six filtered Android smoke tests. Earlier evidence remains 46 
 161 instrumentation tests at the last full device gate. See [testing strategy](testing-strategy.md),
 [R02a review](remaining-work/R02a-review.md), [R02d review](remaining-work/R02d-review.md) and
 [retirement review](fake-retirement-review.md); earlier evidence is not
-verification of a new task. The Android simulator-retirement baseline was delivered in `623207c`; nested shared-docs changes remain separate and uncommitted.
+verification of a new task. The Android simulator-retirement baseline was delivered in `623207c`; nested shared-docs
+history remains separate. Its auth-expiry resolution/index is owner-committed in `31c969f`, as recorded above.
 
 R03a delivers a reusable production-compatible secure HTTP primitive, not endpoint adapters. R03c adds an unused,
 accepted production service-auth adapter after corrected-service interoperability; legacy incompatible accepted replay
@@ -111,7 +119,7 @@ Other slices require individual planning/implementation authorization.
 | R01 | Audit v1 gaps and approve the integration design | Existing baseline | Reviewed requirement/design matrix and bounded next assignment |
 | R02 | Align client models and API boundaries with finalized v1 | R01 | R02a–d accepted; R02e lifecycle deferred with public account features |
 | R03 | [Implement Android HTTP transport](remaining-work/R03-task.md) | Relevant R02 slices | R03a primitive/R03b sync/R03c auth accepted; legacy replay limitation; d deferred |
-| R04 | [Encrypted session storage and refresh recovery](remaining-work/R04-task.md) | R03a, R03c | a vault/storage accepted; b refresh/c startup recovery pending |
+| R04 | [Encrypted session storage and refresh recovery](remaining-work/R04-task.md) | R03a, R03c | a vault/b unused refresh accepted; c startup pending |
 | R05 | Implement remote Room application and protected local intent | R02; R01 design | Atomic revision-safe canonical batches without lost edits or echo uploads |
 | R06 | Implement durable push orchestration | R03b, R04, R05 | Ordered unchanged retries and exact fenced acknowledgments |
 | R07 | Implement incremental pull orchestration | R06 | Contiguous batch/cursor application and safe pagination |
@@ -431,11 +439,11 @@ process-death timer redesign is included here.
   architecture/testing/plans in `docs/` and shared product/contracts in `shared-docs/` as behavior changes, not claims
   of future behavior as already shipped.
 
-**Next proposed pickup:** R04b refresh coordination, only after specific owner authorization.
-R04a UNUSED encrypted vault/storage is [accepted](remaining-work/R04a-review.md); no b/c detailed plan or implementation
-has started. No account activation, Room transition, backend/configuration, commit/push or deployment authorization.
+**Next proposed pickup:** R04c startup/session recovery seams, ONLY after specific owner authorization.
+R04a UNUSED encrypted vault/storage and [R04b unused refresh coordination](remaining-work/R04b-review.md) are accepted;
+stop after b. No c plan/implementation has started. No account activation, Room transition, backend/configuration, commit/push or deployment authorization.
 [R03c](remaining-work/R03c-review.md) is accepted after unchanged corrected-service auth10/10 and broad56/56 pass; preserve
-its explicit historical replay limitation in session/recovery design. R04b/c and deferred lifecycle work have not started. R03b is accepted under its [specification](remaining-work/R03b-task.md) and
+its explicit historical replay limitation in session/recovery design. R04c and deferred lifecycle work have not started. R03b is accepted under its [specification](remaining-work/R03b-task.md) and
 [review](remaining-work/R03b-review.md). R03a is accepted under its [specification](remaining-work/R03a-task.md) and
 [review](remaining-work/R03a-review.md), following the [R03a–d split](remaining-work/R03-task.md).
 R02e lifecycle support remains deferred with public account features.

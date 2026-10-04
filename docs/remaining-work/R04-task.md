@@ -1,14 +1,16 @@
 # R04 — Encrypted session storage and refresh recovery
 
-Status: owner authorized **R04a only** (2026-10-04: “Let's start work on R04a then”).
-R03a–c are accepted prerequisites; this does not authorize R04b/c, R09, app activation, commit/push or deployment.
+Status: **R04a and R04b accepted** (2026-10-04). Owner authorized b: “start work at R04b”.
+[Specification](R04b-task.md) / [review](R04b-review.md):726 forced JVM/99 focused/build/lint/preservation passed;
+unused refresh/lease/decorator only. R03a–c/R04a are accepted prerequisites;
+R04c, R09, app activation, commit/push and deployment remain unauthorized.
 
 ## Sequential slices
 
 | Slice | Deliverable | Boundary |
 |---|---|---|
 | [R04a](R04a-task.md) | Inert encrypted vault, complete versioned records, exact-attempt storage, checked atomic revision replacement, Keystore/private-backup exclusion | [Accepted](R04a-review.md):627 JVM/27 API37/build/lint; no HTTP/session orchestration |
-| R04b | Serialized refresh/access-token orchestration using persist-before-send and unchanged uncertain attempts | Proposed only; prepare detailed specification after authorization |
+| [R04b](R04b-task.md) | Serialized refresh/access-token orchestration using persist-before-send and unchanged uncertain attempts | [Accepted](R04b-review.md):726 JVM/build/lint; unused lease/refresh/bounded retry only |
 | R04c | Startup/session recovery integration seams and restart/logout race matrix | Proposed only; prepare detailed specification after authorization; Room transitions remain R09 |
 
 R04a tests storage-level restart, malformed/missing keys, interrupted replacement and concurrent stale revisions now;
@@ -31,9 +33,15 @@ original pair without expiry-policy guesses; future recovery/release review must
 
 ## Pickup and stop
 
-Live Android HEAD `6134a58bacaa20bcfc7ccb872a77ffb104867d21`, shared-docs HEAD
+R04a pickup Android HEAD `6134a58bacaa20bcfc7ccb872a77ffb104867d21`, shared-docs HEAD
 `d5d68d4cfa919839e6f52a590cebda46c31647ae`. Existing R03c tracked/untracked production/tests/harness/docs and two shared
-issue/index edits are preserved. Coordinator succession edits are also preserved. No backend work is needed in a.
-Only R04a has concrete APIs/allowlists. Its independent review/gates are accepted; stop here. R04b refresh coordination
-is next ONLY after specific owner authorization. No b/c detailed specification, contributor assignment or implementation
-is started; do not continue the roadmap.
+issue/index edits were preserved at the gate, as were coordinator succession edits. No backend work was needed in a.
+The owner subsequently committed Android R03c/R04a in `04f7ed2` and shared issue resolution/index in `31c969f`; both trees
+were clean before this documentation-only follow-up. See
+[the verified delivery record](../coordinator-handoff.md#owner-delivery-commits--verified-2026-10-04); earlier dirty state is historical.
+R04a's independent review/gates are accepted. Owner subsequently authorized R04b; its concrete APIs/allowlists and
+refresh/CAS/lease/unchanged-retry matrix are in [R04b-task.md](R04b-task.md); its [review](R04b-review.md) now accepts
+unused orchestration with726 forced JVM/99 focused/compile/assembly/lint/APK/preservation gates. Seven existing receipt-doc
+edits preserved at Android HEAD04f7ed2; shared HEAD31c969f remains byte-preserved/clean. Both contributors hold idle.
+Next proposed pickup is R04c ONLY after specific owner authorization. No c specification/assignment, Room/startup/account
+activation, backend/configuration, commit/push or deployment. Stop after b.

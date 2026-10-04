@@ -10,20 +10,54 @@ holding; rediscover all live names/models before reuse. **No R04 planning/implem
 
 ## Current strategy and next task
 
-**Current acceptance (2026-10-04):** after succession, owner instructed “Let's start work on R04a then”.
+**Current acceptance — R04b (2026-10-04):** owner authorized “start work at R04b”.
+[Specification](remaining-work/R04b-task.md) and [review](remaining-work/R04b-review.md) accept UNUSED serialized exact
+pending-first refresh, durable-before-send/whole-grant CAS, explicit atomic revocable leases and one unchanged401 retry.
+Independent99 focused and **726 unique forced offline JVM tests in45 suites**, Kotlin/Android-test compilation,
+assembly/lint/manifest/APK/asset/preservation passed; zero test failures/errors/skips. No new device/backend/Google/Room
+convergence gate. Lease invalidation is NOT durable sign-out; R04c/R09 still own startup/two-store/Room integration.
+No app construction/account/UI/engine activation. Legacy incompatible accepted replay remains UNREPAIRED: no rounding/
+rewrite/new uncertain key/revocation/inferred cache deletion. New test compiler opt-ins resolved; two nonfatal unused-
+expression warnings explicitly recorded. Both contributors hold idle in completed fresh R04b Pi Muse Contributor/high
+sessions (Worker w4:pJ, QA w4:pK); same-session corrections/source isolation/serialized slots retained. Owner now requires
+fully async Herdr reports: no coordinator Worker/QA output waits/polling. Rediscover live identities before reuse.
+Android HEAD04f7ed2 and shared HEAD31c969f unchanged. Seven pickup receipt-doc edits preserved; all279 pickup files outside
+seven intentionally updated local docs, including existing source/tests/build/schema/backup/asset and entire shared tree,
+are hash-identical. Four new production/three new QA/two new task-review files plus local docs remain UNCOMMITTED; no staging/
+commit/push. No emulator/service/config created. **Next ONLY after specific authorization: R04c startup/session recovery seams.**
+No c specification/assignment, Room/account activation, backend/configuration/deployment or commit/push is authorized.
+Older R04b stop/authorization descriptions below are historical gate records, not permission to continue. Stop after b.
+
+**Prior R04a acceptance (2026-10-04):** after succession, owner instructed “Let's start work on R04a then”.
 [R04 split](remaining-work/R04-task.md), [specification](remaining-work/R04a-task.md) and [review](remaining-work/R04a-review.md)
 now record **R04a accepted**: UNUSED encrypted vault with exact pending-attempt/grant CAS/tombstones, Keystore/private
 noBackup storage and explicit backup XML.627 forced JVM/27 filtered API37 vault tests, compilation/assembly/lint/manifest/
 APK/preservation passed, zero failures/errors/skips. Room9/asset1/build/app/domain/state/manifest unchanged; no refresh
 HTTP/access/startup/Room journal/account flow. Owned headless emulator stopped, no backend/service/configuration created.
 Both fresh R04a contributors hold idle; source isolation/serialized slots preserved. All R03c tracked/untracked/shared
-issue edits preserved; Android HEAD6134a58/shared HEADd5d68d4 unchanged, R03c/R04a remain uncommitted. No commit/push.
-**Next ONLY after specific authorization: R04b refresh coordination.** No b/c specification, assignment or implementation
-started; account activation, backend, deployment/private configuration remain unauthorized. Legacy incompatible accepted
+issue edits preserved at acceptance (Android6134a58/shared d5d68d4). The owner subsequently committed R03c/R04a and the
+shared issue resolution; see the verified delivery commits below. No coordinator commit/push was performed.
+**At that R04a gate**, next proposed pickup was R04b only after specific authorization; b was later authorized/accepted
+as recorded above. R04c/account activation/backend/deployment/private configuration remain unauthorized. Legacy incompatible accepted
 replay remains UNREPAIRED: no rounding/rewrite/new uncertain key/revocation/inferred data deletion. Earlier no-R04 text
 below describes prior gates, not current pickup.
 
-**Current pickup:** the owner authorized R03c (“Go ahead and start work at task R03c”). Its
+### Owner delivery commits — verified 2026-10-04
+
+The owner reported committing the changes. Live local history/status confirms:
+
+- Android `04f7ed24c39b4396122e6d60225942493ba500e2` (`sync work`), parent `6134a58`: accepted R03c/R04a production,
+  tests/harness, backup XML and local task/review/handoff documents (37 files).
+- Nested shared-docs `31c969f261bd3f0fe662e633c0dfffecb3c08393` (`sync work`), parent `d5d68d4`: the auth-expiry issue
+  resolution and contract README index (2 files). Legacy incompatible accepted replay remains explicitly unresolved.
+
+Both trees, including untracked files, were clean before this documentation-only follow-up. The earlier uncommitted
+statements below are historical gate records. Inspect live HEAD/status on pickup; this receipt update is separate from
+the owner's commits. No build/test rerun, coordinator commit/push, remote/push verification or new task authorization
+is added by that receipt. R04b was separately authorized/accepted afterward as recorded at the top; R04c still requires
+specific owner authorization.
+
+**R03c pickup history:** the owner authorized R03c (“Go ahead and start work at task R03c”). Its
 [specification](remaining-work/R03c-task.md) and [review](remaining-work/R03c-review.md) now record **R03c acceptance
 (2026-10-04)**: client gates 553 offline JVM/six API37 smoke/build/lint passed; unchanged corrected-service auth10/10 and
 broad56/56 passed with all expiry-precision flags true. Historical incompatible accepted replay remains a known legacy
@@ -121,9 +155,9 @@ isolated configuration; owned service/container/config cleaned up. No new Google
 legacy refresh can rotate, but uncertain consumed-token retries never get a new key/rounding/replay rewrite automatically.
 No blanket revocation or cache/data deletion. This is retained rollout limitation, not full v1 release compliance.
 
-**Next proposed task:** R04b refresh coordination, ONLY after specific owner authorization; carry this legacy limitation
-into recovery design. R04a vault/storage is accepted as recorded above; no b/c detailed specification/implementation has
-started. No R04b/c/R03d, R02e, commit/push, app activation/deployment/private configuration or018 is authorized.
+**Next proposed task:** R04c startup/session recovery seams, ONLY after specific owner authorization; carry this legacy
+limitation into recovery design. R04a/b unused vault/refresh machinery is accepted as recorded above; no c specification/
+implementation has started. No R04c/R03d, R02e, commit/push, account activation/deployment/private configuration or018 is authorized.
 
 The proposed integration stores canonical records/deletion evidence separately and conservatively protects the entire
 visible account projection while any local outbox intent remains. Clean complete-cache publication requires finite-edit
@@ -179,7 +213,8 @@ Coordinator resolved a bounded QA escape-fixture editing blocker without grantin
 returned focused execution to the same QA session. Contributor-session mcpls was unavailable/indexing; coordinator
 navigation/diagnostics and actual compilation/tests supplied the gate. No agent changed global configuration.
 R02a is committed as `2a93c56`; the subsequent owner-authorized Android delivery includes R02b/R02c and the prior
-retirement/HTTP/build/AGENTS/local-doc baseline, delivered as `623207c`. R02d and R03a/b are accepted but uncommitted.
+retirement/HTTP/build/AGENTS/local-doc baseline, delivered as `623207c`. Accepted R02d/R03a/b were subsequently
+owner-committed in `6134a58`; R03c/R04a delivery is recorded above.
 Nested-doc history remains separate and untouched; later owner-authorized R03c pickup/status is recorded above.
 No R03d, commit or push is authorized.
 

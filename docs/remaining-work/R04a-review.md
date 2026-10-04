@@ -1,8 +1,9 @@
 # R04a — Coordinator review
 
 Status: **R04a coordinator-accepted (2026-10-04)**. Owner authorized a only: “Let's start work on R04a then”.
-Normative [specification](R04a-task.md), [R04 split](R04-task.md). R04b/c, account activation, commit/push, backend,
-deployment and private configuration remain unauthorized. Legacy incompatible accepted replay remains UNREPAIRED.
+Normative [specification](R04a-task.md), [R04 split](R04-task.md). Subsequent owner delivery commits are recorded below;
+R04b/c, account activation, backend, deployment/private configuration and additional agent commits/pushes remain
+unauthorized. Legacy incompatible accepted replay remains UNREPAIRED.
 
 ## Delivered boundary — UNUSED
 
@@ -95,10 +96,17 @@ android,release-manifest,qa-focused-final,worker-compile}.log`/hash manifest are
 ## Preservation, limitations and stop
 
 Pickup Android HEAD `6134a58bacaa20bcfc7ccb872a77ffb104867d21`, shared HEAD
-`d5d68d4cfa919839e6f52a590cebda46c31647ae`, both remain live at acceptance. Existing R03c tracked/untracked production/
+`d5d68d4cfa919839e6f52a590cebda46c31647ae`, both were live at the acceptance gate. Existing R03c tracked/untracked production/
 tests/harness/docs and predecessor succession edits preserved. All232 pickup Android files outside the eight authorized
 existing docs/XML are hash-identical; all29 shared files are unchanged, including its two existing dirty issue/index edits.
-No commits/pushes/staging or unrelated pane/process/checkout/private input changes.
+No coordinator commits/pushes/staging or unrelated pane/process/checkout/private input changes occurred at that gate.
+
+**Subsequent owner delivery (verified 2026-10-04):** Android
+`04f7ed24c39b4396122e6d60225942493ba500e2` (`sync work`, parent `6134a58`) includes accepted R03c/R04a source/tests/
+harness/backup XML and local docs. Shared-docs `31c969f261bd3f0fe662e633c0dfffecb3c08393` (`sync work`, parent `d5d68d4`)
+commits the existing auth-expiry issue resolution/index edits. Both working trees, including untracked files, were clean
+before this documentation-only receipt update. These are owner commits, not coordinator commits or new verification
+runs; push/remote state was not checked. Earlier dirty-tree descriptions are historical. No later slice is authorized.
 
 Owned headless emulator was stopped after verification, without focus change or other device control. Gradle's device
 harness had already uninstalled the test package (post-run run-as reported no package); no extra installation/activation

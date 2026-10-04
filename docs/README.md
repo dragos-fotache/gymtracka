@@ -40,7 +40,14 @@ with historical incompatible accepted replay explicitly preserved/not counted re
 The owner subsequently authorized **R04a only**: [R04 split](remaining-work/R04-task.md),
 [specification](remaining-work/R04a-task.md) and [review](remaining-work/R04a-review.md) record accepted UNUSED encrypted
 vault/storage,627 offline JVM/27 API37 vault tests and build/lint/security/preservation checks. No refresh/startup/account
-or Room activation flow. R04b is next only after specific authorization; c/R03d remain deferred/unauthorized.
+or Room activation flow in a. Owner subsequently authorized R04b; its [specification](remaining-work/R04b-task.md) and
+[accepted review](remaining-work/R04b-review.md) cover unused serialized exact-attempt refresh/atomic leases/one unchanged401
+retry.726 forced offline JVM/99 focused, compile/assembly/lint/APK/preservation passed; no new device/backend/account gate.
+R04c startup/session recovery is next ONLY after specific authorization; c/R03d/Room/account activation remain unauthorized.
+The owner subsequently committed Android R03c/R04a in `04f7ed2` and the shared auth-expiry issue resolution/index in
+`31c969f`; both trees were clean before the documentation-only receipt update. See
+[the verified full commit IDs](coordinator-handoff.md#owner-delivery-commits--verified-2026-10-04). Earlier dirty-tree text
+is historical; no new test/remote verification or subsequent task authorization is implied.
 No additional implementation is authorized by the roadmap or R01 plan. The near-term target is the owner's personal app
 against an always-on laptop-hosted service, not a public launch.
 

@@ -16,7 +16,7 @@ in `shared-docs/`. No implementation is authorized by the roadmap. [R01 planning
 [duplicate-key guard](remaining-work/R02a-review.md), [family identities](remaining-work/R02b-review.md),
 [typed failures](remaining-work/R02c-review.md) and [auth/exact-body boundaries](remaining-work/R02d-review.md).
 The owner authorized committing the earlier full Android working tree, including its retirement/HTTP baseline; see
-[delivery record](remaining-work/R02bc-commit-review.md). The later authorized R02d is accepted but uncommitted.
+[delivery record](remaining-work/R02bc-commit-review.md). Accepted R02d/R03a/b were subsequently owner-committed in `6134a58`.
 The owner subsequently requested the [R03a–d planning split](remaining-work/R03-task.md): secure primitive, sync,
 auth and deferred lifecycle/streaming. The owner subsequently authorized **R03a only**, delivered under the
 [detailed shared specification](remaining-work/R03a-task.md), now accepted with 423 offline JVM tests, five filtered
@@ -31,8 +31,15 @@ historical evidence; pre-fix incompatible accepted replay is an explicit legacy 
 The owner subsequently authorized **R04a only**, now [accepted](remaining-work/R04a-review.md): unused encrypted
 vault/storage,627 forced offline JVM/27 filtered API37 storage/Keystore tests plus build/lint/preservation gates. See the
 [R04 split](remaining-work/R04-task.md) and [specification](remaining-work/R04a-task.md). No refresh/startup/Room/account
-activation flow is delivered. R04b/c require specific authorization; legacy replay remains unrepaired. No R03d/activation/commit/push.
-Live pickup was clean Android6134a58/shared61fe3f9; older uncommitted baseline descriptions are historical.
+activation flow is delivered in a. Owner subsequently authorized R04b (“start work at R04b”), now accepted under its
+[specification](remaining-work/R04b-task.md) and [review](remaining-work/R04b-review.md): unused refresh/CAS/atomic leases/
+one unchanged401 retry.726 forced JVM/99 focused, Kotlin/Android-test compilation, assembly/lint/APK/preservation passed.
+No new device/backend/Room activation gate. R04c/R03d/startup/Room/account activation/commit/push remain unauthorized;
+legacy replay remains unrepaired. R04c startup/session seams is next ONLY after specific owner authorization.
+Live R03c pickup was clean Android6134a58/shared61fe3f9. The owner subsequently committed R03c/R04a in Android
+`04f7ed2` and the shared auth-expiry issue resolution/index in `31c969f`; both trees were clean before this documentation-
+only receipt update. See [the verified commit IDs](coordinator-handoff.md#owner-delivery-commits--verified-2026-10-04).
+Older uncommitted baseline descriptions are historical; no new test, push/remote verification or next task authorization.
 Current coordination is Pi Worker
 (production only) and QA (tests only), both Muse Spark 1.3 Contributor/high reasoning, with asynchronous Herdr reports
 and independent coordinator review. This supersedes the archived Hermes contributor workflow below.
@@ -45,8 +52,8 @@ Keep transactional safety, stable retries, account/session isolation and credent
 
 ## Simulator-retirement update — 2026-10-02 (historical gate)
 
-The following counts and operational/pane descriptions record that gate only. Current client offline coverage is627;
-see the current roadmap/handoff and [R04a acceptance review](remaining-work/R04a-review.md) for later verification.
+The following counts and operational/pane descriptions record that gate only. Current client offline coverage is726;
+see the current roadmap/handoff and [R04b acceptance review](remaining-work/R04b-review.md) for later verification.
 
 The user completed the separate Java backend and authorized simulator retirement as the first resumed Android task.
 `FakeSyncService`, `FakeAccountSyncApi`, their fixtures, all 92 fake-only test methods, and unused `sharedTest` wiring

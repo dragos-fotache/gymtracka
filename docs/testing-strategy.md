@@ -322,6 +322,34 @@ No HTTP refresh/access orchestration, Google/account/UI/Room activation, backend
 journey was added. R03c backend/old-device evidence remains prior evidence. Legacy incompatible accepted replay stays
 unrepaired and must carry into future R04b/c recovery/release review. Owned emulator stopped; contributors hold idle.
 
+## R04b — unused refresh coordination accepted (2026-10-04)
+
+The [R04b review](remaining-work/R04b-review.md) records independent source/test review and actual final gates:
+
+- **726 unique offline JVM testcases in45 suites**, forced final combined coordinator gate, zero failures/errors/skips:
+  prior627 plus78 SessionRefreshCoordinatorTest and21 SessionRefreshingGymSyncApiTest. Independent final focused99 also
+  passed. Literal original pending text/reopened real vault, before/after-commit uncertainty, complete-grant failure/replay,
+  expired replay then current-token rotation, two rejected old-token callbacks/one rotation, exact frozen push/read retries,
+  preflight types/list ownership, stale binding/op/phase/ABA, lease invalidation/latch and cancellation identity/dominance.
+- Real strict auth/sync adapters with scripted responses and JCA AES256 encrypted vault reopen/coordination are verified
+  on JVM. They are client-seam integration, NOT new real-backend/Google/device evidence. Legacy incompatible grant replay
+  remains malformed with exact original record/pending pair preserved; no new key/rounding/rewrite/cache deletion.
+- Initial focused82 was green but not accepted by count: coordinator required stronger actual race/preflight/literal-body
+  oracles. Corrected QA97 passed; final two direct-admission/SECOND401 cancellation oracles made99. Inside-caller same-probe
+  checks retained (no async.await exception identity oracle); no existing test was removed/weakened. Bare runTest-receiver
+  coroutineContext can capture parent; qualified suspend property reads actual child. Imported currentCoroutineContext exists.
+- Production/Android-test Kotlin, assembly/lint, merged debug manifest/APK/asset/preservation passed. Lint only existing
+  NewerVersionAvailable Warning; coroutine test opt-ins were added. Two NEW nonfatal unused-expression compiler warnings
+  in blocked-callback fixtures remain explicitly recorded alongside earlier compiler/KSP/Gradle/native notes.
+- All existing source/tests/build/schema/manifest/backup XML/asset/app-state and entire shared checkout byte-preserved.
+  Room9/asset1 unchanged. No emulator/service/config created, no new instrumentation/API24/full-device/backend/Python/Room
+  migration/convergence/Google/OAuth/hosted-CI/phone-laptop gate. R04a27-device/R03c auth10/broad56 remain prior evidence.
+
+The machinery remains UNUSED. Explicit leases are not Room authorization; immediate invalidation is not durable sign-out
+or rollback proof. Startup/session reconciliation, Room transitions and account activation remain deferred R04c/R09.
+No new transport retry loop or simulator; contributors remained in same source-isolated sessions for corrections, slots
+serialized. Owner now requires asynchronous Herdr reports with no coordinator Worker/QA output waits/polling.
+
 ## Historical baseline before simulator retirement
 
 Testing milestones 1–8 are complete. After Assignment 016, the suite contained 173 JVM test methods and 161
@@ -601,8 +629,8 @@ appropriate full layer before marking a milestone complete.
 ## Sync test expansion
 
 The [remaining-work roadmap](remaining-work-roadmap.md) assigns per-task acceptance outcomes and separate engine
-convergence, live/device and future-public audit gates. R02a–d, R03a–c and R04a vault/storage are accepted; R03c/R04a
-retain the explicit historical replay limitation. R04 refresh/startup orchestration is NOT complete.
+convergence, live/device and future-public audit gates. R02a–d, R03a–c and R04a/b unused vault/refresh machinery are accepted; R03c/R04a/b
+retain the explicit historical replay limitation. R04c startup/Room activation orchestration is NOT complete.
 Other implementation slices remain pending and require separate authorization.
 [R01 planning](remaining-work/R01-task.md) and its [invariant/test matrix](remaining-work/R01-design.md) were approved by
 the owner on 2026-10-03. These planning updates add no test
