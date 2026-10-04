@@ -7,8 +7,8 @@ import com.dragosfotache.gymtracka.data.sync.model.PushResultModel
 import com.dragosfotache.gymtracka.data.sync.model.SnapshotResultModel
 
 /**
- * SDK-independent sync transport boundary. Implemented by the future production
- * HTTP adapter and by the test-only HTTP adapter; never by Room, engine, UI,
+ * SDK-independent sync transport boundary. Implemented by the production HTTP
+ * sync adapter and by the legacy test-only HTTP adapter; never by Room, engine, UI,
  * or worker code. No Android, Room, Google, or HTTP types appear here.
  *
  * The instance binds the authenticated account and session through its

@@ -12,11 +12,20 @@ acceptance outcomes and coordinator boundaries. It is the current execution inde
 retains the historical milestones, invariant definitions and review evidence. These Android-only documents and
 future task/review records belong in this repository's `docs/`; only cross-project product/contracts/catalogue belong
 in `shared-docs/`. No implementation is authorized by the roadmap. [R01 planning](remaining-work/R01-task.md) and its
-[integration design](remaining-work/R01-design.md) were approved by the owner on 2026-10-03. R02a–c are accepted:
-[duplicate-key guard](remaining-work/R02a-review.md), [family identities](remaining-work/R02b-review.md) and
-[typed failures](remaining-work/R02c-review.md). The owner authorized committing the full Android working tree,
-including its retirement/HTTP baseline; see the [delivery record](remaining-work/R02bc-commit-review.md). The next
-proposed R02d slice requires separate authorization. Current coordination is Pi Worker
+[integration design](remaining-work/R01-design.md) were approved by the owner on 2026-10-03. R02a–d are accepted:
+[duplicate-key guard](remaining-work/R02a-review.md), [family identities](remaining-work/R02b-review.md),
+[typed failures](remaining-work/R02c-review.md) and [auth/exact-body boundaries](remaining-work/R02d-review.md).
+The owner authorized committing the earlier full Android working tree, including its retirement/HTTP baseline; see
+[delivery record](remaining-work/R02bc-commit-review.md). The later authorized R02d is accepted but uncommitted.
+The owner subsequently requested the [R03a–d planning split](remaining-work/R03-task.md): secure primitive, sync,
+auth and deferred lifecycle/streaming. The owner subsequently authorized **R03a only**, delivered under the
+[detailed shared specification](remaining-work/R03a-task.md), now accepted with 423 offline JVM tests, five filtered
+Android transport tests plus one signed-out startup smoke on API 37 and build/lint gates; see
+[review](remaining-work/R03a-review.md). R03b was subsequently authorized and accepted; see its
+[specification](remaining-work/R03b-task.md) and [review](remaining-work/R03b-review.md): 477 offline JVM tests,
+46 real-backend tests through production adapter/test TLS and three filtered API37 Android tests plus build/lint gates.
+R03c/d remain unauthorized; no activation/commit/push.
+Current coordination is Pi Worker
 (production only) and QA (tests only), both Muse Spark 1.3 Contributor/high reasoning, with asynchronous Herdr reports
 and independent coordinator review. This supersedes the archived Hermes contributor workflow below.
 
@@ -28,8 +37,8 @@ Keep transactional safety, stable retries, account/session isolation and credent
 
 ## Simulator-retirement update — 2026-10-02 (historical gate)
 
-The following counts and operational/pane descriptions record that gate only. Current offline coverage is 283 tests;
-see the current roadmap/handoff and [delivery record](remaining-work/R02bc-commit-review.md) for later verification.
+The following counts and operational/pane descriptions record that gate only. Current offline coverage is 477 tests;
+see the current roadmap/handoff and [R03b review](remaining-work/R03b-review.md) for later verification.
 
 The user completed the separate Java backend and authorized simulator retirement as the first resumed Android task.
 `FakeSyncService`, `FakeAccountSyncApi`, their fixtures, all 92 fake-only test methods, and unused `sharedTest` wiring

@@ -1,5 +1,6 @@
 package com.dragosfotache.gymtracka.data.sync.backend
 
+import com.dragosfotache.gymtracka.data.sync.api.GymSyncApi
 import com.dragosfotache.gymtracka.data.sync.model.AggregateType
 import com.dragosfotache.gymtracka.data.sync.model.CanonicalRecord
 import com.dragosfotache.gymtracka.data.sync.model.ChangeOperation
@@ -22,7 +23,7 @@ import org.junit.Assert.assertTrue
  * predicted strings.
  */
 object RealBackendAsserts {
-    fun pushOne(api: HttpGymSyncApi, request: DurableRequestModel): PushResultModel =
+    fun pushOne(api: GymSyncApi, request: DurableRequestModel): PushResultModel =
         runBlocking { api.push(listOf(request)) }
 
     fun acceptedOutcome(result: PushResultModel, index: Int = 0): SyncBatchModel {
@@ -70,7 +71,7 @@ object RealBackendAsserts {
      * [maxPages] pages instead of hanging if the server malfunctions. A valid
      * terminal empty page preserves the boundary cursor and need not advance.
      */
-    suspend fun pullAll(api: HttpGymSyncApi, cursor: String?, limit: Int = 3, maxPages: Int = 1_000): Pair<List<SyncBatchModel>, String> {
+    suspend fun pullAll(api: GymSyncApi, cursor: String?, limit: Int = 3, maxPages: Int = 1_000): Pair<List<SyncBatchModel>, String> {
         val batches = mutableListOf<SyncBatchModel>()
         val seenCursors = HashSet<String>()
         val seenBatchIds = HashSet<String>()
@@ -103,7 +104,7 @@ object RealBackendAsserts {
      * Bounded: fails on a repeated page token, a repeated aggregate key, or
      * more than [maxPages] pages instead of hanging if the server malfunctions.
      */
-    suspend fun snapshotAll(api: HttpGymSyncApi, limit: Int = 50, maxPages: Int = 1_000): Pair<List<SyncChangeModel>, String> {
+    suspend fun snapshotAll(api: GymSyncApi, limit: Int = 50, maxPages: Int = 1_000): Pair<List<SyncChangeModel>, String> {
         val records = mutableListOf<SyncChangeModel>()
         val seenTokens = HashSet<String>()
         val seenKeys = HashSet<Pair<AggregateType, String>>()

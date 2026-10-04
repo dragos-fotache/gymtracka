@@ -1,5 +1,11 @@
 package com.dragosfotache.gymtracka.data.sync.backend
 
+import com.dragosfotache.gymtracka.data.sync.api.GymSyncApi
+import com.dragosfotache.gymtracka.data.sync.api.OpaqueToken
+import com.dragosfotache.gymtracka.data.sync.http.BoundServiceAccessToken
+import com.dragosfotache.gymtracka.data.sync.http.BoundServiceAccessTokenProvider
+import com.dragosfotache.gymtracka.data.sync.http.ServiceSessionBinding
+import com.dragosfotache.gymtracka.data.sync.http.HttpGymSyncApi as ProductionHttpGymSyncApi
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.nio.file.attribute.PosixFilePermission
@@ -108,11 +114,23 @@ class RealBackendFixture private constructor(
         return TestAccount(accountId.toString(), token)
     }
 
-    fun apiFor(account: TestAccount): HttpGymSyncApi =
-        HttpGymSyncApi(JdkSyncHttpTransport(baseUrl), account.accessToken)
+    private val httpBridge = lazy { RealBackendHttpBridge(baseUrl) }
+
+    /** Actual Android-compatible adapter over a test-owned trusted local TLS relay. */
+    fun apiFor(account: TestAccount): GymSyncApi {
+        val bridge = httpBridge.value
+        val binding = ServiceSessionBinding(bridge.origin, account.accountId, 1L)
+        val credential = BoundServiceAccessToken(binding, OpaqueToken(account.accessToken))
+        val provider = BoundServiceAccessTokenProvider { credential }
+        return ProductionHttpGymSyncApi(binding, provider, bridge.transport)
+    }
 
     override fun close() {
-        connection.close()
+        try {
+            if (httpBridge.isInitialized()) httpBridge.value.close()
+        } finally {
+            connection.close()
+        }
     }
 
     companion object {

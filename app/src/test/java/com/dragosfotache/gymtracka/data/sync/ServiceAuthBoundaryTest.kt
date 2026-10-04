@@ -1,14 +1,16 @@
 package com.dragosfotache.gymtracka.data.sync
 
 import com.dragosfotache.gymtracka.data.sync.api.AccessTokenProvider
+import com.dragosfotache.gymtracka.data.sync.api.GoogleChallengePurpose
+import com.dragosfotache.gymtracka.data.sync.api.GoogleExchangeAttempt
 import com.dragosfotache.gymtracka.data.sync.api.GoogleIdentityProvider
 import com.dragosfotache.gymtracka.data.sync.api.OpaqueToken
 import com.dragosfotache.gymtracka.data.sync.api.ServiceAccountRef
 import com.dragosfotache.gymtracka.data.sync.api.ServiceAuthApi
 import com.dragosfotache.gymtracka.data.sync.api.ServiceChallenge
+import com.dragosfotache.gymtracka.data.sync.api.ServiceRefreshAttempt
 import com.dragosfotache.gymtracka.data.sync.api.ServiceSession
 import com.dragosfotache.gymtracka.data.sync.model.SyncModelException
-import com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -70,23 +72,16 @@ class ServiceAuthBoundaryTest {
             refreshExpiresAtMillis = 1_730_000_000_000L,
         )
 
-        override suspend fun challenge(): ServiceChallenge =
+        override suspend fun challenge(purpose: GoogleChallengePurpose): ServiceChallenge =
             ServiceChallenge(CHALLENGE_ID, "server-nonce", 1_700_000_000_000L)
 
-        override suspend fun exchange(
-            idempotencyKey: String,
-            challengeId: String,
-            idToken: OpaqueToken,
-        ): ServiceSession {
-            requireWorkoutUuid(idempotencyKey, "idempotencyKey")
-            requireWorkoutUuid(challengeId, "challengeId")
-            exchangeCalls += ExchangeCall(idempotencyKey, challengeId, idToken)
+        override suspend fun exchange(attempt: GoogleExchangeAttempt): ServiceSession {
+            exchangeCalls += ExchangeCall(attempt.idempotencyKey, attempt.challengeId, attempt.idToken)
             return session
         }
 
-        override suspend fun refresh(idempotencyKey: String, refreshToken: OpaqueToken): ServiceSession {
-            requireWorkoutUuid(idempotencyKey, "idempotencyKey")
-            refreshCalls += RefreshCall(idempotencyKey, refreshToken)
+        override suspend fun refresh(attempt: ServiceRefreshAttempt): ServiceSession {
+            refreshCalls += RefreshCall(attempt.idempotencyKey, attempt.refreshToken)
             return session
         }
 
@@ -139,7 +134,7 @@ class ServiceAuthBoundaryTest {
         val exchange = auth.exchangeCalls.single()
         assertEquals(KEY_EXCHANGE, exchange.idempotencyKey)
         assertEquals(CHALLENGE_ID, exchange.challengeId)
-        assertSame(idToken, exchange.idToken)
+        assertEquals(idToken, exchange.idToken)
 
         // Identical retry replays the same grant with the same key.
         val replayed = auth.exchange(KEY_EXCHANGE, challenge.challengeId, idToken)
@@ -148,7 +143,7 @@ class ServiceAuthBoundaryTest {
 
         val renewed = auth.refresh(KEY_REFRESH, grant.refreshToken)
         assertEquals(ACCOUNT_ID, renewed.account.accountId)
-        assertSame(grant.refreshToken, auth.refreshCalls.single().refreshToken)
+        assertEquals(grant.refreshToken, auth.refreshCalls.single().refreshToken)
 
         auth.logout(renewed.refreshToken)
         auth.logout(renewed.refreshToken)
@@ -171,7 +166,8 @@ class ServiceAuthBoundaryTest {
             auth.exchange("not-a-uuid", CHALLENGE_ID, OpaqueToken("id-token"))
             fail("Expected a non-UUID idempotency key to be rejected")
         } catch (e: SyncModelException) {
-            assertTrue(e.message!!.contains("idempotencyKey"))
+            assertFalse(e.message!!.contains("not-a-uuid"))
+            assertEquals(null, e.cause)
         }
         try {
             auth.refresh(KEY_REFRESH, OpaqueToken("refresh"))
@@ -179,7 +175,8 @@ class ServiceAuthBoundaryTest {
             auth.exchange(KEY_EXCHANGE, "ABCDEF12-1234-5678-9ABC-DEF012345678", OpaqueToken("id-token"))
             fail("Expected an uppercase challenge ID to be rejected")
         } catch (e: SyncModelException) {
-            assertTrue(e.message!!.contains("challengeId"))
+            assertFalse(e.message!!.contains("ABCDEF12-1234-5678-9ABC-DEF012345678"))
+            assertEquals(null, e.cause)
         }
     }
 

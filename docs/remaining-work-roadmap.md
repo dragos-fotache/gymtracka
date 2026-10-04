@@ -1,15 +1,24 @@
 # Remaining Android delivery roadmap
 
-Status: R01 planning/design approved and **R02a/R02b/R02c accepted** (2026-10-03); remaining implementation slices
-require separate authorization.
+Status: R01 planning/design approved and **R02a–d plus R03a/b accepted** (2026-10-03).
+Remaining implementation slices require separate authorization.
 Read the [R01 audit](remaining-work/R01-task.md), [integration design](remaining-work/R01-design.md),
 [planning verification](remaining-work/R01-review.md), [R02a specification](remaining-work/R02a-task.md) and
 [R02a implementation review](remaining-work/R02a-review.md), [R02b specification](remaining-work/R02b-task.md) and
 [R02b review](remaining-work/R02b-review.md), [R02c specification](remaining-work/R02c-task.md) and
-[R02c review](remaining-work/R02c-review.md).
+[R02c review](remaining-work/R02c-review.md), [R02d specification](remaining-work/R02d-task.md) and
+[R02d review](remaining-work/R02d-review.md).
 The owner authorized R02b/R02c execution and subsequently selected the full Android working tree for delivery commit,
 including the existing retirement/HTTP/build/local-doc baseline; see [delivery record](remaining-work/R02bc-commit-review.md).
-No further implementation, push, backend change or deployment is authorized. Each task will receive its
+The owner subsequently authorized bounded R02d execution, now accepted with 340 passing offline JVM tests, and then
+requested the [R03 subtask split](remaining-work/R03-task.md) (documentation/planning only).
+The owner subsequently authorized **R03a only**, now accepted; see its
+[shared specification](remaining-work/R03a-task.md) and [review](remaining-work/R03a-review.md): 423 offline JVM tests,
+five filtered Android transport tests plus one signed-out startup smoke on API 37, build/lint/security gates.
+The owner subsequently authorized **R03b only**, now accepted under its [specification](remaining-work/R03b-task.md)
+and [review](remaining-work/R03b-review.md): 477 offline JVM, 46 real-backend via production adapter/test TLS and
+three filtered API37 Android tests, plus build/lint/security gates. No R02e/R03c–d implementation, commit, push, backend change,
+app activation or deployment is authorized. Each task will receive its
 own detailed plan and may be split further by the current assistant or a successor coordinator before implementation.
 
 ## Scope and baseline
@@ -25,15 +34,17 @@ recreate the retired backend simulator.
 
 Existing foundations are not tasks to reimplement: Room v9 and supported migrations, the unchanged bundled v1 asset,
 17 typed mutation kinds and durable codecs, account/session-fenced local capture and selected-scope reads, SDK-independent
-API boundaries, and the isolated real-backend HTTP harness. R02c's current gate is 283 offline JVM tests; R02a
+API boundaries, and the isolated real-backend HTTP harness. R02d's current gate is 340 offline JVM tests; R02a
 previously passed six filtered Android smoke tests. Earlier evidence remains 46 separate real-backend tests, 11 Python launcher tests and
 161 instrumentation tests at the last full device gate. See [testing strategy](testing-strategy.md),
-[R02a review](remaining-work/R02a-review.md) and [retirement review](fake-retirement-review.md); earlier evidence is not
-verification of a new task. The simulator-retirement changes in Android and shared-docs remain uncommitted.
+[R02a review](remaining-work/R02a-review.md), [R02d review](remaining-work/R02d-review.md) and
+[retirement review](fake-retirement-review.md); earlier evidence is not
+verification of a new task. The Android simulator-retirement baseline was delivered in `623207c`; nested shared-docs changes remain separate and uncommitted.
 
-There is no production Android HTTP adapter, running sync engine, account UI, snapshot publication, Google integration,
-or background scheduling. Existing models/API interfaces predate some finalized v1 additions, including purpose-bound
-proofs and account export/delete/status. A JVM HTTP pass does not prove Android Room convergence or real Google OAuth.
+R03a delivers a reusable production-compatible secure HTTP primitive, not endpoint adapters. There is no production
+service-auth endpoint adapter, running sync engine, account UI, snapshot publication, Google integration or background scheduling.
+R03b's production sync adapter is implemented and independently verified, but not constructed/activated by the app. R02d adds challenge purposes, auth codecs and exact-body attempts; account-bound lifecycle
+proofs and export/delete/status models remain deferred. A JVM HTTP pass does not prove Android Room convergence or real Google OAuth.
 
 Backend access remains **operational build/start and black-box HTTP only**. Use the checked-in isolated launcher;
 do not inspect/change backend source, run its full Maven suite, read personal configuration, or touch personal databases.
@@ -83,26 +94,26 @@ capability envelope and must be narrowed to the relevant milestone before implem
 
 Numbers give a sensible default walkthrough, not a requirement to do independent branches serially. Dependencies are
 capability gates, including their accepted subplans. R01 may refine the graph with a documented reason; successors must
-not quietly omit a required capability. R01 planning and R02a/R02b/R02c implementation are accepted; other slices
-require individual planning/implementation authorization.
+not quietly omit a required capability. R01 planning and R02a–d/R03a implementation are accepted.
+Other slices require individual planning/implementation authorization.
 
 | ID | Task | Depends on | Main acceptance result |
 |----|------|------------|------------------------|
 | R01 | Audit v1 gaps and approve the integration design | Existing baseline | Reviewed requirement/design matrix and bounded next assignment |
-| R02 | Align client models and API boundaries with finalized v1 | R01 | R02a duplicate-key, R02b identity and R02c failure slices accepted; R02d auth/R02e lifecycle pending |
-| R03 | Implement Android HTTP transport | Relevant R02 slices | Sync/auth first; safe adapter, later account-lifecycle routes |
-| R04 | Implement encrypted session storage and refresh recovery | R03 | Crash-safe exact-key refresh, account/session-bound credentials |
+| R02 | Align client models and API boundaries with finalized v1 | R01 | R02a–d accepted; R02e lifecycle deferred with public account features |
+| R03 | [Implement Android HTTP transport](remaining-work/R03-task.md) | Relevant R02 slices | R03a primitive/R03b sync accepted; c auth pending; d lifecycle deferred |
+| R04 | Implement encrypted session storage and refresh recovery | R03a, R03c | Crash-safe exact-key refresh, account/session-bound credentials |
 | R05 | Implement remote Room application and protected local intent | R02; R01 design | Atomic revision-safe canonical batches without lost edits or echo uploads |
-| R06 | Implement durable push orchestration | R03, R04, R05 | Ordered unchanged retries and exact fenced acknowledgments |
+| R06 | Implement durable push orchestration | R03b, R04, R05 | Ordered unchanged retries and exact fenced acknowledgments |
 | R07 | Implement incremental pull orchestration | R06 | Contiguous batch/cursor application and safe pagination |
 | R08 | Implement staged bootstrap and full resync | R05, R06, R07 | Complete snapshot publication; partial reads never replace visible cache |
 | R09 | Implement account transitions and local-data import/replace | R04, R08 | Recoverable scope transitions, private cache and explicit data choice |
-| R10 | Prove two-client convergence and engine recovery | R03, R06, R07, R08, R09 | Core safety gate now; expanded matrix before public release |
+| R10 | Prove two-client convergence and engine recovery | R03b/c, R06, R07, R08, R09 | Core safety gate now; expanded matrix before public release |
 | R11 | Implement foreground Google identity and fresh-proof flows | Relevant R02 slices, R04 | Sign-in/out now; lifecycle proof flows with R14/R15 |
 | R12 | Reconcile feature/app state with remote and session changes | R05, R07, R09 | Current screens, names, active workout and timer stay consistent |
 | R13 | Integrate account UI, foreground sync and rejection recovery | R09, core R10, sign-in R11, R12 | Usable personal sign-in/out, import, status and recovery |
-| R14 | Implement cloud JSON export | R03, R11, R13 | Fresh-proof, complete user-saved export; no partial-success claim |
-| R15 | Implement account deletion and old-account status recovery | R03, R09, R11, R13, R14 | Confirmed, account-fenced cleanup; safe lost-response/new-signup handling |
+| R14 | Implement cloud JSON export | R02e, R03d export, R11, R13 | Fresh-proof, complete user-saved export; no partial-success claim |
+| R15 | Implement account deletion and old-account status recovery | R02e, R03d delete/status, R09, R11, R13, R14 | Confirmed, account-fenced cleanup; safe lost-response/new-signup handling |
 | R16 | Implement background sync scheduling | R06, R07, R08, R13 | Unattended personal sync; deletion cancellation integrated when R15 ships |
 | R17 | Verify the personal laptop deployment and app journeys | Core R10, R13; R16 for background gate; connection/OAuth inputs | R17a usable personal app; R17b unattended recovery; public matrix later |
 | R18 | Audit future public-release readiness | All tasks' public gates, including R14/R15 and expanded R17 | Deferred public-release audit, not a personal-use blocker |
@@ -162,7 +173,21 @@ implementation work can proceed without OAuth/deployment inputs; live gates rema
   Prevent credential/domain logging and redirects or configuration that disclose credentials to another origin.
 - **Gate:** deterministic transport tests plus isolated real-backend interoperability through the production-compatible
   adapter where feasible. Test-only loopback configuration must not enable cleartext or auth bypasses in release.
-- **Possible splits:** common transport/configuration; sync routes; auth/account routes and streaming.
+
+The owner-requested [R03 split](remaining-work/R03-task.md) makes the bounded gates explicit:
+
+| Slice | Scope | Gate / stop |
+|---|---|---|
+| R03a | Secure origin/configuration, Android-compatible cancellable HTTP primitive, common I/O ownership/hint parsing | Independent TLS/redirect/encoding/cancellation/security tests; no endpoint adapter |
+| R03b | Production push/pull/snapshot + shared service-error decoding | Exact frozen bytes, complete outcomes, operation-aware failures and isolated interoperability; no engine/Room writes |
+| R03c | Purpose challenge, exact-body exchange/refresh and logout adapter | No bootstrap bearer, exact retained keys/bodies, safe grants/errors/cancellation; no vault/Google/account flow |
+| R03d | Deferred account export/delete/status and owned export streaming | R02e prerequisite; complete download/account-bound results; no UI or destructive cleanup |
+
+Default personal execution/review order is **a → b → c**, then stop; **d** follows public lifecycle needs. R04 requires a/c,
+not deferred d; R06 requires b plus R04/R05. Exact library/version/API/allowlists are prepared at each authorized pickup.
+R03a is now separately authorized and accepted under its [detailed specification](remaining-work/R03a-task.md)
+and [review](remaining-work/R03a-review.md).
+R03b–d and concurrent implementation of other slices remain unauthorized.
 
 ### R04 — Implement encrypted session storage and refresh recovery
 
@@ -396,10 +421,14 @@ process-death timer redesign is included here.
   architecture/testing/plans in `docs/` and shared product/contracts in `shared-docs/` as behavior changes, not claims
   of future behavior as already shipped.
 
-**Next proposed pickup:** a bounded R02d sign-in challenge/auth codec and exact-body-boundary plan, after explicit owner
-authorization. R02a–c acceptance does not complete all R02 or authorize transport work or pushes. The separate owner-approved
+**Next proposed pickup:** detailed R03c exact-body service-auth HTTP specification and execution, only after
+separate owner authorization. R03b is accepted under its [specification](remaining-work/R03b-task.md) and
+[review](remaining-work/R03b-review.md). R03a is accepted under its [specification](remaining-work/R03a-task.md) and
+[review](remaining-work/R03a-review.md), following the [R03a–d split](remaining-work/R03-task.md).
+R02e lifecycle support remains deferred with public account features.
+R02 acceptance does not authorize transport work, commits or pushes. The separate owner-approved
 Android delivery commit is recorded above. The
-[R02c review](remaining-work/R02c-review.md) records 283 passing offline JVM tests and build/lint gates; R02a's six API 37
+[R02d review](remaining-work/R02d-review.md) records 340 passing offline JVM tests and build/lint gates; R02a's six API 37
 platform smoke tests remain earlier evidence. No new device/backend pass is added. R01 proposes account-wide visible-intent protection and requires R12 publication/edit
 barriers before account UI activation; see its dependency refinements. Phone access is required on LAN and away;
-HTTPS is unconfigured and Google setup is partial. These block live R17a, not deterministic R02 work.
+HTTPS is unconfigured and Google setup is partial. These block live R17a, not deterministic R02/R03 work.

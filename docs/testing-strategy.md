@@ -72,7 +72,8 @@ python3 -B -m unittest discover -s shared-docs/catalogue -p 'test_*.py'
 ## Current baseline — simulator retired (2026-10-02)
 
 This records the retirement baseline. R02a added six filtered Android smoke tests and raised offline coverage to 200;
-R02b raised it to 216 and R02c to 283. The newer model/failure slices add no device or real-backend pass.
+R02b raised it to 216, R02c to 283 and R02d to 340. Those model/failure/auth slices add no device or real-backend pass. R03a subsequently raised offline coverage to 423
+and passed five filtered Android transport tests plus one signed-out startup smoke, not a full instrumentation run.
 
 - **183 offline JVM tests**, including 29 HTTP-adapter tests, 23 pure fixture-configuration tests, and the 10 retained
   sync-boundary tests. They need no backend or external configuration. A local loopback HTTP stub tests cancellation
@@ -190,6 +191,78 @@ alignment, not a production transport/recovery engine:
 No device, Room/migration, Google OAuth, production HTTP/engine, hosted CI or personal laptop journey was executed.
 R02a's six platform tests and M3's full 161-device-test gate remain prior evidence. Existing JVM adapter extraction
 constraints are test-only; production response parsing and recovery remain R03 onward. See [spec](remaining-work/R02c-task.md).
+
+## R02d — purpose/auth codecs and exact-body attempts (2026-10-03)
+
+The [R02d coordinator review](remaining-work/R02d-review.md) records the stateless auth representation gate:
+
+- **340 offline JVM tests in 32 suites**, forced by the coordinator with zero failures/errors/skips. The prior 283 remain;
+  57 independent methods were added (39 `ServiceAuthCodecTest`, 18 `ServiceAuthAttemptTest`). Four legacy auth boundary tests
+  remain, with only coordinator-owned typed-override/value/redaction expectation alignment.
+- Purpose/defaults, closed requests vs additive responses, null/blank/Unicode/opaque fidelity, required/type/UUID tables,
+  expiry constructor/copy bounds, expired replay/unordered grants, duplicate escaped keys, exact restored UTF-8 bodies,
+  header-only keys, private immutable attempt factories, redacted display and original cancellation/default delegation
+  are covered. Raw readers require SyncModelException; only direct OpaqueToken empty construction keeps its legacy guard.
+- Auth-only scalar and literal-control guards leave the shared parser/durable behavior unchanged. Long fractional zero
+  tails are lossless; malformed empty/repeated fractions and nonzero far-tail precision reject. Coordinator source review
+  and compiled probing found the normalization/raw-control gaps before acceptance; same contributor sessions corrected
+  production and independently extended regressions without cross-role source access.
+- Production and Android-test Kotlin compilation, debug assembly and lint passed. Only existing catalogue FK-index,
+  test-helper/Gradle/packaging warnings and lint's `NewerVersionAvailable` warning remain.
+- A temporary coordinator-only independent probe classified **1,138 auth bodies** (449 valid accepted, 689 invalid rejected)
+  with zero mismatches on final compiled code, including every literal U+0000..U+001F, legal escaped controls and long zero
+  tails. This is supplemental evidence, not another checked-in suite or service/platform gate.
+
+No Room/migration, device, backend, OAuth, hosted CI or phone/laptop journey ran. R02a's six platform smoke tests and M3's
+full 161-test device pass remain earlier evidence. No transport/vault/Google/retry/UI capability was activated. See the
+[shared specification](remaining-work/R02d-task.md).
+
+## R03a — secure origin/cancellable HTTP primitive (2026-10-03)
+
+The [R03a coordinator review](remaining-work/R03a-review.md) accepts reusable transport, not sync/auth endpoint adapters:
+
+- **423 offline JVM tests in 35 suites**, forced by the coordinator, zero failures/errors/skips. Prior 340 retained; new
+  independent suites have 42 origin/request/timeout/retry-hint, 26 ownership/strict-body/cancellation and 15 local-TLS
+  network methods. No backend or external configuration is required.
+- Tests cover original origin/path rejection, fixed origin and exact UTF-8/query/header encoding, immutable snapshots,
+  complete/framed/strict media/body reads, malformed/duplicate media, EOF/truncation, large bodies, response lifetime,
+  actual cancellation/late closure, original exception identity and off-caller read/close. Real local TLS covers trusted
+  CA vs default untrusted/wrong-host refusal, no same-/cross-origin redirects or forwarded POST credentials/body,
+  no 408/503 replay, independent repeated Calls, no cookies/cache, timeout and streamed cancellation.
+- **5 filtered ServiceHttpAndroidTest tests** plus **1 filtered existing AppFlow startup test** passed on Pixel_6a,
+  Android 17/API 37, emulator-5554, zero failures/errors/skips. INTERNET/effective cleartext refusal, unavailable/default
+  construction, local trusted TLS/cancellation and normal signed-out startup are proved. Not a full instrumentation
+  gate; the last full existing device gate remains M3's 161 tests.
+- Production/Android-test Kotlin, debug assembly and lint passed. Debug/release merged manifests enforce minSdk 24,
+  INTERNET and cleartext false with the standard OkHttp Startup initializer. Production APK contains no test TLS/server,
+  PostgreSQL/JDK adapter or new test helpers. API 24 image is absent: library compatibility/compilation and API 37 I/O
+  are evidence, **not API 24 runtime verification**.
+- Two initial consumer-exception identity failures were corrected in production for coroutine stack-trace recovery;
+  assertions were unchanged. Coordinator corrected an Android import and a test body's cached-source/closure fixture,
+  then forced final regression. No legacy test was removed/weakened. Only existing compiler/build/lint warnings remain.
+
+Both roles remained source-isolated in fresh Pi Muse Contributor/high sessions through corrections; Gradle ran serially.
+No real backend, Google/OAuth, Python supervisor, migration/Room, full-device, hosted CI or personal phone/laptop gate ran.
+R03b/c and account/engine activation remain pending. See [shared specification](remaining-work/R03a-task.md).
+
+## R03b — bound production sync HTTP adapter (2026-10-03)
+
+The [R03b review](remaining-work/R03b-review.md) accepts the unused network API/shared error boundary:
+
+- **477 offline JVM tests in 38 suites**, forced, zero failures/errors/skips: prior 423 plus 19 error-reader,
+  26 bound-adapter and 9 local TLS endpoint tests. Exact bytes/ordered complete outcomes, credential binding/selection,
+  scalar fidelity/unknown codes, status/body/hints, page consistency and cancellation are covered independently.
+- **46 real-backend tests in 9 suites**, freshly executed through the actual production adapter/OkHttp transport and
+  test-only trusted local TLS relay to disposable PostgreSQL-backed service. Existing guards/scenarios/assertions stay;
+  no legacy JDK-only pass is presented as a production adapter pass. This is not deployed TLS/Google/Room convergence.
+- **3 filtered Android parser/construction/TLS pull tests** on Pixel_6a / Android17/API37, zero failures/errors/skips.
+  Numeric overflow/duplicate handling is exercised on actual platform org.json. No full instrumentation/API24 runtime pass.
+- Kotlin/Android-test compilation, assembly/lint and APK/preservation checks passed; only existing warnings remain.
+  Coordinator corrected expected-async/fixture/sentinel assumptions and Android-only accessor/DEX names before final gates.
+  No legacy assertions were removed/weakened. Test relay/server/certificate/JDBC helpers remain excluded from APK.
+
+No engine/vault/Google/account activation, migration/Room/Python-supervisor/hosted-CI/personal phone-laptop gate was added.
+The isolated service and owned emulator were cleaned up. R03c/d still need separate authorization.
 
 ## Historical baseline before simulator retirement
 
@@ -470,8 +543,8 @@ appropriate full layer before marking a milestone complete.
 ## Sync test expansion
 
 The [remaining-work roadmap](remaining-work-roadmap.md) assigns per-task acceptance outcomes and separate engine
-convergence, live/device and future-public audit gates. R02a, R02b and R02c are accepted; later implementation slices
-remain pending and require separate authorization.
+convergence, live/device and future-public audit gates. R02a–d and R03a/b are accepted; later implementation slices remain pending
+and require separate authorization.
 [R01 planning](remaining-work/R01-task.md) and its [invariant/test matrix](remaining-work/R01-design.md) were approved by
 the owner on 2026-10-03. These planning updates add no test
 pass or implemented capability. The current target is the owner's phone and personal laptop-hosted service: core

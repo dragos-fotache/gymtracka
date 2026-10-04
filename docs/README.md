@@ -22,11 +22,19 @@ fixed catalogue package; the backend must not depend on these Android-local docu
 Detailed task/subtask plans and acceptance reviews belong under `docs/remaining-work/` in this repository,
 created on pickup. [R01 audit](remaining-work/R01-task.md), [design](remaining-work/R01-design.md) and
 [verification record](remaining-work/R01-review.md) record owner design approval on 2026-10-03, along with the next
-[R02a shared specification](remaining-work/R02a-task.md). R02a–c are now accepted; see the
-[R02b review](remaining-work/R02b-review.md), [R02c review](remaining-work/R02c-review.md) and
-[authorized Android delivery commit record](remaining-work/R02bc-commit-review.md). No additional implementation is
-authorized by the roadmap or R01 plan. The near-term target is the owner's personal app against an always-on
-laptop-hosted service, not a public launch.
+[R02a shared specification](remaining-work/R02a-task.md). R02a–d are now accepted; see the
+[R02b review](remaining-work/R02b-review.md), [R02c review](remaining-work/R02c-review.md),
+[R02d review](remaining-work/R02d-review.md) and
+[authorized Android delivery commit record](remaining-work/R02bc-commit-review.md). R02d remains uncommitted.
+The owner's requested [R03 subtask split](remaining-work/R03-task.md) defines secure transport, sync, auth and deferred
+lifecycle/streaming gates. The owner subsequently authorized **R03a only**, delivered under the
+[detailed shared specification](remaining-work/R03a-task.md), now accepted; see the
+[R03a review](remaining-work/R03a-review.md). It supplies reusable secure HTTP I/O, not endpoint adapters or activation.
+R03b is also accepted; see its [specification](remaining-work/R03b-task.md) and [review](remaining-work/R03b-review.md).
+It adds the unused production sync adapter/shared errors with real-service interoperability through test TLS.
+R03c/d remain separate unauthorized slices.
+No additional implementation is authorized by the roadmap or R01 plan. The near-term target is the owner's personal app
+against an always-on laptop-hosted service, not a public launch.
 
 ## Shared references
 

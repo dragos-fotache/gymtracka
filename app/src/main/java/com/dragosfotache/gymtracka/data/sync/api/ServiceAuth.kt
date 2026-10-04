@@ -1,5 +1,7 @@
 package com.dragosfotache.gymtracka.data.sync.api
 
+import com.dragosfotache.gymtracka.data.sync.model.SyncModelException
+import com.dragosfotache.gymtracka.data.sync.model.requireWireMillis
 import com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid
 
 /**
@@ -37,7 +39,11 @@ data class ServiceAccountRef(
     val displayName: String?,
 ) {
     init {
-        requireWorkoutUuid(accountId, "accountId")
+        try {
+            requireWorkoutUuid(accountId, "accountId")
+        } catch (_: SyncModelException) {
+            throw SyncModelException("Invalid accountId")
+        }
     }
 }
 
@@ -48,9 +54,17 @@ data class ServiceChallenge(
     val expiresAtMillis: Long,
 ) {
     init {
-        requireWorkoutUuid(challengeId, "challengeId")
-        require(nonce.isNotEmpty()) { "challenge nonce must not be empty" }
+        try {
+            requireWorkoutUuid(challengeId, "challengeId")
+        } catch (_: SyncModelException) {
+            throw SyncModelException("Invalid challengeId")
+        }
+        if (nonce.isEmpty()) throw SyncModelException("Invalid nonce")
+        requireWireMillis(expiresAtMillis, "expiresAt")
     }
+
+    override fun toString(): String =
+        "ServiceChallenge(challengeId=$challengeId, expiresAtMillis=$expiresAtMillis)"
 }
 
 /**
@@ -64,6 +78,11 @@ data class ServiceSession(
     val refreshToken: OpaqueToken,
     val refreshExpiresAtMillis: Long,
 ) {
+    init {
+        requireWireMillis(accessExpiresAtMillis, "accessExpiresAt")
+        requireWireMillis(refreshExpiresAtMillis, "refreshExpiresAt")
+    }
+
     override fun toString(): String =
         "ServiceSession(accountId=${account.accountId}, " +
             "accessExpiresAtMillis=$accessExpiresAtMillis, " +
@@ -84,24 +103,43 @@ interface GoogleIdentityProvider {
 
 /**
  * Service authentication API: the four documented challenge, exchange,
- * refresh, and logout operations. Exchange and refresh take an explicit
- * caller-supplied stable idempotency key so lost-response retries replay
- * the original grant instead of minting a second one; refresh must never
- * change the account identity. An expired, revoked, or otherwise invalid
- * refresh credential fails with `reauthentication_required` and requires
- * foreground reauthentication without deleting local domain data. Logout
- * revokes the refresh-token session and is idempotent for an already-revoked
- * token; local sign-out itself always succeeds offline and is handled outside
- * this interface.
+ * refresh, and logout operations. Exchange and refresh take an immutable typed
+ * attempt carrying the caller-supplied stable idempotency key alongside the
+ * exact UTF-8 request body, so lost-response retries replay the original
+ * grant instead of minting a second one; refresh must never change the
+ * account identity. An expired, revoked, or otherwise invalid refresh
+ * credential fails with `reauthentication_required` and requires foreground
+ * reauthentication without deleting local domain data. Logout revokes the
+ * refresh-token session and is idempotent for an already-revoked token; local
+ * sign-out itself always succeeds offline and is handled outside this
+ * interface.
+ *
+ * Future retry orchestration retains and reuses a typed attempt. Repeatedly
+ * invoking a convenience method captures a fresh body each time and is not
+ * durable recovery; only the typed methods preserve arbitrary restored bytes.
  */
 interface ServiceAuthApi {
-    suspend fun challenge(): ServiceChallenge
+    suspend fun challenge(purpose: GoogleChallengePurpose = GoogleChallengePurpose.SIGN_IN): ServiceChallenge
 
-    suspend fun exchange(idempotencyKey: String, challengeId: String, idToken: OpaqueToken): ServiceSession
+    suspend fun exchange(attempt: GoogleExchangeAttempt): ServiceSession
 
-    suspend fun refresh(idempotencyKey: String, refreshToken: OpaqueToken): ServiceSession
+    suspend fun refresh(attempt: ServiceRefreshAttempt): ServiceSession
 
     suspend fun logout(refreshToken: OpaqueToken)
+
+    suspend fun exchange(
+        idempotencyKey: String,
+        challengeId: String,
+        idToken: OpaqueToken,
+    ): ServiceSession {
+        val attempt = GoogleExchangeAttempt.capture(idempotencyKey, challengeId, idToken)
+        return exchange(attempt)
+    }
+
+    suspend fun refresh(idempotencyKey: String, refreshToken: OpaqueToken): ServiceSession {
+        val attempt = ServiceRefreshAttempt.capture(idempotencyKey, refreshToken)
+        return refresh(attempt)
+    }
 }
 
 /**

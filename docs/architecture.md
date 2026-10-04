@@ -164,7 +164,7 @@ parsing (RFC 3339 UTC via desugared java.time), and explicit
 Room mappings under `data/sync` (upload input vs canonical records, validated positions/IDs,
 no ID generation, no database writes). Typed canonical result envelopes, all 17 semantic/autosave mutation kinds, import
 snapshots, and version-1 durable request wrappers are implemented with strict request-field/identity validation and
-unchanged raw wire bytes across retries. There is still no running sync engine, production network/auth adapter, snapshot publication,
+unchanged raw wire bytes across retries. There is still no running sync engine, service-auth endpoint adapter, snapshot publication,
 or sign-out logic, so the app is not syncing. The device row's `cached_account_id` is storage for a retained signed-out
 cache,
 independent of the active account; retaining cached data on sign-out and clearing the cache when
@@ -275,6 +275,71 @@ category meanings guide future adapters/engine work and never establish account-
 
 See the [R02c review](remaining-work/R02c-review.md) for actual scripted/JVM and build gates. Room, assets, scopes,
 request versions and app activation remain unchanged.
+
+## R02d auth models/codecs/exact-body attempts — implemented
+
+`api/ServiceAuthRequests.kt` defines all four explicit `GoogleChallengePurpose` wire values and immutable private-constructor
+`GoogleExchangeAttempt`/`ServiceRefreshAttempt` factories. Capture encodes once; restore validates and retains the entire
+original request string, including whitespace, order and escapes. The UUID idempotency key is header data, never body
+content. Typed `ServiceAuthApi` exchange/refresh methods receive the attempt itself; legacy caller convenience signatures
+capture/delegate, and no-argument challenge calls default to signIn. Implementer overrides now use purpose/typed methods.
+Future adapters must send `requestJson` directly, and retry orchestration must retain the attempt rather than recapture it.
+
+`codec/ServiceAuthCodec.kt` adds raw-string challenge request encode/decode, challenge/session response decode and logout
+request encode. Request fields are closed; additive response/account fields are tolerated without bypassing original-text
+duplicate checks. A bounded auth-only iterative lexical guard rejects arbitrary unquoted scalars and literal unescaped
+string controls that the shared parser can normalize/accept; valid quoted/escaped opaque data is preserved. Existing
+`StrictJson`, `TimeFormat` and durable mutation bytes/versions are unchanged. Auth timestamp handling permits arbitrarily
+long lossless fractional zero tails, rejects nonzero sub-millisecond precision and cannot normalize malformed fractions.
+
+Direct account/challenge UUIDs, challenge nonce and all challenge/session expiry constructor/copy paths validate with
+fixed safe failures. Expiry bounds are inclusive four-digit-year milliseconds; no current-time/lifetime/ordering policy
+is inferred, so original expired-access grants remain representable. Challenge display now excludes nonce; attempt display
+is fixed redacted text. Raw body/token getters remain sensitive transport inputs, not logging APIs. OpaqueToken's legacy
+empty-value guard and session token-safe display remain compatible.
+
+This is stateless authentication representation, not an HTTP/Google adapter, vault, retry engine or working sign-in.
+Exchange attempts are foreground-memory-only; future refresh persistence belongs in the encrypted vault, never Room/outbox.
+Lifecycle proof/export/delete/status codecs remain deferred R02e. Room stays v9 and the asset v1. See the
+[R02d coordinator review](remaining-work/R02d-review.md) for actual evidence and limitations.
+
+## R03a secure HTTP primitive — implemented, not activated
+
+`data/sync/http` now provides immutable canonical HTTPS `ServiceOrigin` (null configuration is unavailable), defensive
+`ServiceHttpRequest` snapshots, validated paths/query/header/body/timeout inputs, and `ServiceHttpTransport.withResponse`.
+`OkHttpServiceTransport` builds fixed-origin exact UTF-8 requests over OkHttp 5.5.0's Android variant with normal platform
+TLS/hostname verification, no cookies/cache/logging/authenticators/redirects/retries, explicit timeouts and a per-Call
+on-wire guard. This guard also blocks the library's GET 503 Retry-After:0 follow-up; POST bodies are one-shot.
+
+The scoped response supports whole-body strict UTF-8 application/json reads and incremental suspend chunks. It validates
+identity encoding/framing/length/media syntax, never silently replaces/truncates bytes or adds a permanent aggregate-size
+cap, and cannot be read after its consumer ends or through both modes. A structured watcher cancels the actual Call
+through header/body/consumer cancellation; late responses close safely, cleanup is once-only/off-Main, and original
+consumer exceptions survive coroutine stack-trace recovery. Network/response failures remain fixed safe closed-cause
+categories; whole-second Retry-After validates all digits and saturates at five minutes without scheduling retry.
+
+INTERNET and explicit `usesCleartextTraffic=false` are in the production manifest; the standard OkHttp Startup initializer
+is retained. MockWebServer3/local TLS certificates are test-only. The internal trusted I/O/test-TLS construction seams do
+not permit HTTP ServiceOrigin or production insecure settings. No URL, OAuth input, app-shell/repository construction,
+vault/session binding, endpoint adapter, sync engine or account flow is activated. Room stays v9 and the bundled asset v1.
+See the [specification](remaining-work/R03a-task.md) and [acceptance review](remaining-work/R03a-review.md).
+
+## R03b bound sync endpoint adapter — implemented, not activated
+
+`http/HttpGymSyncApi` now implements push/pull/snapshot over R03a. Immutable ServiceSessionBinding includes canonical
+HTTPS origin/account/positive generation; a tagged bound provider is selected once and checked before I/O. Frozen body,
+query and expected IDs are captured before suspension. Exact ordered outcomes and bounded/progressing pages are required;
+there is no refresh/resend, outbox acknowledgment, cursor publication or Room write.
+
+`codec/ServiceErrorCodec` reuses existing lexical/duplicate guards and iteratively checks original scalar kinds against
+org.json, preventing numeric overflow fallback from becoming a string field. Codes are exact nonempty strings without
+whitelist/cap; optional message is validated/discarded. `SyncHttpFailures` applies operation/status precedence and bounded
+hints with fixed safe causes/messages. Existing domain/durable/auth codecs and versions remain unchanged.
+
+RealBackendFixture now uses this adapter over a test-only locally trusted TLS relay to the guarded isolated HTTP service.
+All existing real-backend assertions/guards remain. Relay/certificates/JDBC/JDK adapters are absent from the app APK.
+No configured URL, service-auth adapter, vault/session lifecycle, engine, Google/UI or app activation is delivered.
+See [R03b specification](remaining-work/R03b-task.md) and [review](remaining-work/R03b-review.md).
 
 ## Proposed integration design — not implemented
 

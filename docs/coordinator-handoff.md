@@ -7,7 +7,7 @@ this repository's top-level `docs/`, alongside `shared-docs/`. Shared product be
 artifacts remain in `shared-docs/`. Start with root [AGENTS.md](../AGENTS.md) and this handoff; follow the current roadmap,
 not the archived execution instructions. Create detailed R01/subtask plans under `docs/remaining-work/`.
 
-**Current delivery:** R01 planning/design and **R02a/R02b/R02c implementations are accepted** (2026-10-03).
+**Current delivery:** R01 planning/design and **R02a–d/R03a–b implementations are accepted** (2026-10-03).
 Read the [R01 audit/task](remaining-work/R01-task.md), [integration design](remaining-work/R01-design.md),
 [planning verification](remaining-work/R01-review.md), [R02a shared specification](remaining-work/R02a-task.md) and
 [R02a coordinator review](remaining-work/R02a-review.md). R02a adds the focused iterative original-text duplicate-member
@@ -39,8 +39,47 @@ existing retirement/HTTP/build/scripts/local-doc baseline, so the delivery is se
 [commit review](remaining-work/R02bc-commit-review.md) and Android git history after `2a93c56`. Nested shared-docs is
 preserved exactly and is not committed/pushed. This authorizes the Android delivery commit only, not another slice.
 
-**Next proposed task:** a bounded R02d sign-in challenge/auth-codec/exact-body-boundary plan, only after explicit owner
-authorization. No push, R02d–e, transport, configuration or assignment 018 is authorized.
+**R02d result:** owner-authorized auth representation slice accepted; see the
+[shared specification](remaining-work/R02d-task.md) and [coordinator review](remaining-work/R02d-review.md).
+Four challenge purposes, raw auth request/response codecs, all expiry constructor/copy range checks and immutable
+exact-body exchange/refresh attempts are delivered. Typed ServiceAuthApi methods preserve attempts; legacy caller
+conveniences delegate. Auth-only lexical checks reject unquoted scalars/literal controls without changing shared parser
+or durable behavior; long fractional zero tails remain lossless without normalizing malformed fractions.
+**340 offline JVM tests in 32 suites**, production/Android-test compilation, debug assembly/lint and both diff checks
+passed with zero test failures/errors/skips. Independent temporary probe: 1,138 auth bodies, zero mismatches after
+same-session review corrections. No device/backend/OAuth gate or auth activation was added. Android R02d changes are
+uncommitted; nested shared-docs remains exactly preserved.
+
+**R03 planning split:** the owner requested a split like R02; see [R03 subtask plan](remaining-work/R03-task.md).
+R03a is secure origin/cancellable HTTP primitive, R03b sync endpoints/shared service errors, R03c exact-body service auth,
+and R03d deferred account-lifecycle transport/export streaming. Default review order is a → b → c, then stop; d needs
+R02e and public lifecycle feature pickup. R04 needs a/c and R06 needs b, not deferred d.
+This planning task changes Android docs only, assigns no contributors and adds no build/test/backend/device pass.
+
+**R03a result:** owner-authorized secure primitive accepted; see the
+[shared specification](remaining-work/R03a-task.md) and [coordinator review](remaining-work/R03a-review.md).
+OkHttp 5.5.0 supplies strict immutable HTTPS origin/fixed requests, exact UTF-8, no redirect/cookie/cache/auth/replay,
+per-Call on-wire guard (including GET503 Retry-After:0), scoped cancellable response/chunk reads, strict complete UTF-8/
+media/framing and capped hints. INTERNET/cleartext-refusal/standard Startup wiring is delivered, not app activation.
+**423 offline JVM tests in 35 suites**, **5 filtered Android transport tests + 1 signed-out startup smoke on API 37**,
+compilation, debug assembly, lint, manifest/APK/preservation and both diff checks passed, zero failures/errors/skips.
+Coordinator/source review corrections include actual blocked-read cancellation/late close, proper per-Call guard,
+quoted-media/closure ownership and exact consumer exception preservation across coroutine stack-trace recovery; identity
+assertions were not weakened. Initial test/compiler failures were corrected before final forced acceptance.
+API24 runtime/full instrumentation, backend/OAuth/Python/phone-laptop gates were not run. Android R02d/R03a remains
+uncommitted; nested shared-docs is exactly preserved. Both roles completed fresh R03a Pi sessions and are idle.
+
+**R03b result:** accepted; see [specification](remaining-work/R03b-task.md) and
+[review](remaining-work/R03b-review.md). Bound production push/pull/snapshot preserve frozen bytes, select one tagged
+service/account/generation credential, require complete ordered outcomes/pages and apply strict scalar/error/status rules.
+**477 offline JVM tests in 38 suites**, **46 real-backend tests in 9 suites through actual production adapter + test TLS
+relay**, **3 filtered Android parser/endpoint tests on API37**, compilation/assembly/lint/APK/preservation checks passed,
+zero failures/errors/skips. Coordinator corrected test fixtures and Android accessor/DEX naming issues before acceptance.
+No auth adapter, engine/vault/Google/UI or app activation. Both fresh R03b contributors are complete/idle; owned isolated
+backend/container/config and emulator cleaned up. Existing R02d/R03a changes and nested shared-docs are preserved.
+
+**Next proposed task:** detailed R03c exact-body service-auth HTTP specification and execution, only after separate owner
+authorization. No R03c/d, R02e, commit/push, app activation/deployment/private configuration or 018 is authorized.
 
 The proposed integration stores canonical records/deletion evidence separately and conservatively protects the entire
 visible account projection while any local outbox intent remains. Clean complete-cache publication requires finite-edit
@@ -60,8 +99,9 @@ R01 pickup HEADs were Android `25bdfd66f1424e7deb06a5fedc585d49fa1f3ab3` and sha
 The user completed the separate Java backend and authorized **removing the Android simulator first**. That task is
 implemented: the two simulator classes, fixtures, 12 fake-only test classes (92 methods), and unused `sharedTest`
 wiring are removed. Production interfaces, wire codecs, Room/capture tests, feature states, and UI regressions remain.
-The current test layers are 283 offline JVM tests, 46 separate real-backend JVM tests, and 11 Python supervisor tests.
-R02b/R02c reran offline/build gates only; R02a's six Android smoke tests and backend/Python counts are earlier evidence.
+The current test layers are 477 offline JVM tests, 46 separate real-backend JVM tests, and 11 Python supervisor tests.
+R02b–d reran offline/build gates only; R03a added five filtered transport device tests and one startup smoke.
+R02a's six parser smoke tests and backend/Python counts are earlier evidence.
 See the [coverage ledger](fake-retirement-coverage.md), [retirement review](fake-retirement-review.md), and
 [testing strategy](testing-strategy.md#current-baseline--simulator-retired-2026-10-02) for actual gates and limits.
 Assignment 018 remains paused; do not implement or recreate the simulator.
@@ -73,16 +113,18 @@ Tests instead use `scripts/run-isolated-backend.py`, disposable PostgreSQL 16, g
 and test-only credential setup. No personal database or backend source was changed. Earlier setup/test inspection and
 an interrupted broad Maven run preceded this clarification; they are not a full backend verification claim.
 
-The new `HttpGymSyncApi` is JVM-test-only. The app still has no running sync engine, production HTTP adapter, working
-sign-in/account UI, snapshot publication, or background scheduling. M5–M12 remain pending; get explicit authorization
+The `HttpGymSyncApi` is JVM-test-only. R03a delivers a reusable secure production-compatible HTTP primitive, but the
+app now has the unused production sync adapter but no running engine, service-auth adapter, working sign-in/account UI, snapshot
+publication, or background scheduling. M5–M12 remain pending; get explicit authorization
 and plan a bounded client slice rather than continuing automatically. Real Google OAuth, deployed HTTPS, and device
 sync/account flows are not proved by the local HTTP task. The last full device gate remains M3's 161 tests on API 37.
 
 **Current contributor workflow (owner instruction):** coordinator owns design/planning and independent full review;
 `gym-worker` and `gym-qa` are Pi agents using `meta/muse-spark-1.3-contributor` at high reasoning. R02a rediscovered
-coordinator `w4:p7`, Worker `w4:pJ`, QA `w4:pK`; R02b and R02c rediscovered the live panes/models and used fresh native
-`/new` sessions for each slice. Both roles completed R02c and are idle. Rediscover/start fresh sessions for another
-authorized slice; do not assume these identities/processes remain unchanged.
+coordinator `w4:p7`, Worker `w4:pJ`, QA `w4:pK`; R02b–d rediscovered the live panes/models and used fresh native
+`/new` sessions for each slice. R02d retained the same sessions for corrections (including a stopped/resumed stalled
+Worker planning turn before source writes). Both roles completed R02d and then owner-authorized R03a in fresh sessions; they are idle. Rediscover/start fresh sessions for
+another authorized slice; do not assume these identities/processes remain unchanged.
 Rediscover live identities/processes before reuse and preserve user focus. Worker must never inspect tests/fixtures/
 reports or QA work; QA must never inspect production code/diffs/decompiled sources or Worker work. Both receive the
 same normative spec/API contract with disjoint allowlists, use Kotlin mcpls navigation restricted to their own code,
@@ -92,8 +134,8 @@ Coordinator resolved a bounded QA escape-fixture editing blocker without grantin
 returned focused execution to the same QA session. Contributor-session mcpls was unavailable/indexing; coordinator
 navigation/diagnostics and actual compilation/tests supplied the gate. No agent changed global configuration.
 R02a is committed as `2a93c56`; the subsequent owner-authorized Android delivery includes R02b/R02c and the prior
-retirement/HTTP/build/AGENTS/local-doc baseline. Nested-doc changes remain separate and untouched. No next slice or
-push is authorized.
+retirement/HTTP/build/AGENTS/local-doc baseline, delivered as `623207c`. R02d and R03a/b are accepted but uncommitted.
+Nested-doc changes remain separate and untouched; no R03c/d, commit or push is authorized.
 
 The remainder is the **archived pre-pivot baseline and 018 proposal**. Its old pending statuses, dirty-tree/pane
 identifiers, imperative instructions, and delegation gates are historical, not current authorization.
