@@ -1,13 +1,44 @@
-# Android sync coordinator handoff — 2026-10-03
+# Android sync coordinator handoff — 2026-10-04
+
+## Coordinator succession
+
+The owner requested a fresh coordinator and retirement of the previous one. Successor **`gym-coordinator` in `w4:pQ`**
+is a fresh Pi `openai-codex/gpt-6.1-sol` / high session in the Android root and has acknowledged read-only orientation,
+live working-tree inventory, R03c acceptance/legacy limits and the R04 authorization boundary. Previous coordinator
+`w4:p7` is renamed `gym-coordinator-retired` and stops after this handoff. Existing Android/backend contributors are left
+holding; rediscover all live names/models before reuse. **No R04 planning/implementation is authorized by succession.**
 
 ## Current strategy and next task
+
+**Current acceptance (2026-10-04):** after succession, owner instructed “Let's start work on R04a then”.
+[R04 split](remaining-work/R04-task.md), [specification](remaining-work/R04a-task.md) and [review](remaining-work/R04a-review.md)
+now record **R04a accepted**: UNUSED encrypted vault with exact pending-attempt/grant CAS/tombstones, Keystore/private
+noBackup storage and explicit backup XML.627 forced JVM/27 filtered API37 vault tests, compilation/assembly/lint/manifest/
+APK/preservation passed, zero failures/errors/skips. Room9/asset1/build/app/domain/state/manifest unchanged; no refresh
+HTTP/access/startup/Room journal/account flow. Owned headless emulator stopped, no backend/service/configuration created.
+Both fresh R04a contributors hold idle; source isolation/serialized slots preserved. All R03c tracked/untracked/shared
+issue edits preserved; Android HEAD6134a58/shared HEADd5d68d4 unchanged, R03c/R04a remain uncommitted. No commit/push.
+**Next ONLY after specific authorization: R04b refresh coordination.** No b/c specification, assignment or implementation
+started; account activation, backend, deployment/private configuration remain unauthorized. Legacy incompatible accepted
+replay remains UNREPAIRED: no rounding/rewrite/new uncertain key/revocation/inferred data deletion. Earlier no-R04 text
+below describes prior gates, not current pickup.
+
+**Current pickup:** the owner authorized R03c (“Go ahead and start work at task R03c”). Its
+[specification](remaining-work/R03c-task.md) and [review](remaining-work/R03c-review.md) now record **R03c acceptance
+(2026-10-04)**: client gates 553 offline JVM/six API37 smoke/build/lint passed; unchanged corrected-service auth10/10 and
+broad56/56 passed with all expiry-precision flags true. Historical incompatible accepted replay remains a known legacy
+limitation, not counted repaired. Android/backend contributors hold; source isolation and bounded ownership preserved.
+Owned rerun service/container/config are cleaned up; no new emulator/offline/device pass was added in the backend-only rerun. Live pickup found clean Android HEAD
+`6134a58bacaa20bcfc7ccb872a77ffb104867d21` and clean shared-docs HEAD
+`61fe3f9e2e7d4b502abea7532cf566759fb6ada4`; the earlier uncommitted R02d/R03a/b statements below are historical.
+No R04/R03d/R02e, commit/push, activation, deployment or private configuration is authorized.
 
 **Documentation ownership:** Android architecture, tests, roadmap, handoff and assignment/review records now live in
 this repository's top-level `docs/`, alongside `shared-docs/`. Shared product behavior, backend/API contracts and catalogue
 artifacts remain in `shared-docs/`. Start with root [AGENTS.md](../AGENTS.md) and this handoff; follow the current roadmap,
 not the archived execution instructions. Create detailed R01/subtask plans under `docs/remaining-work/`.
 
-**Current delivery:** R01 planning/design and **R02a–d/R03a–b implementations are accepted** (2026-10-03).
+**Current delivery:** R01 planning/design and **R02a–d/R03a–c implementations are accepted** (R03c: 2026-10-04).
 Read the [R01 audit/task](remaining-work/R01-task.md), [integration design](remaining-work/R01-design.md),
 [planning verification](remaining-work/R01-review.md), [R02a shared specification](remaining-work/R02a-task.md) and
 [R02a coordinator review](remaining-work/R02a-review.md). R02a adds the focused iterative original-text duplicate-member
@@ -78,8 +109,21 @@ zero failures/errors/skips. Coordinator corrected test fixtures and Android acce
 No auth adapter, engine/vault/Google/UI or app activation. Both fresh R03b contributors are complete/idle; owned isolated
 backend/container/config and emulator cleaned up. Existing R02d/R03a changes and nested shared-docs are preserved.
 
-**Next proposed task:** detailed R03c exact-body service-auth HTTP specification and execution, only after separate owner
-authorization. No R03c/d, R02e, commit/push, app activation/deployment/private configuration or 018 is authorized.
+**R03c result:** accepted. See [review](remaining-work/R03c-review.md): four-purpose challenge/exact-body exchange-refresh/
+verified-empty204 logout, no bearer/retry, original cancellation and safe errors. Client gates 553 offline/six API37/
+compilation/assembly/lint/APK/preservation passed. Initial eight auth failures were retained as evidence. Separately owned
+backend correction then passed unchanged auth10/10 and broad56/56 (all46 sync cases), zero failures/errors/skips, all
+precision flags true; 201/201 client inputs and reviewed JAR SHA256 unchanged. Backend reported independent full344/344,
+but Android did not run its Maven suite or inspect backend source. Operational rerun used --no-build and generated
+isolated configuration; owned service/container/config cleaned up. No new Google/API24/full-device/Room convergence gate.
+
+**Legacy limit:** pre-fix encrypted accepted replay bytes/deadlines remain original and incompatible; fresh still-current
+legacy refresh can rotate, but uncertain consumed-token retries never get a new key/rounding/replay rewrite automatically.
+No blanket revocation or cache/data deletion. This is retained rollout limitation, not full v1 release compliance.
+
+**Next proposed task:** R04b refresh coordination, ONLY after specific owner authorization; carry this legacy limitation
+into recovery design. R04a vault/storage is accepted as recorded above; no b/c detailed specification/implementation has
+started. No R04b/c/R03d, R02e, commit/push, app activation/deployment/private configuration or018 is authorized.
 
 The proposed integration stores canonical records/deletion evidence separately and conservatively protects the entire
 visible account projection while any local outbox intent remains. Clean complete-cache publication requires finite-edit
@@ -113,9 +157,10 @@ Tests instead use `scripts/run-isolated-backend.py`, disposable PostgreSQL 16, g
 and test-only credential setup. No personal database or backend source was changed. Earlier setup/test inspection and
 an interrupted broad Maven run preceded this clarification; they are not a full backend verification claim.
 
-The `HttpGymSyncApi` is JVM-test-only. R03a delivers a reusable secure production-compatible HTTP primitive, but the
-app now has the unused production sync adapter but no running engine, service-auth adapter, working sign-in/account UI, snapshot
-publication, or background scheduling. M5–M12 remain pending; get explicit authorization
+The legacy backend-test `HttpGymSyncApi` is JVM-test-only. R03a delivers a reusable secure production-compatible HTTP
+primitive; R03b adds the unused production sync adapter and R03c adds the accepted unused auth adapter with its explicit
+historical replay limitation.
+The app still has no running engine, working sign-in/account UI, snapshot publication or background scheduling. M5–M12 remain pending; get explicit authorization
 and plan a bounded client slice rather than continuing automatically. Real Google OAuth, deployed HTTPS, and device
 sync/account flows are not proved by the local HTTP task. The last full device gate remains M3's 161 tests on API 37.
 
@@ -135,7 +180,8 @@ returned focused execution to the same QA session. Contributor-session mcpls was
 navigation/diagnostics and actual compilation/tests supplied the gate. No agent changed global configuration.
 R02a is committed as `2a93c56`; the subsequent owner-authorized Android delivery includes R02b/R02c and the prior
 retirement/HTTP/build/AGENTS/local-doc baseline, delivered as `623207c`. R02d and R03a/b are accepted but uncommitted.
-Nested-doc changes remain separate and untouched; no R03c/d, commit or push is authorized.
+Nested-doc history remains separate and untouched; later owner-authorized R03c pickup/status is recorded above.
+No R03d, commit or push is authorized.
 
 The remainder is the **archived pre-pivot baseline and 018 proposal**. Its old pending statuses, dirty-tree/pane
 identifiers, imperative instructions, and delegation gates are historical, not current authorization.

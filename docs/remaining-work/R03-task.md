@@ -1,6 +1,10 @@
 # R03 — Android HTTP transport subtask split
 
-Status: **R03a/b accepted; R03c–d not authorized** (2026-10-03).
+Status: **R03a–c accepted; R03d deferred** (R03c acceptance 2026-10-04).
+R03c passed unchanged auth10/10 and broad56/56 after separately owned backend precision correction;
+historical incompatible accepted replay remains an explicit legacy limitation, not counted repaired.
+The owner instructed “Go ahead and start work at task R03c”; see its [shared specification](R03c-task.md).
+This authorization does not include later slices, commit/push or app activation.
 The owner instructed “go ahead and start work at r03b”; its [specification](R03b-task.md) and
 [review](R03b-review.md) record bound sync endpoints/shared errors and actual gates: 477 offline JVM, 46 real-backend
 through production adapter/test TLS relay, three filtered API37 Android tests, compilation/assembly/lint/security checks.
@@ -18,8 +22,9 @@ The original split was documentation-only; R03a execution does not authorize com
   Those are earlier evidence, not a fresh R03 gate. R02d remains uncommitted; preserve all current changes in both trees.
 - `GymSyncApi` covers push/pull/snapshot; `ServiceAuthApi` covers purpose-bound challenge, typed exchange/refresh and logout.
   R03a now supplies OkHttp 5.5.0, secure origin/scoped cancellable HTTP I/O and INTERNET/cleartext-refusal wiring.
-  R03b adds the bound production sync endpoint adapter/shared strict errors. Service-auth endpoints/configuration,
-  vault, engine and account activation remain absent.
+  R03b adds the bound production sync endpoint adapter/shared strict errors. R03c now implements the unused auth adapter with
+  [passing client and corrected-service gates](R03c-review.md). Historical incompatible accepted replay is preserved as
+  a known limitation; fresh issuance/rotation is compatible. Configured origin, vault, engine and account activation remain absent.
 - JVM-only `backend/HttpGymSyncApi.kt` includes a JDK loopback client and scripted seam. Its exact-request and outcome
   matching lessons are useful, but production must not import java.net.http, JDBC, fixture credentials or that adapter.
   In particular its error-code regex/length limit is test-only, not a production contract rule.
@@ -37,7 +42,7 @@ The original split was documentation-only; R03a execution does not authorize com
 |---|---|---|---|
 | **R03a** | Secure origin/configuration and cancellable Android-compatible HTTP primitive | Accepted R02 failure/representation boundaries | Personal prerequisite; [accepted](R03a-review.md) |
 | **R03b** | Production push/pull/snapshot adapter and shared service-error decoding | R03a, accepted R02a–c and existing durable/result codecs | Personal sync transport; [accepted](R03b-review.md) |
-| **R03c** | Production challenge/exchange/refresh/logout adapter | R03a, R03b shared error support, accepted R02c/d | Personal auth transport; not started |
+| **R03c** | Production challenge/exchange/refresh/logout adapter | R03a, R03b shared error support, accepted R02c/d | Personal auth transport; [accepted with legacy limitation](R03c-review.md) |
 | **R03d** | Account export/delete/status transport and export response streaming | R03a–c, future R02e; lifecycle feature needs | Public/deferred; not started |
 
 Default execution/review order: **a → b → c**, then stop with the personal R03 transport baseline. **d** comes with
@@ -173,9 +178,9 @@ assembly/lint, executed XML inspection, both diff checks and updated Android doc
 and isolated backend gates where relevant; document unavailable external gates separately, never claim them from source
 compilation or cached tasks. Do not run backend source review/Maven suites or use personal configuration/databases.
 
-**Original planning stop:** the split itself delivered documentation only. The owner has since authorized and accepted **R03a only**;
-its detailed specification/review records the library, APIs, allowlists, test wiring and actual gates. Other slices, commit/push and activation
-remain unauthorized. The verification below records the original planning gate, not R03a implementation evidence.
+**Original planning stop:** the split itself delivered documentation only. The owner subsequently authorized/accepted
+R03a and R03b, then authorized/accepted [R03c](R03c-review.md). R04/R03d, commit/push and activation remain unauthorized.
+The verification below records the original planning gate, not implementation evidence.
 
 ### Documentation verification
 

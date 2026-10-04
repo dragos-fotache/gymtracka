@@ -164,8 +164,9 @@ parsing (RFC 3339 UTC via desugared java.time), and explicit
 Room mappings under `data/sync` (upload input vs canonical records, validated positions/IDs,
 no ID generation, no database writes). Typed canonical result envelopes, all 17 semantic/autosave mutation kinds, import
 snapshots, and version-1 durable request wrappers are implemented with strict request-field/identity validation and
-unchanged raw wire bytes across retries. There is still no running sync engine, service-auth endpoint adapter, snapshot publication,
-or sign-out logic, so the app is not syncing. The device row's `cached_account_id` is storage for a retained signed-out
+unchanged raw wire bytes across retries. There is still no running sync engine, snapshot publication,
+or sign-out logic, so the app is not syncing. R03c adds an unused, accepted auth HTTP adapter after the corrected backend passed unchanged interoperability;
+historical incompatible accepted replay remains an explicit legacy limitation. See its review below. The device row's `cached_account_id` is storage for a retained signed-out
 cache,
 independent of the active account; retaining cached data on sign-out and clearing the cache when
 switching to a different account are not implemented behaviors in this slice. Later sync work will
@@ -338,8 +339,52 @@ hints with fixed safe causes/messages. Existing domain/durable/auth codecs and v
 
 RealBackendFixture now uses this adapter over a test-only locally trusted TLS relay to the guarded isolated HTTP service.
 All existing real-backend assertions/guards remain. Relay/certificates/JDBC/JDK adapters are absent from the app APK.
-No configured URL, service-auth adapter, vault/session lifecycle, engine, Google/UI or app activation is delivered.
+No configured URL, session lifecycle, engine, Google/UI or app activation is delivered.
+R03c subsequently adds the unused auth adapter; R04a adds the unused encrypted vault, reviewed below.
 See [R03b specification](remaining-work/R03b-task.md) and [review](remaining-work/R03b-review.md).
+
+## R03c service-auth HTTP — accepted, not activated
+
+`http/HttpServiceAuthApi` implements four-purpose challenge, exact retained exchange/refresh bodies and header-only
+idempotency keys, and verified bodyless204 logout over the existing secure transport. No bearer/query/automatic resend,
+new attempts/expiry extension, vault, Room writes, Google or account flow. Success/error bodies use strict original scalar
+fidelity and approved auth codecs; expired original grants remain representable without authorizing them. The pure
+`AuthHttpFailures` table never confuses proof/refresh rejection with service-access recovery or account deletion.
+
+The outer auth boundary preserves active-caller safe/injected exception identity and prioritizes an already-cancelled
+caller's original cause over stack-recovery copies or racing I/O categories. The bounded common transport amendment
+maps header-level ProtocolException to MalformedResponse (OkHttp rejects forbidden nonempty204 before delivering headers);
+other IOException, cancellation, TLS and one-send behavior remains unchanged.
+
+[Coordinator review](remaining-work/R03c-review.md): 553 offline JVM/six filtered API37 auth smoke/build/lint gates pass.
+After separately owned service correction, unchanged auth10/10 and broad56/56 interoperability pass with lossless expiry
+flags true; client source/decoders/tests remain unchanged. These latest runs are backend-only, not new offline/device runs.
+Pre-fix incompatible accepted replay bytes/deadlines remain preserved and incompatible; do not round, rewrite or mint a
+new key for an uncertain consumed-token attempt. Carry this limitation into session recovery/release review.
+No app activation or backend source changes by Android. Room stays v9, asset v1 and signed-out use unchanged.
+
+## R04a encrypted session vault — accepted, not activated
+
+`data/sync/session` now implements an UNUSED revision-checked encrypted vault. Validated immutable records bind canonical
+HTTPS origin, service account, positive device generation, operation/phase, original grant and exact uncertain-refresh
+body/key. Strict version1 binary UTF8 preserves original text/expiry values; pending scalar fidelity reuses approved
+preflight without altering auth codecs. A matching CAS commits the complete snapshot; clear writes an encrypted positive-
+revision tombstone rather than resetting to0. Corrupt/unsupported/missing-key data stays closed and preserved.
+
+The inert Android factory shares a process mutex and defers all IO/key creation. Keystore nonexportable AES256/GCM uses
+provider-generated12-byte IV/128-bit tag. Ciphertext lives only in credential-protected noBackupFilesDir. Original-path
+symlink/type checks, checked0600 temp writes/fsync/rename and namespace+parent fsync on every successful replacement avoid
+silent partial success. Both legacy and modern cloud/D2D backup XMLs additionally exclude the production namespace;
+ordinary backup remains enabled. No multiprocess, hardware-backed, flash/GC secure-erasure or actual OEM-transfer claim.
+
+Codec/crypto/file work is on IO with owned-copy cleanup. Outer caller-activity checks preserve original cancellation
+identity across context recovery; cancellation after a commit is not rollback proof. Whole grant+pending state can be
+replaced atomically, but there is NO refresh HTTP orchestration, access provider, Room journal/startup reconciliation,
+account activation or sign-out flow yet. Prepared/active are stored labels, not permission to expose account data.
+
+[Review](remaining-work/R04a-review.md):627 forced offline JVM tests/27 filtered API37 vault tests and compile/build/lint/
+APK/preservation gates passed. Room9/asset1/domain/UI/build/manifest are unchanged. Legacy incompatible accepted replay
+remains UNREPAIRED; no rounding/new uncertain key/rewrite/revocation/data deletion. R04b/c require separate authorization.
 
 ## Proposed integration design — not implemented
 

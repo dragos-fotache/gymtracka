@@ -1,7 +1,14 @@
 # Remaining Android delivery roadmap
 
-Status: R01 planning/design approved and **R02a–d plus R03a/b accepted** (2026-10-03).
-Remaining implementation slices require separate authorization.
+Status: R01 planning/design approved and **R02a–d plus R03a–c accepted** (R03c: 2026-10-04).
+Owner subsequently authorized **R04a only**, now accepted (2026-10-04). See [R04 split](remaining-work/R04-task.md),
+[R04a specification](remaining-work/R04a-task.md) and [review](remaining-work/R04a-review.md): unused encrypted vault,
+627 offline JVM/27 API37 vault tests/build/lint/preservation passed, not refresh orchestration or activation.
+R04b/c and later slices, commit/push/deployment remain unauthorized; older no-R04 text is prior-gate history.
+[R03c specification](remaining-work/R03c-task.md) and [review](remaining-work/R03c-review.md): 553 offline JVM/six API37
+smoke/build/lint gates pass; unchanged corrected-service auth10/10 and broad56/56 pass with all expiry-precision flags true.
+Historical incompatible accepted replay remains an explicit legacy limitation, not counted repaired.
+Other remaining implementation slices require separate authorization.
 Read the [R01 audit](remaining-work/R01-task.md), [integration design](remaining-work/R01-design.md),
 [planning verification](remaining-work/R01-review.md), [R02a specification](remaining-work/R02a-task.md) and
 [R02a implementation review](remaining-work/R02a-review.md), [R02b specification](remaining-work/R02b-task.md) and
@@ -17,7 +24,7 @@ The owner subsequently authorized **R03a only**, now accepted; see its
 five filtered Android transport tests plus one signed-out startup smoke on API 37, build/lint/security gates.
 The owner subsequently authorized **R03b only**, now accepted under its [specification](remaining-work/R03b-task.md)
 and [review](remaining-work/R03b-review.md): 477 offline JVM, 46 real-backend via production adapter/test TLS and
-three filtered API37 Android tests, plus build/lint/security gates. No R02e/R03c–d implementation, commit, push, backend change,
+three filtered API37 Android tests, plus build/lint/security gates. The owner subsequently authorized R03c only. No R02e/R03d implementation, commit, push, backend change,
 app activation or deployment is authorized. Each task will receive its
 own detailed plan and may be split further by the current assistant or a successor coordinator before implementation.
 
@@ -41,8 +48,10 @@ previously passed six filtered Android smoke tests. Earlier evidence remains 46 
 [retirement review](fake-retirement-review.md); earlier evidence is not
 verification of a new task. The Android simulator-retirement baseline was delivered in `623207c`; nested shared-docs changes remain separate and uncommitted.
 
-R03a delivers a reusable production-compatible secure HTTP primitive, not endpoint adapters. There is no production
-service-auth endpoint adapter, running sync engine, account UI, snapshot publication, Google integration or background scheduling.
+R03a delivers a reusable production-compatible secure HTTP primitive, not endpoint adapters. R03c adds an unused,
+accepted production service-auth adapter after corrected-service interoperability; legacy incompatible accepted replay
+remains preserved/documented rather than repaired or permissively decoded. There is no running sync engine, account UI, snapshot publication,
+Google integration or background scheduling.
 R03b's production sync adapter is implemented and independently verified, but not constructed/activated by the app. R02d adds challenge purposes, auth codecs and exact-body attempts; account-bound lifecycle
 proofs and export/delete/status models remain deferred. A JVM HTTP pass does not prove Android Room convergence or real Google OAuth.
 
@@ -101,8 +110,8 @@ Other slices require individual planning/implementation authorization.
 |----|------|------------|------------------------|
 | R01 | Audit v1 gaps and approve the integration design | Existing baseline | Reviewed requirement/design matrix and bounded next assignment |
 | R02 | Align client models and API boundaries with finalized v1 | R01 | R02a–d accepted; R02e lifecycle deferred with public account features |
-| R03 | [Implement Android HTTP transport](remaining-work/R03-task.md) | Relevant R02 slices | R03a primitive/R03b sync accepted; c auth pending; d lifecycle deferred |
-| R04 | Implement encrypted session storage and refresh recovery | R03a, R03c | Crash-safe exact-key refresh, account/session-bound credentials |
+| R03 | [Implement Android HTTP transport](remaining-work/R03-task.md) | Relevant R02 slices | R03a primitive/R03b sync/R03c auth accepted; legacy replay limitation; d deferred |
+| R04 | [Encrypted session storage and refresh recovery](remaining-work/R04-task.md) | R03a, R03c | a vault/storage accepted; b refresh/c startup recovery pending |
 | R05 | Implement remote Room application and protected local intent | R02; R01 design | Atomic revision-safe canonical batches without lost edits or echo uploads |
 | R06 | Implement durable push orchestration | R03b, R04, R05 | Ordered unchanged retries and exact fenced acknowledgments |
 | R07 | Implement incremental pull orchestration | R06 | Contiguous batch/cursor application and safe pagination |
@@ -180,14 +189,15 @@ The owner-requested [R03 split](remaining-work/R03-task.md) makes the bounded ga
 |---|---|---|
 | R03a | Secure origin/configuration, Android-compatible cancellable HTTP primitive, common I/O ownership/hint parsing | Independent TLS/redirect/encoding/cancellation/security tests; no endpoint adapter |
 | R03b | Production push/pull/snapshot + shared service-error decoding | Exact frozen bytes, complete outcomes, operation-aware failures and isolated interoperability; no engine/Room writes |
-| R03c | Purpose challenge, exact-body exchange/refresh and logout adapter | No bootstrap bearer, exact retained keys/bodies, safe grants/errors/cancellation; no vault/Google/account flow |
+| R03c | Purpose challenge, exact-body exchange/refresh and logout adapter | Accepted after unchanged corrected-service rerun; legacy limitation; no vault/Google/account flow |
 | R03d | Deferred account export/delete/status and owned export streaming | R02e prerequisite; complete download/account-bound results; no UI or destructive cleanup |
 
 Default personal execution/review order is **a → b → c**, then stop; **d** follows public lifecycle needs. R04 requires a/c,
 not deferred d; R06 requires b plus R04/R05. Exact library/version/API/allowlists are prepared at each authorized pickup.
 R03a is now separately authorized and accepted under its [detailed specification](remaining-work/R03a-task.md)
 and [review](remaining-work/R03a-review.md).
-R03b–d and concurrent implementation of other slices remain unauthorized.
+R03b is accepted; R03c is accepted with the explicit legacy replay limitation in its [review](remaining-work/R03c-review.md).
+R03d and concurrent implementation of other slices remain unauthorized.
 
 ### R04 — Implement encrypted session storage and refresh recovery
 
@@ -421,8 +431,11 @@ process-death timer redesign is included here.
   architecture/testing/plans in `docs/` and shared product/contracts in `shared-docs/` as behavior changes, not claims
   of future behavior as already shipped.
 
-**Next proposed pickup:** detailed R03c exact-body service-auth HTTP specification and execution, only after
-separate owner authorization. R03b is accepted under its [specification](remaining-work/R03b-task.md) and
+**Next proposed pickup:** R04b refresh coordination, only after specific owner authorization.
+R04a UNUSED encrypted vault/storage is [accepted](remaining-work/R04a-review.md); no b/c detailed plan or implementation
+has started. No account activation, Room transition, backend/configuration, commit/push or deployment authorization.
+[R03c](remaining-work/R03c-review.md) is accepted after unchanged corrected-service auth10/10 and broad56/56 pass; preserve
+its explicit historical replay limitation in session/recovery design. R04b/c and deferred lifecycle work have not started. R03b is accepted under its [specification](remaining-work/R03b-task.md) and
 [review](remaining-work/R03b-review.md). R03a is accepted under its [specification](remaining-work/R03a-task.md) and
 [review](remaining-work/R03a-review.md), following the [R03a–d split](remaining-work/R03-task.md).
 R02e lifecycle support remains deferred with public account features.

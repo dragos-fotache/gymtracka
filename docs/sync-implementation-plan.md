@@ -24,7 +24,15 @@ Android transport tests plus one signed-out startup smoke on API 37 and build/li
 [review](remaining-work/R03a-review.md). R03b was subsequently authorized and accepted; see its
 [specification](remaining-work/R03b-task.md) and [review](remaining-work/R03b-review.md): 477 offline JVM tests,
 46 real-backend tests through production adapter/test TLS and three filtered API37 Android tests plus build/lint gates.
-R03c/d remain unauthorized; no activation/commit/push.
+The owner subsequently authorized R03c; its [specification](remaining-work/R03c-task.md) and
+[review](remaining-work/R03c-review.md) record accepted unused auth HTTP, 553 passing offline JVM/six API37 smoke/build/lint,
+and unchanged corrected-service auth10/10 plus broad56/56 passing. The initial eight timestamp failures are retained as
+historical evidence; pre-fix incompatible accepted replay is an explicit legacy limitation, not counted repaired.
+The owner subsequently authorized **R04a only**, now [accepted](remaining-work/R04a-review.md): unused encrypted
+vault/storage,627 forced offline JVM/27 filtered API37 storage/Keystore tests plus build/lint/preservation gates. See the
+[R04 split](remaining-work/R04-task.md) and [specification](remaining-work/R04a-task.md). No refresh/startup/Room/account
+activation flow is delivered. R04b/c require specific authorization; legacy replay remains unrepaired. No R03d/activation/commit/push.
+Live pickup was clean Android6134a58/shared61fe3f9; older uncommitted baseline descriptions are historical.
 Current coordination is Pi Worker
 (production only) and QA (tests only), both Muse Spark 1.3 Contributor/high reasoning, with asynchronous Herdr reports
 and independent coordinator review. This supersedes the archived Hermes contributor workflow below.
@@ -37,8 +45,8 @@ Keep transactional safety, stable retries, account/session isolation and credent
 
 ## Simulator-retirement update — 2026-10-02 (historical gate)
 
-The following counts and operational/pane descriptions record that gate only. Current offline coverage is 477 tests;
-see the current roadmap/handoff and [R03b review](remaining-work/R03b-review.md) for later verification.
+The following counts and operational/pane descriptions record that gate only. Current client offline coverage is627;
+see the current roadmap/handoff and [R04a acceptance review](remaining-work/R04a-review.md) for later verification.
 
 The user completed the separate Java backend and authorized simulator retirement as the first resumed Android task.
 `FakeSyncService`, `FakeAccountSyncApi`, their fixtures, all 92 fake-only test methods, and unused `sharedTest` wiring

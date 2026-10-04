@@ -70,7 +70,7 @@ internal class RealBackendHttpBridge(baseUrl: String) : AutoCloseable {
         val target = recorded.target
         val path = target.substringBefore('?')
         val method = recorded.method
-        val allowed = (method == "POST" && path == "/v1/sync/push" && !target.contains('?')) ||
+        val allowed = (method == "POST" && path in POST_ROUTES && !target.contains('?')) ||
             (method == "GET" && (path == "/v1/sync/pull" || path == "/v1/sync/snapshot"))
         if (!allowed || !target.startsWith("/v1/") || target.any { it < ' ' || it == '\\' }) {
             return relayFailure()
@@ -166,8 +166,16 @@ internal class RealBackendHttpBridge(baseUrl: String) : AutoCloseable {
     }
 
     companion object {
+        private val POST_ROUTES = setOf(
+            "/v1/sync/push",
+            "/v1/auth/google/challenge",
+            "/v1/auth/google",
+            "/v1/auth/refresh",
+            "/v1/auth/logout",
+        )
         private val FORWARDED_REQUEST_HEADERS = listOf(
             "Authorization",
+            "Idempotency-Key",
             "Content-Type",
             "Accept",
             "Accept-Encoding",

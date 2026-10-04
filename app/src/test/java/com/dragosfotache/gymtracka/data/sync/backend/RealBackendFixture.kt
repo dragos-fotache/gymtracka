@@ -2,6 +2,8 @@ package com.dragosfotache.gymtracka.data.sync.backend
 
 import com.dragosfotache.gymtracka.data.sync.api.GymSyncApi
 import com.dragosfotache.gymtracka.data.sync.api.OpaqueToken
+import com.dragosfotache.gymtracka.data.sync.api.ServiceAuthApi
+import com.dragosfotache.gymtracka.data.sync.http.HttpServiceAuthApi
 import com.dragosfotache.gymtracka.data.sync.http.BoundServiceAccessToken
 import com.dragosfotache.gymtracka.data.sync.http.BoundServiceAccessTokenProvider
 import com.dragosfotache.gymtracka.data.sync.http.ServiceSessionBinding
@@ -114,7 +116,76 @@ class RealBackendFixture private constructor(
         return TestAccount(accountId.toString(), token)
     }
 
+    /** Test-only session setup, not Google exchange or production auth bypass. */
+    class TestAuthSession(val account: TestAccount, val refreshToken: OpaqueToken) {
+        override fun toString(): String = "TestAuthSession(redacted)"
+    }
+
+    /**
+     * Adds one current refresh credential to a fresh isolated session using the
+     * existing fixture HMAC scheme. No domain rows are written through SQL.
+     * Expired setup is deterministic relative to service time, not JVM sleeps.
+     */
+    fun newAuthSession(
+        expiredRefresh: Boolean = false,
+        existingAccount: TestAccount? = null,
+    ): TestAuthSession {
+        val accountId = existingAccount?.let { UUID.fromString(it.accountId) } ?: UUID.randomUUID()
+        val sessionId = UUID.randomUUID()
+        val access = randomToken()
+        val refresh = randomToken()
+        val autoCommit = connection.autoCommit
+        connection.autoCommit = false
+        try {
+            if (existingAccount == null) {
+                connection.prepareStatement("insert into accounts(id) values(?)").use {
+                    it.setObject(1, accountId)
+                    it.executeUpdate()
+                }
+            }
+            connection.prepareStatement(
+                "insert into auth_sessions(id,account_id,created_at) values(?,?,clock_timestamp())",
+            ).use {
+                it.setObject(1, sessionId)
+                it.setObject(2, accountId)
+                it.executeUpdate()
+            }
+            for ((kind, token) in listOf("access" to access, "refresh" to refresh)) {
+                val expiry = when {
+                    kind == "access" -> "clock_timestamp()+interval '15 minutes'"
+                    expiredRefresh -> "clock_timestamp()-interval '1 minute'"
+                    else -> "clock_timestamp()+interval '30 days'"
+                }
+                connection.prepareStatement(
+                    "insert into auth_credentials(fingerprint,session_id,kind,issued_at,expires_at)" +
+                        " values(?,?,?,clock_timestamp()-interval '2 minutes',$expiry)",
+                ).use {
+                    it.setBytes(1, hmac(authKeyBytes, token.toByteArray(Charsets.UTF_8)))
+                    it.setObject(2, sessionId)
+                    it.setString(3, kind)
+                    it.executeUpdate()
+                }
+            }
+            connection.commit()
+        } catch (_: Exception) {
+            try {
+                connection.rollback()
+            } catch (_: Exception) {
+            }
+            throw IllegalStateException("Real-backend auth session minting failed")
+        } finally {
+            connection.autoCommit = autoCommit
+        }
+        return TestAuthSession(TestAccount(accountId.toString(), access), OpaqueToken(refresh))
+    }
+
     private val httpBridge = lazy { RealBackendHttpBridge(baseUrl) }
+
+    /** Production auth adapter over the same guarded trusted TLS relay. */
+    fun authApi(): ServiceAuthApi {
+        val bridge = httpBridge.value
+        return HttpServiceAuthApi(bridge.origin, bridge.transport)
+    }
 
     /** Actual Android-compatible adapter over a test-owned trusted local TLS relay. */
     fun apiFor(account: TestAccount): GymSyncApi {

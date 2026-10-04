@@ -264,6 +264,64 @@ The [R03b review](remaining-work/R03b-review.md) accepts the unused network API/
 No engine/vault/Google/account activation, migration/Room/Python-supervisor/hosted-CI/personal phone-laptop gate was added.
 The isolated service and owned emulator were cleaned up. R03c/d still need separate authorization.
 
+## R03c — auth HTTP accepted after corrected service rerun
+
+The [R03c review](remaining-work/R03c-review.md) records acceptance of unused transport after independently passing
+unchanged interoperability. The earlier source-identical offline/device/build evidence remains:
+
+- **553 offline JVM tests in 40 suites**, forced, zero failures/errors/skips; prior477 plus63 independent Api and13 local
+  TLS Network methods. Exact restored bodies/keys and repeats/loss, four purposes/defaults/legacy calls, strict full grants/
+  errors/statuses, verified-empty204, redaction, one-send and original cancellation are covered.
+- Five real TLS cancellation scenarios gate actual Source.read entry and assert supplied exception identity INSIDE the
+  API caller, not through async.await recovery. A deterministic all-four-operation × three-late-failure matrix protects
+  cancellation dominance over racing malformed/transient/unknown failures. Assertions were not weakened; production
+  was corrected after a broad gate revealed the race.
+- **6 filtered auth Android smoke tests** on Pixel_6a / Android17 / API37, final rerun, zero failures/errors/skips.
+  Platform duplicate/scalar-overflow rejection, auth TLS/grant/default construction and empty204 are verified; no full
+  instrumentation/API24/Google pass.
+- Compilation/assembly/lint/APK/asset/preservation gates pass. Lint has only existing NewerVersionAvailable Warning;
+  one new nonfatal test Call.enqueue parameter-name compiler warning is explicitly recorded alongside existing notes.
+- **Initial historical real-backend gate: 56 tests in 10 suites, 48 passed, 8 failed**, zero errors/skips. All46 existing sync tests pass. New
+  auth unknown/expired refresh rejection and bodyless logout pass; successful-auth/grant-dependent cases fail plus a
+  precision diagnostic. Actual challenge/access/refresh expiries have NONZERO submillisecond precision, which accepted
+  codecs correctly reject under the finalized contract. No skip, rounding, assertion weakening or backend source change.
+
+The initial eight-failure gate above is historical and preserved, not current acceptance evidence. The independently
+reviewed backend package then passed **unchanged auth10/10 and broad56/56 in10 suites**, zero failures/errors/skips, with
+challenge/access/refresh precision flags all true. Reviewed JAR hash and 201/201 frozen client code/build inputs matched
+before/after the `--no-build` disposable launch. Backend-owned full344/344 and auth19/19 are reported separately, not
+Android-executed backend suites. No client rounding, assertions changed or backend source review by Android.
+
+The guarded fixture/relay preserves every old scenario/assertion/ownership guard; no Google proof is fabricated. Owned
+service/container/config are cleaned up; no emulator/new device gate was added in this backend-only rerun. R03c is now
+accepted with historical incompatible encrypted replay preserved as an explicit legacy limitation, not counted repaired.
+A still-current legacy refresh may freshly rotate; uncertain consumed-token retries never get a new key automatically.
+Real Google, Room/engine convergence, full-device/hosted-CI/personal phone-laptop journeys remain unverified.
+
+## R04a — unused encrypted vault accepted (2026-10-04)
+
+The [R04a review](remaining-work/R04a-review.md) records independent source/test review and final actual gates:
+
+- **627 offline JVM tests in43 suites**, forced coordinator execution, zero failures/errors/skips: prior553 plus32 vault,
+  31 binary-codec and11 independent JCA cipher methods. Full exact fields/body/key/UTF8/IPv6/expiry bounds/>64KiB, malformed
+  complete fixtures/version/tags/lengths, CAS/tombstone/overflow/restart/failures, original cancellation and ownership.
+- **27 filtered SessionVaultAndroidTest tests** on owned Pixel_6a/Android17/API37, zero failures/errors/skips: real Keystore
+  settings/nonexportability/randomization, exact reopen/grant+attempt/tombstone, missing/wrong-kind keys, actual atomic-file
+  stages/.new, permission/type/symlink/protected-context privacy, concurrency, platform scalar fidelity and packaged backup
+  rules/inert construction. Table subcases are not extra test counts. Not a full device/Room/migration/API24 runtime gate.
+- Production/Android-test Kotlin, assembly/lint, merged debug/release manifests and APK/asset/preservation passed. Lint
+  only existing NewerVersionAvailable Warning; two new nonfatal QA nullable-expression compiler warnings are explicit.
+  Ordinary backup remains enabled; noBackup path plus packaged cloud/D2D/legacy exclusions checked, not live cloud/OEM transfer.
+- Initial focused70 had6 failures: two real outer-context cancellation identity bugs and four fixture errors. Same-session
+  production corrections retained the in-caller assertSame regressions. Final focused74 and independent627/27 are green;
+  no old assertion weakened or test removed. Worker never read tests; QA never read production/declarations/diffs/bytecode.
+- Core IO scope owns buffers in finally; caller cancellation dominates late categories/recovery copies. A synchronous
+  committed snapshot may survive cancellation/failure; reload/fence, never assume rollback or invent another key.
+
+No HTTP refresh/access orchestration, Google/account/UI/Room activation, backend/Python/full-device/hosted-CI/phone-laptop
+journey was added. R03c backend/old-device evidence remains prior evidence. Legacy incompatible accepted replay stays
+unrepaired and must carry into future R04b/c recovery/release review. Owned emulator stopped; contributors hold idle.
+
 ## Historical baseline before simulator retirement
 
 Testing milestones 1–8 are complete. After Assignment 016, the suite contained 173 JVM test methods and 161
@@ -543,8 +601,9 @@ appropriate full layer before marking a milestone complete.
 ## Sync test expansion
 
 The [remaining-work roadmap](remaining-work-roadmap.md) assigns per-task acceptance outcomes and separate engine
-convergence, live/device and future-public audit gates. R02a–d and R03a/b are accepted; later implementation slices remain pending
-and require separate authorization.
+convergence, live/device and future-public audit gates. R02a–d, R03a–c and R04a vault/storage are accepted; R03c/R04a
+retain the explicit historical replay limitation. R04 refresh/startup orchestration is NOT complete.
+Other implementation slices remain pending and require separate authorization.
 [R01 planning](remaining-work/R01-task.md) and its [invariant/test matrix](remaining-work/R01-design.md) were approved by
 the owner on 2026-10-03. These planning updates add no test
 pass or implemented capability. The current target is the owner's phone and personal laptop-hosted service: core

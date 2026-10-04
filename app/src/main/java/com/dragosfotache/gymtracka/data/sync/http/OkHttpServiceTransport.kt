@@ -2,6 +2,7 @@ package com.dragosfotache.gymtracka.data.sync.http
 
 import com.dragosfotache.gymtracka.data.sync.api.SyncApiException
 import java.io.IOException
+import java.net.ProtocolException
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -292,7 +293,11 @@ private suspend fun awaitHeaders(call: Call): Response =
                     // A completed continuation means caller cancellation won; the original
                     // CancellationException propagates instead of this induced failure.
                     if (continuation.isCompleted) return
-                    continuation.resumeWithException(SyncApiException.Transient())
+                    if (e is ProtocolException) {
+                        continuation.resumeWithException(SyncApiException.MalformedResponse())
+                    } else {
+                        continuation.resumeWithException(SyncApiException.Transient())
+                    }
                 }
 
                 override fun onResponse(call: Call, response: Response) {
