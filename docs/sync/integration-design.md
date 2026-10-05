@@ -11,10 +11,9 @@ record/batch application. R05c adds an inert protected publisher; R06a adds iner
 exact replay admission; R06b adds inert single-head outcome classification and retry/error bookkeeping; R06c adds inert
 atomic canonical acknowledgment; R06d adds an inert bounded push delivery driver; R07a adds inert incremental batch/
 checkpoint transactions on that same admitted run; R07b adds bounded incremental HTTP pull receiving an already
-admitted run. Production projection activation, shared push/pull
-orchestration, convergence, snapshots, the durable
-Room-authority adapter/journal, account transitions and cross-feature
-publication barriers remain planned. Stored vault phases and explicit refresh leases alone never
+admitted run. R07c adds an inert shared push-first driver and separate fenced valid-tail/last-success transaction.
+Production projection activation, convergence, snapshots, the durable Room-authority adapter/journal, account
+transitions and cross-feature publication barriers remain planned. Stored vault phases and explicit refresh leases alone never
 authorize activation. Preserve the unresolved
 [legacy auth replay limitation](implementation.md#legacy-auth-replay-limitation) in all recovery work.
 
@@ -189,8 +188,11 @@ run(scope fence):
   commits one complete canonical batch with its boundary on that same run, without last-success/publication or HTTP.
   R07b's [bounded pull driver](implementation.md#bounded-incremental-pull) accepts an already admitted `PushRun` with
   no store admission or second owner/mutex. It validates/owns whole pages before suspension, fences transport results,
-  detects run cycles and chains complete batches within strict page/count budgets. R07c must add uninterrupted
-  push-before-pull composition and tail/last-success integration; it must not nest existing push driver admission.
+  detects run cycles and chains complete batches within strict page/count budgets. The inert
+  [shared driver](implementation.md#shared-push-before-pull-and-valid-tail) reuses the admitted push overload and
+  internal exact-checkpoint terminal callback under one uninterrupted run, never nesting admission. Only fenced push
+  Empty permits pull; push budget/error/auth stops do not probe or bypass the head. Its separate tail transaction
+  records last-success and observes outstanding newer intent without advancing a cursor or publishing projection.
   Bootstrap/publication and user-facing activation remain later integration.
 - Frozen means possibly transmitted forever, even if socket construction/cancellation occurred early. Transient failure
   never makes it coalescible. Process restart selects the same frozen head and unchanged ID/bytes/child plans.
@@ -215,8 +217,12 @@ run(scope fence):
   later batch fails; the durable checkpoint is exactly the last successfully contiguous batch, never page tail on failure.
   Empty tail preserves the input boundary. Validate count/hasMore/progress and repeated IDs/tokens across the run; tokens
   are opaque and never lexically compared. An invalid token is not expiry and never silently triggers bootstrap.
-- `lastSuccess` means the defined run reached its valid tail/complete bootstrap, not merely one HTTP 200. Track
-  outstanding local work and projection publication separately so UI does not claim convergence while edits remain.
+- `lastSuccess` means the defined run reached its valid tail/complete bootstrap, not merely one HTTP 200. R07c records
+  only a validated terminal page's exact chained checkpoint under complete-row/baseline/session/epoch/cancellation
+  fences. Failed/uncertain writes require durable reread; retired tokens are not commit evidence. The supplied
+  nonnegative wall time is retained exactly, including equal/backward observations, and is never a conflict clock.
+  Track outstanding local work and projection publication separately: a bounded valid tail/empty observed outbox is
+  not account convergence or absence of later edits. Bootstrap last-success establishment remains R08.
 
 ## 5. Frozen snapshots and full resync
 

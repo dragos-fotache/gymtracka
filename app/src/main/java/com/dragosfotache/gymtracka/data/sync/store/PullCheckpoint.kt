@@ -31,6 +31,21 @@ data class PullBatchCommitResult(
     override fun toString(): String = "PullBatchCommitResult"
 }
 
+/**
+ * Immutable owned commit summary for one atomic valid-tail last-success write. The carried
+ * checkpoint is the fresh token binding the new durable row (unchanged cursor, exact supplied
+ * last-success time). The flag is a selected-account outbox presence observation inside that tail
+ * transaction, not convergence or publication evidence. The string form never prints tokens,
+ * identities, cursors or bodies.
+ */
+data class PullTailCommitResult(
+    val checkpoint: PullCheckpoint,
+    val hasOutstandingLocalWork: Boolean,
+) {
+    override fun toString(): String =
+        "PullTailCommitResult(hasOutstandingLocalWork=$hasOutstandingLocalWork)"
+}
+
 /** The pull checkpoint boundary no longer matches the admitted token. Fixed safe message. */
 class StalePullCheckpointException : IllegalStateException("Stale pull checkpoint")
 

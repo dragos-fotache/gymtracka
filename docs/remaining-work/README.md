@@ -1,11 +1,10 @@
 # Active task specifications
 
 **No implementation task is currently open here.**
-[R07b bounded incremental HTTP pull](../archive/remaining-work/R07b-review.md),
-[R07a checkpoint transactions](../archive/remaining-work/R07a-review.md), R06a–d and R05a–c are accepted.
-R07c shared push-before-pull orchestration, tail/last-success integration and package gates is the next eligible slice
-under the owner's [standing workflow](../coordinator-workflow.md#coordinator-rotation-and-automatic-continuation).
-Its fresh coordinator must prepare a concrete bounded specification before delegation.
+[R07c shared push-before-pull / valid tail](../archive/remaining-work/R07c-review.md), R07a/b, R06a–d and R05a–c are accepted.
+R08a staged bootstrap storage foundations is next dependency-ready under the
+[standing workflow](../coordinator-workflow.md#coordinator-rotation-and-automatic-continuation).
+Its fresh coordinator must settle concrete schema/storage/harness facts and one bounded normative specification before delegation.
 See [current pickup](../coordinator-handoff.md) and [roadmap](../remaining-work-roadmap.md).
 Production remains signed-out/local-only; accepted inert components do not authorize activation.
 

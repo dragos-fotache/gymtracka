@@ -87,8 +87,9 @@ transaction use. Batch writes and dirty marking roll back together on failure/ca
 Inert [head claiming/replay admission](#durable-head-claiming-and-replay-admission),
 [atomic canonical acknowledgment](#atomic-canonical-acknowledgment), a
 [bounded push driver](#bounded-push-delivery), [incremental checkpoint transactions](#incremental-checkpoint-transactions)
-and [bounded incremental pull](#bounded-incremental-pull) exist, but no shared push/pull engine, staging,
-vault/Room journal or production publication activation exists.
+and [bounded incremental pull](#bounded-incremental-pull) exist, composed by the inert
+[shared push-before-pull driver](#shared-push-before-pull-and-valid-tail). No staged bootstrap, vault/Room journal,
+convergence integration or production publication activation exists.
 The independent ledger is not itself a visible projection.
 
 ### Protected publication
@@ -234,7 +235,9 @@ Room v10 without schema/entity changes. The app constructs no push store or engi
 The app constructs none of it. The caller must pair the API with the same authorized service/account/session as the
 store and share one required `PushRunOwner` per physical database; the driver creates no owner, credentials or scope.
 
-- One `withRun` lease spans the entire invocation. Each explicit head freezes durably, its defensive request is obtained,
+- The standalone `deliver(expectedCacheEpoch, maxMutations)` holds one `withRun` lease. Its compatible
+  `deliver(run, maxMutations)` overload reuses an already admitted run without another admission or owner; both share
+  the same head loop. Each explicit head freezes durably, its defensive request is obtained,
   and `checkClaim` plus caller cancellation are checked immediately before a single-request HTTP push outside Room.
   Request JSON, mutation/effect/child identity and sequence are never regenerated or normalized.
 - Only a `SyncApiException` from that HTTP call is classified as transport failure. Typed failure handling honors caller
@@ -256,8 +259,9 @@ store and share one required `PushRunOwner` per physical database; the driver cr
 
 This is bounded push orchestration, not a complete running sync engine or durable session authority. R07a's
 [checkpoint transactions](#incremental-checkpoint-transactions) and [bounded pull driver](#bounded-incremental-pull)
-exist; R07c still owns shared push/pull orchestration and tail/last-success integration, R08 complete bootstrap,
-R09 the Room/session journal, R10 convergence and R12 live publication/UI reconciliation.
+exist and the [shared driver](#shared-push-before-pull-and-valid-tail) composes them uninterrupted with valid-tail
+bookkeeping. R08 owns complete bootstrap, R09 the Room/session journal, R10 convergence and R12 live publication/UI
+reconciliation.
 
 ## Incremental checkpoint transactions
 
@@ -288,17 +292,17 @@ Production constructs none of it.
   unresolved references may arrive in later batches. Absence never becomes deletion or snapshot absence.
 
 This is a transaction primitive, not a paging/HTTP policy or running engine. The [bounded pull driver](#bounded-incremental-pull)
-validates complete ordered pages and run progress/cycles; R07c must compose uninterrupted push-before-pull ownership,
-block retained errors, and establish valid-tail/last-success behavior without nested driver admission. R08 establishes
+validates complete ordered pages and run progress/cycles; the [shared driver](#shared-push-before-pull-and-valid-tail)
+adds push-first policy and a separate tail transaction without nested admission. R08 establishes
 complete baselines, R09 supplies durable authority, and R12a supplies live publication barriers. No HTTP,
 expiry/bootstrap recovery, publication, last-success update or convergence claim is produced by this seam.
 
 ## Bounded incremental pull
 
 `sync/engine/PullDeliveryLoop(api).pull(run, maxPages, pageLimit)` is an inert explicitly constructed HTTP pull driver.
-It receives an **already admitted `PushRun`**, owns no store admission/mutex/owner, and can be composed within eventual
-R07c's uninterrupted shared ownership. The caller must pair API/store with the same authorized service/account/session
-and share one `PushRunOwner` per physical database. Production constructs none of it.
+It receives an **already admitted `PushRun`**, owns no store admission/mutex/owner, and composes within
+[shared driver](#shared-push-before-pull-and-valid-tail) uninterrupted ownership. The caller must pair API/store with the
+same authorized service/account/session and share one `PushRunOwner` per physical database. Production constructs none of it.
 
 - Strict page budget 1..100 and page limit 1..200 (both default 100) reject before checkpoint/HTTP work. Limits count
   complete pages/batches, never bytes or changes; no domain-size cap/truncation is introduced. Seen IDs/cursors are
@@ -323,8 +327,47 @@ and share one `PushRunOwner` per physical database. Production constructs none o
   without another fetch/probe. These are bounded transport summaries, not last-success/convergence/publication claims.
   Domain data/newer intent/outbox/watermarks/baseline/epochs/last-success/other scopes remain protected by R07a.
 
-Shared push-before-pull policy, retained-rejection blocking and tail/last-success integration remain R07c; bootstrap,
-durable authority, live edit/timer barriers, convergence and app activation remain their later roadmap gates.
+The public standalone pull API still writes no last-success. Its internal `pullWithTail` composition seam shares the
+same private paging core and invokes a callback exactly once at a validated terminal page, with its exact current
+chained checkpoint before returning Tail. There is no post-Tail reread that could substitute another boundary;
+callback failures propagate rather than becoming transport failures. The shared driver uses this seam below.
+
+## Shared push-before-pull and valid tail
+
+`sync/engine/SyncDeliveryLoop(store, api, nowMillis)` is inert and explicitly constructed. Production constructs none
+of it. One required application-owned `PushRunOwner` per physical DB serializes its entire `deliver` invocation,
+including push, all pull HTTP/commits and terminal bookkeeping. API/store must bind the same authorized service/account/
+session. It uses the admitted push overload and the internal pull terminal callback on one uninterrupted `withRun`;
+there is no nested admission, release/reacquire gap, additional owner or background work.
+
+- Strict epoch and push/page/count budgets validate before admission, clocks or effects. Only an actual fenced push
+  `Empty` permits pull. Every retained/deferred/auth/rejection/corruption/oversize or budget stop remains push-only;
+  `LimitReached` never probes a head even when the final acknowledgment emptied the queue. Exceptions propagate.
+- Missing complete baseline/cursor or explicit expiry returns the existing R08 requirement without snapshot/null-cursor
+  bootstrap. Invalid/foreign/wrong-context tokens remain failures. No retry, token interpretation, outbox rewriting,
+  credential/cache cleanup, publication or authority transition is introduced.
+- Only a validated terminal page invokes `PushRun.recordPullTail(checkpoint, nowMillis)` on its exact driver-supplied
+  checkpoint. Generic checkpoints/constructible Tail summaries alone are not transport-tail evidence; the transaction
+  primitive's caller must prove terminal validation. Standalone public pull does not invoke bookkeeping.
+- Tail recording shares the run handling Mutex and one Room transaction: exact complete sync-state row (including null
+  last-success), complete baseline, account/session/epoch/live admission and cancellation recheck before writes. Only
+  `last_success_millis` changes through a null-safe exact-row update, with count-1 and full post-row/baseline/fence checks.
+  The nonnegative supplied wall-clock time is preserved exactly, even equal/backward; it never orders conflicts/cursors.
+- Selected-account outbox presence is sampled before writes and rechecked before commit using `EXISTS`, without parsing,
+  filtering or changing any row. A changed observation fails closed. Foreign rows do not count. Legitimate newer capture
+  during network remains protected; a valid bounded tail may coexist with outstanding intent.
+- The input checkpoint retires immediately before every write attempt, including equal timestamps. Retirement survives
+  rollback/uncertain commit and is not success evidence. Only returned commit and active resumption install a fresh token
+  binding the new complete row. Failed/uncertain writes require durable reread; earlier acknowledgments/batches survive.
+- Tail changes no cursor, canonical/domain data, watermarks, outbox, cache/baseline/materialized epochs, device/catalogue
+  or other account. Owned SQLite errors stay fixed/safe; cancellation and external callback/clock failures propagate.
+- `SyncDeliveryResult` carries push/pull summaries and a nullable `hasOutstandingLocalWork`: null means no returned
+  successful tail commit, not false/clean. Nonnull is only the observation at that transaction. Neither false nor
+  last-success establishes account convergence, visible publication or absence of later edits. Displays remain redacted.
+
+No complete bootstrap, durable Room/vault authority, live edit/timer barrier, engine convergence or production activation
+is implied. Existing inert publication still advances epoch when used; eventual callers must use its returned epoch.
+Those integrations remain R08/R09/R10/R12 and their later activation gates.
 
 ## Models, codecs, and durable identity
 

@@ -49,6 +49,40 @@ class PullDeliveryLoop(
         maxPages: Int = MAX_PULL_DELIVERY_PAGES,
         pageLimit: Int = DEFAULT_PULL_LIMIT,
     ): PullDeliveryResult {
+        return pullInternal(run, maxPages, pageLimit, onValidTail = null)
+    }
+
+    /**
+     * Internal composition seam sharing the same private core as [pull]. Behaves
+     * identically except that [onValidTail] fires exactly once at a validated
+     * empty or nonempty terminal page, with the exact current chained checkpoint
+     * that this driver fenced and committed, before returning Tail. It never fires
+     * for budget, recovery, failure or error stops. There is no post-Tail reread
+     * that could substitute another boundary. Callback storage, fence,
+     * cancellation and unexpected failures propagate unchanged, not as API
+     * failures or success. This is an internal composition contract, not a new
+     * transport policy or reusable unbounded program.
+     */
+    internal suspend fun pullWithTail(
+        run: PushRun,
+        maxPages: Int,
+        pageLimit: Int,
+        onValidTail: suspend (PullCheckpoint) -> Unit,
+    ): PullDeliveryResult {
+        return pullInternal(run, maxPages, pageLimit, onValidTail)
+    }
+
+    /**
+     * Shared private core for [pull] and [pullWithTail]. A null [onValidTail] is
+     * the standalone no-op path preserving established behavior; a nonnull
+     * callback is the composed valid-tail path.
+     */
+    private suspend fun pullInternal(
+        run: PushRun,
+        maxPages: Int,
+        pageLimit: Int,
+        onValidTail: (suspend (PullCheckpoint) -> Unit)?,
+    ): PullDeliveryResult {
         if (maxPages !in 1..MAX_PULL_DELIVERY_PAGES) {
             throw IllegalArgumentException("maxPages must be in 1..100")
         }
@@ -98,8 +132,8 @@ class PullDeliveryLoop(
             // Own and validate the entire page synchronously before the
             // suspending post-response checkpoint check or any other suspension,
             // so caller mutation during that suspension cannot change it. The
-            // suspending fence below still precedes every malformed, tail,
-            // recovery or failure outcome and every page commit.
+            // suspending fence below still precedes every malformed, empty-tail,
+            // failure/recovery and data result alike.
             currentCoroutineContext().ensureActive()
             val page = ownPullPage(response, checkpoint.cursor, pageLimit, seenBatchIds, seenCursors)
             pagesUsed += 1
@@ -113,6 +147,7 @@ class PullDeliveryLoop(
                     )
                 }
                 is OwnedPullPage.EmptyTail -> {
+                    onValidTail?.invoke(checkpoint)
                     return PullDeliveryResult(
                         committedBatches = committedBatches,
                         stop = PullDeliveryStop.Tail,
@@ -128,6 +163,7 @@ class PullDeliveryLoop(
                     }
                     currentCoroutineContext().ensureActive()
                     if (!page.result.hasMore) {
+                        onValidTail?.invoke(checkpoint)
                         return PullDeliveryResult(
                             committedBatches = committedBatches,
                             stop = PullDeliveryStop.Tail,

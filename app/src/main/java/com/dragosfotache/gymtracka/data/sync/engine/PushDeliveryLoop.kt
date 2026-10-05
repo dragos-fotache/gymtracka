@@ -10,6 +10,7 @@ import com.dragosfotache.gymtracka.data.sync.store.PushBlockReason
 import com.dragosfotache.gymtracka.data.sync.store.PushFailureResult
 import com.dragosfotache.gymtracka.data.sync.store.PushHeadResult
 import com.dragosfotache.gymtracka.data.sync.store.PushOutcomeResult
+import com.dragosfotache.gymtracka.data.sync.store.PushRun
 import com.dragosfotache.gymtracka.data.sync.store.PushStore
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -53,84 +54,103 @@ class PushDeliveryLoop(
             throw IllegalArgumentException("Expected cache epoch must be nonnegative")
         }
         return store.withRun(expectedCacheEpoch) { run ->
-            var acknowledgedMutations = 0
-            var stop: PushDeliveryStop? = null
-            while (stop == null) {
-                val claimTime = nowMillis()
-                if (claimTime < 0) {
-                    throw IllegalArgumentException("Push delivery time must be nonnegative")
+            deliver(run, maxMutations)
+        }
+    }
+
+    /**
+     * Delivers up to [maxMutations] heads on the already admitted [run] without
+     * admitting or releasing another run, so a shared driver can compose push,
+     * pull and tail bookkeeping under one uninterrupted ownership. Validates the
+     * budget and never enters [PushStore.withRun]. Behavior per head matches the
+     * epoch overload: freeze/check/send one head outside Room, classify,
+     * acknowledge atomically, then continue within the strict budget.
+     */
+    suspend fun deliver(
+        run: PushRun,
+        maxMutations: Int = MAX_PUSH_DELIVERY_MUTATIONS,
+    ): PushDeliveryResult {
+        if (maxMutations !in 1..MAX_PUSH_DELIVERY_MUTATIONS) {
+            throw IllegalArgumentException("maxMutations must be in 1..100")
+        }
+        currentCoroutineContext().ensureActive()
+        var acknowledgedMutations = 0
+        var stop: PushDeliveryStop? = null
+        while (stop == null) {
+            val claimTime = nowMillis()
+            if (claimTime < 0) {
+                throw IllegalArgumentException("Push delivery time must be nonnegative")
+            }
+            when (val head = run.claimHead(claimTime)) {
+                is PushHeadResult.Empty -> {
+                    stop = PushDeliveryStop.Empty
                 }
-                when (val head = run.claimHead(claimTime)) {
-                    is PushHeadResult.Empty -> {
-                        stop = PushDeliveryStop.Empty
-                    }
-                    is PushHeadResult.Deferred -> {
-                        stop = PushDeliveryStop.Deferred(head.retryAfterMillis)
-                    }
-                    is PushHeadResult.Blocked -> {
-                        stop = PushDeliveryStop.Blocked(head.reason, head.errorCode)
-                    }
-                    is PushHeadResult.Claimed -> {
-                        val claim = head.claim
-                        val request = claim.request
-                        run.checkClaim(claim)
+                is PushHeadResult.Deferred -> {
+                    stop = PushDeliveryStop.Deferred(head.retryAfterMillis)
+                }
+                is PushHeadResult.Blocked -> {
+                    stop = PushDeliveryStop.Blocked(head.reason, head.errorCode)
+                }
+                is PushHeadResult.Claimed -> {
+                    val claim = head.claim
+                    val request = claim.request
+                    run.checkClaim(claim)
+                    currentCoroutineContext().ensureActive()
+                    val response: PushResultModel
+                    try {
+                        response = api.push(listOf(request))
+                    } catch (failure: SyncApiException) {
                         currentCoroutineContext().ensureActive()
-                        val response: PushResultModel
-                        try {
-                            response = api.push(listOf(request))
-                        } catch (failure: SyncApiException) {
-                            currentCoroutineContext().ensureActive()
-                            val failureTime = nowMillis()
-                            if (failureTime < 0) {
-                                throw IllegalArgumentException("Push delivery time must be nonnegative")
+                        val failureTime = nowMillis()
+                        if (failureTime < 0) {
+                            throw IllegalArgumentException("Push delivery time must be nonnegative")
+                        }
+                        val handled = run.handleFailure(claim, failure, failureTime)
+                        stop = when (handled) {
+                            is PushFailureResult.RetryScheduled -> {
+                                PushDeliveryStop.Deferred(handled.retryAfterMillis)
                             }
-                            val handled = run.handleFailure(claim, failure, failureTime)
-                            stop = when (handled) {
-                                is PushFailureResult.RetryScheduled -> {
-                                    PushDeliveryStop.Deferred(handled.retryAfterMillis)
-                                }
-                                is PushFailureResult.Retained -> {
-                                    PushDeliveryStop.Blocked(
+                            is PushFailureResult.Retained -> {
+                                PushDeliveryStop.Blocked(
+                                    PushBlockReason.RETAINED_ERROR,
+                                    handled.errorCode,
+                                )
+                            }
+                            is PushFailureResult.AuthenticationRequired -> {
+                                PushDeliveryStop.AuthenticationRequired
+                            }
+                            is PushFailureResult.ReauthenticationRequired -> {
+                                PushDeliveryStop.ReauthenticationRequired
+                            }
+                        }
+                        continue
+                    }
+                    currentCoroutineContext().ensureActive()
+                    when (val outcome = run.handleResult(claim, response)) {
+                        is PushOutcomeResult.Rejected -> {
+                            stop = PushDeliveryStop.Blocked(
+                                PushBlockReason.REJECTED,
+                                outcome.errorCode,
+                            )
+                        }
+                        is PushOutcomeResult.Malformed -> {
+                            stop = PushDeliveryStop.Blocked(
+                                PushBlockReason.RETAINED_ERROR,
+                                MALFORMED_RESPONSE_CODE,
+                            )
+                        }
+                        is PushOutcomeResult.Accepted -> {
+                            when (run.acknowledgeAccepted(claim, outcome)) {
+                                is PushAcknowledgmentResult.RetainedCorruption -> {
+                                    stop = PushDeliveryStop.Blocked(
                                         PushBlockReason.RETAINED_ERROR,
-                                        handled.errorCode,
+                                        ACK_CONTEXT_CORRUPT_CODE,
                                     )
                                 }
-                                is PushFailureResult.AuthenticationRequired -> {
-                                    PushDeliveryStop.AuthenticationRequired
-                                }
-                                is PushFailureResult.ReauthenticationRequired -> {
-                                    PushDeliveryStop.ReauthenticationRequired
-                                }
-                            }
-                            continue
-                        }
-                        currentCoroutineContext().ensureActive()
-                        when (val outcome = run.handleResult(claim, response)) {
-                            is PushOutcomeResult.Rejected -> {
-                                stop = PushDeliveryStop.Blocked(
-                                    PushBlockReason.REJECTED,
-                                    outcome.errorCode,
-                                )
-                            }
-                            is PushOutcomeResult.Malformed -> {
-                                stop = PushDeliveryStop.Blocked(
-                                    PushBlockReason.RETAINED_ERROR,
-                                    MALFORMED_RESPONSE_CODE,
-                                )
-                            }
-                            is PushOutcomeResult.Accepted -> {
-                                when (run.acknowledgeAccepted(claim, outcome)) {
-                                    is PushAcknowledgmentResult.RetainedCorruption -> {
-                                        stop = PushDeliveryStop.Blocked(
-                                            PushBlockReason.RETAINED_ERROR,
-                                            ACK_CONTEXT_CORRUPT_CODE,
-                                        )
-                                    }
-                                    is PushAcknowledgmentResult.Acknowledged -> {
-                                        acknowledgedMutations += 1
-                                        if (acknowledgedMutations >= maxMutations) {
-                                            stop = PushDeliveryStop.LimitReached
-                                        }
+                                is PushAcknowledgmentResult.Acknowledged -> {
+                                    acknowledgedMutations += 1
+                                    if (acknowledgedMutations >= maxMutations) {
+                                        stop = PushDeliveryStop.LimitReached
                                     }
                                 }
                             }
@@ -138,8 +158,9 @@ class PushDeliveryLoop(
                     }
                 }
             }
-            PushDeliveryResult(acknowledgedMutations, stop)
         }
+        currentCoroutineContext().ensureActive()
+        return PushDeliveryResult(acknowledgedMutations, stop)
     }
 
     override fun toString(): String = "PushDeliveryLoop"

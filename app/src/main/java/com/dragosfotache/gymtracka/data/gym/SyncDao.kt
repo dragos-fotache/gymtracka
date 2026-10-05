@@ -143,6 +143,34 @@ interface SyncDao {
         nextCursor: String,
     ): Int
 
+    /**
+     * Records one valid-tail last-success observation on the exact previously observed
+     * pull boundary. Only the last-success column changes; the row is never inserted or
+     * replaced and the cursor never advances. The null-safe predicate pins the update to
+     * the full row observed by the caller. Callers must verify the affected count is
+     * exactly one and recheck the expected post-write row before commit.
+     */
+    @Query(
+        """UPDATE sync_state SET last_success_millis = :nowMillis
+            WHERE account_id = :accountId AND cursor = :expectedCursor
+                AND last_success_millis IS :expectedLastSuccess""",
+    )
+    suspend fun updatePullLastSuccess(
+        accountId: String,
+        expectedCursor: String,
+        expectedLastSuccess: Long?,
+        nowMillis: Long,
+    ): Int
+
+    /**
+     * Selected-account outbox presence observation for valid-tail bookkeeping. Reports
+     * whether any row exists for the account without parsing, filtering, claiming or
+     * updating any row. Foreign-account rows never match. This is not an admission
+     * to send.
+     */
+    @Query("SELECT EXISTS(SELECT 1 FROM sync_outbox WHERE account_id = :accountId)")
+    suspend fun hasOutboxForAccount(accountId: String): Boolean
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDeviceState(state: SyncDeviceStateEntity)
 

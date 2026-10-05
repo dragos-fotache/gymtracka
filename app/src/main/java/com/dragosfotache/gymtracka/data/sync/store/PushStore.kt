@@ -1049,6 +1049,141 @@ class PushRun internal constructor(
             }
         }
     }
+
+    /**
+     * Atomically records one validated terminal pull boundary as the account's last
+     * success time. The caller proves validated terminal transport exhaustion; this is a
+     * transaction primitive and generic checkpoints alone are not tail evidence.
+     *
+     * The supplied wall-clock milliseconds are validated before any write and preserved
+     * exactly: no inferred ordering, clamping or max with prior time. Time is observation
+     * metadata, never a conflict or cursor clock.
+     *
+     * Under the shared handling Mutex in exactly one Room transaction this rechecks live
+     * admission/cancellation, canonical fences, the complete selected-account baseline and
+     * the exact observed full sync-state row (cursor plus last-success, including nulls).
+     * A missing/changed row or baseline is stale; session/epoch/storage errors keep their
+     * existing types and fixed safe messages. Selected-account outbox presence is sampled
+     * before retirement and rechecked before commit without parsing, filtering, claiming
+     * or updating any row; foreign-account rows never count and this observation is not
+     * an admission to send. A presence change across the write fails closed as stale.
+     *
+     * Immediately before the last-success write the input token retires, even for equal
+     * timestamps, and is never restored on rollback or uncertain commit. The narrow DAO
+     * update touches only last-success with exact account/cursor/previous-last-success
+     * predicates; it never upserts, inserts, replaces, advances the cursor or mutates
+     * canonical/cache/domain/outbox/watermark/device/catalogue/other-account state. The
+     * update must affect exactly one row; the reread row must keep the account/cursor with
+     * last-success exactly the supplied time. Baseline, session, epoch, live capability,
+     * cancellation and the outbox observation are rechecked before commit so trigger
+     * tampering fails closed with uncommitted effects rolled back. No uncertain return
+     * claims recorded success.
+     *
+     * Only after the returned commit and active resumption is a fresh checkpoint binding
+     * the new full row installed and returned with the observed presence flag. Old tokens
+     * stay stale; failed or uncertain commits require a durable reread while previously
+     * acknowledged heads and complete batch boundaries survive.
+     */
+    suspend fun recordPullTail(
+        checkpoint: PullCheckpoint,
+        nowMillis: Long,
+    ): PullTailCommitResult {
+        if (nowMillis < 0) {
+            throw IllegalArgumentException("Pull tail time must be nonnegative")
+        }
+        if (checkpoint.run !== this) {
+            throw IllegalStateException("Pull checkpoint belongs to another run")
+        }
+        if (checkpoint.accountId != accountId ||
+            checkpoint.sessionGeneration != sessionGeneration ||
+            checkpoint.expectedCacheEpoch != expectedCacheEpoch
+        ) {
+            throw StalePullCheckpointException()
+        }
+        requireAdmitted()
+        if (database.inTransaction()) {
+            throw IllegalStateException("Pull checkpoint requires no active transaction")
+        }
+        currentCoroutineContext().ensureActive()
+        return handlingMutex.withLock {
+            if (currentPullCheckpoint !== checkpoint) {
+                throw StalePullCheckpointException()
+            }
+            try {
+                val observedPresence = database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    val cache = database.syncCanonicalDao().getAccountCache(accountId)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    if (cache == null || !cache.baselineComplete) {
+                        throw StalePullCheckpointException()
+                    }
+                    val observed = SyncStateEntity(
+                        accountId = accountId,
+                        cursor = checkpoint.cursor,
+                        lastSuccessMillis = checkpoint.lastSuccessMillis,
+                    )
+                    val current = database.syncDao().getSyncState(accountId)
+                    requireExactPullState(observed, current)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    val presenceBefore = database.syncDao().hasOutboxForAccount(accountId)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    // Fail-closed retirement: clear the current token immediately
+                    // before the last-success write attempt and never restore it, so
+                    // rollback or uncertain commit still requires a durable reread.
+                    // Read-only checks never clear the token.
+                    currentPullCheckpoint = null
+                    val updated = database.syncDao().updatePullLastSuccess(
+                        accountId,
+                        checkpoint.cursor,
+                        checkpoint.lastSuccessMillis,
+                        nowMillis,
+                    )
+                    if (updated != 1) {
+                        throw StalePullCheckpointException()
+                    }
+                    val reread = database.syncDao().getSyncState(accountId)
+                    if (reread == null ||
+                        reread.accountId != accountId ||
+                        reread.cursor != checkpoint.cursor ||
+                        reread.lastSuccessMillis != nowMillis
+                    ) {
+                        throw StalePullCheckpointException()
+                    }
+                    val presenceAfter = database.syncDao().hasOutboxForAccount(accountId)
+                    if (presenceAfter != presenceBefore) {
+                        throw StalePullCheckpointException()
+                    }
+                    val postCache = database.syncCanonicalDao().getAccountCache(accountId)
+                    if (postCache == null || !postCache.baselineComplete) {
+                        throw StalePullCheckpointException()
+                    }
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    presenceAfter
+                }
+                currentCoroutineContext().ensureActive()
+                requireAdmitted()
+                val fresh = PullCheckpoint(
+                    run = this,
+                    accountId = accountId,
+                    sessionGeneration = sessionGeneration,
+                    expectedCacheEpoch = expectedCacheEpoch,
+                    cursor = checkpoint.cursor,
+                    lastSuccessMillis = nowMillis,
+                )
+                currentPullCheckpoint = fresh
+                PullTailCommitResult(checkpoint = fresh, hasOutstandingLocalWork = observedPresence)
+            } catch (_: SQLiteException) {
+                currentCoroutineContext().ensureActive()
+                throw PullStorageException()
+            }
+        }
+    }
 }
 
 /**

@@ -22,7 +22,7 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/`.
 | `ui/activeworkout/` | Active screen, compact exercise/set controls, timer UI and feature state |
 | `ui/util/WorkoutFormatters.kt` | Shared derived calculations and locale-aware parsing/formatting |
 | `data/gym/GymRepository.kt` | Application-facing persistence, UUID creation, transactional edits and sync capture |
-| `data/sync/` | Models/codecs, fenced capture/canonical batches, inert protected publication, durable head claiming/replay, outcome/retry bookkeeping, atomic acknowledgment, inert bounded push/pull drivers and incremental checkpoint transactions, unused HTTP/session components; [details](sync/implementation.md) |
+| `data/sync/` | Models/codecs, fenced capture/canonical batches, inert protected publication, durable head claiming/replay, outcome/retry bookkeeping, atomic acknowledgment, inert bounded push/pull and shared push-first drivers, incremental checkpoint/valid-tail transactions, unused HTTP/session components; [details](sync/implementation.md) |
 
 `FeatureRepositories.kt` exposes narrow interfaces to state holders; reusable/leaf composables receive values and callbacks.
 `ui/GymRepositoryProvider.kt` supplies `rememberGymRepository()` and optional internal `LocalGymRepositoryOverride` for
@@ -112,8 +112,13 @@ canonical publication refuses incompatible physical identities instead of overwr
   last-success and visible intent. Inert `PullDeliveryLoop(api).pull(run)` now validates bounded complete ordered pages
   and run-local ID/token cycles, fetches outside Room, and chains whole-batch checkpoint commits on that already admitted
   run without owning admission or another mutex. Missing baseline/cursor or explicit expiry requests R08; invalid tokens
-  never bootstrap. Earlier commits survive later failure; Tail is not last-success/convergence. The app constructs none
-  of it; shared push/pull policy, convergence and activation remain outstanding. The
+  never bootstrap. Earlier commits survive later failure; standalone Tail is not last-success/convergence.
+  Inert `SyncDeliveryLoop` holds that single admitted run uninterrupted through push, pull and a separate exact-checkpoint
+  tail transaction. Only fenced push Empty authorizes pull; budget/error/auth stops never probe or bypass the head.
+  A validated terminal callback updates only last-success with full-row/baseline/session/epoch/cancellation fences and
+  conservative token retirement, reporting outstanding local work separately. No projection/convergence is claimed.
+  The app constructs none of it; complete bootstrap, durable authority, convergence and activation remain outstanding.
+  The [shared driver](sync/implementation.md#shared-push-before-pull-and-valid-tail),
   [push](sync/implementation.md#bounded-push-delivery), [checkpoint](sync/implementation.md#incremental-checkpoint-transactions)
   and [pull](sync/implementation.md#bounded-incremental-pull) references own details.
 - All existing repository mutation families use in-transaction session fencing and local capture. Default signed-out
