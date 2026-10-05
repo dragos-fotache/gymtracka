@@ -1,12 +1,20 @@
 # Coordinator workflow
 
 > Follow [the documentation rules](README.md#documentation-rules): **replace current state; append only to historical evidence.**
-> This is durable process guidance, not authorization for a task or an agent launch.
+> This records the owner's standing slice-commit and coordinator rotation/continuation authorization below, not blanket
+> permission for pushes, deployment, live actions or changes outside the approved roadmap scope.
 
 ## Scope and planning
 
-- Confirm the owner's authorization for the specific planning/implementation slice. Approval of a design or earlier
-  task does not authorize the next slice, app activation, commits, pushes, deployment, or personal configuration changes.
+- Confirm that the selected bounded planning/implementation slice is covered by explicit owner direction or the
+  [standing next-slice authorization](#coordinator-rotation-and-automatic-continuation). Acceptance evidence alone is not
+  authorization. App activation still requires its capability/acceptance gates. The accepted slice's scoped local commit
+  is required by the standing rule; pushes, deployment, personal configuration and live actions need separate permission.
+- Return to the owner for every unresolved blocker/question: missing inputs, unavailable required gates/agents/tools,
+  unmet dependencies, ambiguous product/destructive/configuration decisions or scope changes. Do not silently substitute
+  a model, weaken a gate, skip a dependency, choose another task or infer permission. Resolve routine implementation/
+  review defects within the approved specification; when a blocker cannot be resolved there, report it and ask the user.
+  Automatic continuation never removes this escalation obligation.
 - Inspect live working trees, including untracked files, before assigning ownership. Preserve user changes. Rediscover
   agents/processes before reuse; historical pane IDs, models, HEADs, and cleanup reports are not live facts.
 - Coordinator owns design, integration, and independent final review. Resolve internal choices with the simplest
@@ -66,7 +74,91 @@ environment before controlling agents.
 6. Extract enduring implementation facts into architecture, approved future decisions into design, and test procedures
    into testing strategy. Update roadmap status and replace the handoff snapshot. Archive the completed spec/review and
    remove obsolete active instructions. Keep outstanding subparts visible even when their parent has accepted slices.
-7. Stop at the authorized boundary. Only explicit owner direction starts another slice or permits delivery operations.
+7. Stop implementation at the slice boundary. Once accepted, commit the slice's changes and transfer the next eligible
+   slice to a fresh coordinator using the protocol below; do not continue it in the completed coordinator session.
+   Pushes, deployment and live actions still require separate explicit owner direction.
+
+## Coordinator rotation and automatic continuation
+
+**Owner-approved standing rule:** after finishing and accepting an implementation slice, the coordinator starts a new
+coordinator pane with a fresh native session, gives it the prompt to start the next bounded roadmap slice, and closes
+its own pane after a verified ownership handoff. **Before that handoff, commit the accepted slice's changes locally.**
+The successor may plan and implement that next slice automatically; asking for next-slice authorization again is
+unnecessary within this standing scope. Repeat this rotation at every
+accepted slice, including a sub-slice of a larger package. Do not carry a completed coordinator conversation forward.
+
+This permission applies to the next dependency-ready slice in the current handoff/approved roadmap and its declared
+milestone. A bounded specification and independent Worker/QA assignments are still required before implementation.
+Do not automatically pull forward deferred milestones, activate a feature before its gates, start multiple successors,
+skip to an unrelated branch or perform pushes, deployment, private configuration, real Google/account actions or
+personal-device journeys. The required local commit is limited to the accepted slice; it is not permission to commit
+unrelated work or push anything. Bring any blocker or unresolved question back to the user. If there is no eligible next
+slice, required authority is missing, or the current slice is partial/failing, ask the user rather than claiming completion or
+launching around the problem. Documentation-only maintenance is not itself an implementation-slice completion.
+
+### Safe handoff sequence
+
+1. **Close the accepted slice durably first.** Finish independent review and required gates; write acceptance evidence,
+   extract enduring facts, archive the specification/review, and replace roadmap/handoff state. Identify the exact next
+   slice, dependencies, boundaries and still-deferred gates. Inspect both working trees and preserve unrelated
+   uncommitted/untracked work. Release Gradle slots and settle owned builds/work.
+2. **Commit the accepted slice.** Include its reviewed production/tests and owning documentation/archived evidence.
+   Stage only the slice-owned paths/hunks, inspect the complete staged diff (including new files), run staged whitespace
+   checks, and create a meaningful local commit. Do not use blanket `git add .`/`-A`, include unrelated changes, reset the
+   user's index/worktree, amend/rewrite history or bypass failing hooks. If pre-existing staged or overlapping user work
+   prevents a clearly scoped commit, ask the user rather than guessing ownership. When authorized slice changes span
+   both repositories, commit the scoped shared-docs changes first and then the Android changes, including any tracked
+   shared reference only if applicable. Verify commit contents and both post-commit working trees; unrelated work may
+   remain dirty, but accepted slice changes must not be left behind accidentally. A failed/uncertain commit is a blocker:
+   retain the outgoing coordinator and return to the user, without retrying blindly, pushing or launching the next slice.
+3. **Discover, do not assume.** Read the Herdr skill and verify `HERDR_ENV=1`. Discover the outgoing caller's actual pane
+   ID, repository cwd and live agents; verify its coordinator model/reasoning and the successor's availability. Never use
+   archived pane/session IDs. If Herdr, the model or startup is unavailable/blocked, return to the user and keep the
+   outgoing pane alive; do not silently substitute a model or close the only coordinator.
+4. **Launch a fresh sibling coordinator.** Create one new pane in the same tab/repository cwd, choosing usable geometry
+   and `--no-focus`. Do not reuse Worker/QA or an unrelated pane, create a new worktree, or change global configuration.
+   Start Pi with the verified coordinator model/reasoning and a fresh session (no `--continue`, `--resume`, old
+   `--session` or old session ID). Use a unique temporary live name while the outgoing `gym-coordinator` still exists.
+5. **Send the next-slice prompt asynchronously.** Include the exact next slice and standing authority, pickup route,
+   current accepted review and commit hash(es), relevant capability seams, boundary/dependency/allowlist/testing
+   requirements, working-tree preservation, contributor independence, fresh contributor sessions and serialized Gradle ownership.
+   Explicitly require user escalation for blockers/questions. The successor first orients and reports readiness to the
+   outgoing coordinator via fire-and-forget `herdr agent prompt <outgoing-name> ...`; it must not edit, delegate or build
+   until ownership is released. Do not use `--wait`, `agent wait`, or poll for readiness; use the acknowledgment message.
+6. **Transfer the live role only after acknowledgment.** Verify that the acknowledgment identifies the successor and
+   next slice. Rename the outgoing agent to a unique retiring name, rename the successor to `gym-coordinator`, and send
+   the asynchronous release/start prompt. This keeps Worker/QA reports routed to the new owner without duplicate names
+   or simultaneous coordinators. If startup/prompt/rename/acknowledgment fails or its outcome is uncertain, inspect only
+   the owned handoff resources, report the blocker to the user, and do not blindly retry launches or close the outgoing
+   pane. Keep authority unambiguous until the problem is resolved.
+7. **Close only your own outgoing pane.** Give the user the completion/handoff summary before shutdown; finish any
+   bookkeeping and release resources first. Use the captured outgoing pane ID with `herdr pane close <outgoing-pane-id>`
+   as the final control operation. This user authorization explicitly covers closing the current coordinator pane even
+   if it predates the session. Never close the successor, Worker/QA, another user pane, a tab/workspace/session or the
+   Herdr server. Do not issue further edits/builds/control commands after self-closure.
+
+### Successor prompt template
+
+Fill in the current facts; do not paste old pane IDs, inventories or verification claims as live state:
+
+```text
+You are the next GymTracka coordinator, taking over <next bounded slice> after accepted <previous slice>.
+The owner authorizes scoped acceptance commits, automatic next-slice planning/implementation and coordinator rotation
+under docs/coordinator-workflow.md#coordinator-rotation-and-automatic-continuation.
+Read AGENTS.md, docs/README.md, docs/coordinator-handoff.md, docs/remaining-work-roadmap.md and the workflow;
+then inspect both live working trees/HEADs and task-relevant contracts/code. Preserve existing changes.
+Accepted evidence: <review path>. Accepted commit(s): <hash(es)>; verify live HEADs/trees rather than assuming clean.
+Reuse <capability seams>; do not recreate them.
+Next scope: <goal, dependencies and non-goals>. Prepare a bounded spec with concrete interfaces,
+independent Worker/QA allowlists, proportional tests/gates and a stop condition before delegation.
+Use fresh native Contributor/high Worker and QA sessions; keep reports asynchronous and Gradle serialized.
+Bring every unresolved blocker/question back to the user; no silent substitutions, gate weakening or scope drift.
+Commit only your accepted slice's changes before handoff. No push, deployment, private configuration or live
+account/device actions without separate permission.
+First report readiness for <slice> asynchronously to <outgoing live agent name>; do not edit/delegate/build
+until its release prompt. After release, own the slice as gym-coordinator, implement/review/verify it,
+update the durable handoff, commit the accepted slice, and rotate to a fresh coordinator using the same protocol.
+```
 
 ## External boundaries
 

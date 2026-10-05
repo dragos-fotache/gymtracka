@@ -3,6 +3,7 @@ package com.dragosfotache.gymtracka.data.sync.store
 import android.database.sqlite.SQLiteException
 import androidx.room.withTransaction
 import com.dragosfotache.gymtracka.data.gym.GymDatabase
+import com.dragosfotache.gymtracka.data.gym.SyncStateEntity
 import com.dragosfotache.gymtracka.data.sync.api.SyncApiException
 import com.dragosfotache.gymtracka.data.sync.codec.decodeDurableRequest
 import com.dragosfotache.gymtracka.data.sync.codec.decodePushResult
@@ -15,6 +16,7 @@ import com.dragosfotache.gymtracka.data.sync.model.MutationKind
 import com.dragosfotache.gymtracka.data.sync.model.MutationOutcomeModel
 import com.dragosfotache.gymtracka.data.sync.model.MutationStatus
 import com.dragosfotache.gymtracka.data.sync.model.PushResultModel
+import com.dragosfotache.gymtracka.data.sync.model.SyncBatchModel
 import com.dragosfotache.gymtracka.data.sync.model.SyncModelException
 import com.dragosfotache.gymtracka.data.sync.model.UnsupportedDurableVersionException
 import kotlinx.coroutines.currentCoroutineContext
@@ -157,6 +159,17 @@ class PushRun internal constructor(
      * authentication paths never take the token.
      */
     private val consumedClaims = mutableSetOf<PushClaim>()
+
+    /**
+     * The run's one current pull-checkpoint token, or null when no checkpoint is
+     * admitted. Guarded by [handlingMutex]. Tokens are fresh objects that are never
+     * reused, so clearing this field retires every prior token forever: a new read
+     * attempt clears it (even on a failed read) and a batch commit clears it
+     * immediately before any write. Read-only checks never clear. Under the
+     * handling Mutex, referential comparison against this field alone decides
+     * whether a token is current.
+     */
+    private var currentPullCheckpoint: PullCheckpoint? = null
 
     internal fun close() {
         open = false
@@ -779,6 +792,261 @@ class PushRun internal constructor(
         currentCoroutineContext().ensureActive()
         if (headAfter != expected) {
             throw IllegalStateException("Push head changed during transaction")
+        }
+    }
+
+    /**
+     * Reads the eligible incremental pull boundary without changing any stored data.
+     * Serialized through the existing handling Mutex; a new read attempt supersedes
+     * the previous checkpoint token, including a failed read. In one Room
+     * transaction this checks session/epoch fences and reads the selected-account
+     * cache and sync state coherently. A present row with an empty nonnull cursor
+     * or a negative nonnull last-success is corrupt and fails closed without repair;
+     * opaque whitespace tokens are preserved exactly. Null means bootstrap/baseline
+     * work is needed: absent/incomplete cache, absent state row or null cursor.
+     * Otherwise returns a fresh token binding this run and the complete observed
+     * row, after rechecking fences, eligibility/admission and cancellation before
+     * transaction completion and before return.
+     */
+    suspend fun readPullCheckpoint(): PullCheckpoint? {
+        requireAdmitted()
+        if (database.inTransaction()) {
+            throw IllegalStateException("Pull checkpoint requires no active transaction")
+        }
+        currentCoroutineContext().ensureActive()
+        return handlingMutex.withLock {
+            // Fresh checkpoint objects are never reused, so clearing the current
+            // token retires every prior token forever, including on a failed read.
+            currentPullCheckpoint = null
+            try {
+                val observed = database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    currentCoroutineContext().ensureActive()
+                    val cache = database.syncCanonicalDao().getAccountCache(accountId)
+                    val state = database.syncDao().getSyncState(accountId)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    if (state != null) {
+                        validatePullSyncState(state)
+                    }
+                    if (cache == null || !cache.baselineComplete || state == null || state.cursor == null) {
+                        checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                        currentCoroutineContext().ensureActive()
+                        requireAdmitted()
+                        null
+                    } else {
+                        checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                        currentCoroutineContext().ensureActive()
+                        requireAdmitted()
+                        state
+                    }
+                }
+                currentCoroutineContext().ensureActive()
+                requireAdmitted()
+                if (observed == null) {
+                    return@withLock null
+                }
+                val cursor = observed.cursor
+                    ?: throw IllegalStateException("Pull checkpoint changed during transaction")
+                val checkpoint = PullCheckpoint(
+                    run = this,
+                    accountId = accountId,
+                    sessionGeneration = sessionGeneration,
+                    expectedCacheEpoch = expectedCacheEpoch,
+                    cursor = cursor,
+                    lastSuccessMillis = observed.lastSuccessMillis,
+                )
+                currentPullCheckpoint = checkpoint
+                checkpoint
+            } catch (_: SQLiteException) {
+                currentCoroutineContext().ensureActive()
+                throw PullStorageException()
+            }
+        }
+    }
+
+    /**
+     * Read-only fenced validation that the pull boundary still matches the
+     * checkpoint's exact observed full sync-state row with a complete baseline.
+     * Foreign token/run, closed/outside-run, enclosing-transaction, consumed or
+     * superseded use is rejected; a changed/deleted checkpoint row or a lost
+     * baseline is stale, while changed session/epoch keeps the existing fence
+     * errors. Success is evidence only at that boundary: it cannot recall
+     * already-admitted network bytes or authorize later writes without
+     * transaction rechecks. Never consumes the token.
+     */
+    suspend fun checkPullCheckpoint(checkpoint: PullCheckpoint) {
+        if (checkpoint.run !== this) {
+            throw IllegalStateException("Pull checkpoint belongs to another run")
+        }
+        if (checkpoint.accountId != accountId ||
+            checkpoint.sessionGeneration != sessionGeneration ||
+            checkpoint.expectedCacheEpoch != expectedCacheEpoch
+        ) {
+            throw StalePullCheckpointException()
+        }
+        requireAdmitted()
+        if (database.inTransaction()) {
+            throw IllegalStateException("Pull checkpoint requires no active transaction")
+        }
+        currentCoroutineContext().ensureActive()
+        handlingMutex.withLock {
+            if (currentPullCheckpoint !== checkpoint) {
+                throw StalePullCheckpointException()
+            }
+            try {
+                database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    val cache = database.syncCanonicalDao().getAccountCache(accountId)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    if (cache == null || !cache.baselineComplete) {
+                        throw StalePullCheckpointException()
+                    }
+                    val state = database.syncDao().getSyncState(accountId)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    requireExactPullState(
+                        SyncStateEntity(
+                            accountId = accountId,
+                            cursor = checkpoint.cursor,
+                            lastSuccessMillis = checkpoint.lastSuccessMillis,
+                        ),
+                        state,
+                    )
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                }
+                currentCoroutineContext().ensureActive()
+                requireAdmitted()
+            } catch (_: SQLiteException) {
+                currentCoroutineContext().ensureActive()
+                throw PullStorageException()
+            }
+        }
+    }
+
+    /**
+     * Atomically commits one complete owned canonical batch together with its next
+     * pull cursor. The supplied whole batch is deep-owned and fully validated
+     * before the first suspension, so caller mutation after suspension cannot
+     * change it; a batch cursor equal to the input checkpoint cursor is rejected
+     * as no progress with exact token equality only. Under the handling Mutex in
+     * exactly one Room transaction this rechecks fences, complete baseline, the
+     * exact observed full row, token admission and cancellation, then conservatively
+     * consumes the token immediately before the canonical/cursor write attempt:
+     * consumption is process-local, survives rollback or uncertain commit, and is
+     * never persistence evidence. The complete owned batch is applied through the
+     * existing canonical writer (all-obsolete/equal batches keep their no-op
+     * semantics and still advance the cursor), then the cursor-only update must
+     * affect exactly one row. All canonical changes, dirty marking and cursor
+     * advancement share the same transaction; the full expected post-write row
+     * (new cursor, old last-success unchanged), baseline, fences, live capability
+     * and cancellation are rechecked before commit. Returns the canonical result
+     * plus a fresh current token binding the new full state only after successful
+     * commit and active resumption; the old token stays stale and a failure never
+     * advertises a successful checkpoint. Earlier separately committed batches
+     * remain durable when a later batch rolls back.
+     */
+    suspend fun applyNextPullBatch(
+        checkpoint: PullCheckpoint,
+        batch: SyncBatchModel,
+    ): PullBatchCommitResult {
+        val owned = ownedCanonicalBatch(batch)
+        if (owned.cursor == checkpoint.cursor) {
+            throw SyncModelException("Pull batch cursor did not advance")
+        }
+        if (checkpoint.run !== this) {
+            throw IllegalStateException("Pull checkpoint belongs to another run")
+        }
+        if (checkpoint.accountId != accountId ||
+            checkpoint.sessionGeneration != sessionGeneration ||
+            checkpoint.expectedCacheEpoch != expectedCacheEpoch
+        ) {
+            throw StalePullCheckpointException()
+        }
+        requireAdmitted()
+        if (database.inTransaction()) {
+            throw IllegalStateException("Pull checkpoint requires no active transaction")
+        }
+        currentCoroutineContext().ensureActive()
+        return handlingMutex.withLock {
+            if (currentPullCheckpoint !== checkpoint) {
+                throw StalePullCheckpointException()
+            }
+            try {
+                val canonical = database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    val cache = database.syncCanonicalDao().getAccountCache(accountId)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    if (cache == null || !cache.baselineComplete) {
+                        throw StalePullCheckpointException()
+                    }
+                    val observed = SyncStateEntity(
+                        accountId = accountId,
+                        cursor = checkpoint.cursor,
+                        lastSuccessMillis = checkpoint.lastSuccessMillis,
+                    )
+                    requireExactPullState(observed, database.syncDao().getSyncState(accountId))
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    // Fail-closed retirement: clear the current token immediately
+                    // before any canonical/cursor write attempt and never restore it,
+                    // so rollback or uncertain commit still requires a fresh read of
+                    // the durable boundary. Read-only checks never clear the token.
+                    currentPullCheckpoint = null
+                    val result = applyOwnedCanonicalBatch(
+                        database,
+                        accountId,
+                        sessionGeneration,
+                        expectedCacheEpoch,
+                        owned,
+                    )
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    val advanced = database.syncDao().advancePullCursor(
+                        accountId,
+                        checkpoint.cursor,
+                        owned.cursor,
+                    )
+                    if (advanced != 1) {
+                        throw StalePullCheckpointException()
+                    }
+                    requireAdvancedPullState(
+                        observed,
+                        owned.cursor,
+                        database.syncDao().getSyncState(accountId),
+                    )
+                    val postCache = database.syncCanonicalDao().getAccountCache(accountId)
+                    if (postCache == null || !postCache.baselineComplete) {
+                        throw StalePullCheckpointException()
+                    }
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    result
+                }
+                currentCoroutineContext().ensureActive()
+                requireAdmitted()
+                val fresh = PullCheckpoint(
+                    run = this,
+                    accountId = accountId,
+                    sessionGeneration = sessionGeneration,
+                    expectedCacheEpoch = expectedCacheEpoch,
+                    cursor = owned.cursor,
+                    lastSuccessMillis = checkpoint.lastSuccessMillis,
+                )
+                currentPullCheckpoint = fresh
+                PullBatchCommitResult(canonical = canonical, checkpoint = fresh)
+            } catch (_: SQLiteException) {
+                currentCoroutineContext().ensureActive()
+                throw PullStorageException()
+            }
         }
     }
 }

@@ -84,10 +84,10 @@ transaction use. Batch writes and dirty marking roll back together on failure/ca
   independently; the protected publisher validates the complete graph and physical identities before materialization.
   Existing snapshot_absent evidence blocks lower/equal restoration; R05b does not create absence or invent delete revisions.
 
-Inert [head claiming/replay admission](#durable-head-claiming-and-replay-admission) and
-[atomic canonical acknowledgment](#atomic-canonical-acknowledgment) and an inert
-[bounded push driver](#bounded-push-delivery) exist, but no pull/checkpoint engine, staging, vault/Room journal or
-production publication activation exists.
+Inert [head claiming/replay admission](#durable-head-claiming-and-replay-admission),
+[atomic canonical acknowledgment](#atomic-canonical-acknowledgment), a
+[bounded push driver](#bounded-push-delivery) and [incremental checkpoint transactions](#incremental-checkpoint-transactions)
+exist, but no HTTP pull engine, staging, vault/Room journal or production publication activation exists.
 The independent ledger is not itself a visible projection.
 
 ### Protected publication
@@ -188,8 +188,9 @@ retry policy. It reuses Room v10 without entity/schema changes; production const
   diagnostics and no raw causes; result displays omit batches, IDs, payloads and service-issued codes.
 
 Classification remains separate from acknowledgment: accepted handling itself applies/removes nothing. The inert
-[bounded push driver](#bounded-push-delivery) supplies HTTP orchestration; no pull checkpoint, recovery/discard/reset API,
-publication invocation or app activation exists. A previously
+[bounded push driver](#bounded-push-delivery) supplies HTTP push orchestration; the separate
+[checkpoint seam](#incremental-checkpoint-transactions) adds no HTTP pull loop, recovery/discard/reset API,
+publication invocation or app activation. A previously
 returned accepted snapshot or successful check is insufficient write authority; the acknowledgment operation below
 rechecks live admission and durable context atomically.
 
@@ -252,8 +253,43 @@ store and share one required `PushRunOwner` per physical database; the driver cr
   last-success, baseline or account epoch is advanced. A pre-send check cannot recall bytes already admitted before a
   subsequent session change.
 
-This is bounded push orchestration, not a complete running sync engine or durable session authority. R07 owns incremental
-pull, R08 complete bootstrap, R09 the Room/session journal, R10 convergence and R12 live publication/UI reconciliation.
+This is bounded push orchestration, not a complete running sync engine or durable session authority. R07a's
+[checkpoint transactions](#incremental-checkpoint-transactions) exist; R07b/c still own HTTP pull and shared push/pull
+orchestration, R08 complete bootstrap, R09 the Room/session journal, R10 convergence and R12 live publication/UI reconciliation.
+
+## Incremental checkpoint transactions
+
+R07a extends the existing admitted `PushRun` with inert `readPullCheckpoint`, `checkPullCheckpoint` and
+`applyNextPullBatch` operations over Room v10. There is no separate pull owner or lock: callers share the required
+`PushRunOwner` per physical database, and push settlement/checkpoint admission share the run's short handling Mutex.
+Production constructs none of it.
+
+- Read coherently requires a complete selected-account baseline and nonnull persisted cursor. Missing/incomplete
+  baseline or absent/null cursor returns null, never authorization for null-cursor retained-history bootstrap. A present
+  empty cursor or negative last-success fails closed without repair even when baseline is unavailable. Tokens are opaque;
+  whitespace is preserved, and equality is exact rather than lexical/numeric ordering.
+- Immutable `PullCheckpoint` privately binds its originating live run, account/session/cache epoch and complete observed
+  sync-state row. Read-only checks recheck exact row/baseline/fences inside Room. Foreign/closed/outside-run/enclosing
+  use rejects; another read attempt, including failed/null read, supersedes the previous token.
+- Batch input is deeply owned/validated before suspension. The complete canonical batch and cursor-only update from the
+  exact prior boundary commit in one transaction with post-row/baseline/session/epoch/cancellation rechecks. Returned
+  fresh tokens support a sequential chain. All-obsolete/equal canonical observations still advance the cursor while
+  preserving canonical no-op/dirty semantics. Earlier committed batches survive a later batch failure.
+- Before any write attempt, clearing the one current-token reference conservatively retires the input token; failed or
+  uncertain commit cannot reuse it even in a surviving parent run. Recovery rereads durable state. Retirement is not
+  persistence evidence, and cancellation after synchronous commit cannot prove rollback. No unbounded token ledger is kept.
+- Cursor update-count, expected-row and baseline mismatches are typed stale checkpoints; session/epoch retain existing
+  fence exceptions. Owned SQLite failures use fixed safe messages with no raw causes. Summaries omit tokens/identities.
+- Only selected-account canonical observations, their existing dirty bookkeeping and its pull cursor can change. Domain
+  rows/metadata, outbox/newer intent, watermarks, baseline/account/materialized epochs, other scopes, catalogue/device
+  identity and last-success stay unchanged. Explicit unknown DELETE persists evidence without fabricating a domain row;
+  unresolved references may arrive in later batches. Absence never becomes deletion or snapshot absence.
+
+This is a transaction primitive, not a paging/HTTP policy or running engine. R07b must validate complete ordered pages
+and run progress/cycles; R07c must compose uninterrupted push-before-pull ownership, block retained errors, and establish
+valid-tail/last-success behavior. It must not nest existing driver admission. R08 establishes complete baselines, R09
+supplies durable authority, and R12a supplies live publication barriers. No HTTP, expiry/bootstrap recovery, publication,
+last-success update or convergence claim is produced by this seam.
 
 ## Models, codecs, and durable identity
 

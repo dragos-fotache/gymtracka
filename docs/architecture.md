@@ -22,7 +22,7 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/`.
 | `ui/activeworkout/` | Active screen, compact exercise/set controls, timer UI and feature state |
 | `ui/util/WorkoutFormatters.kt` | Shared derived calculations and locale-aware parsing/formatting |
 | `data/gym/GymRepository.kt` | Application-facing persistence, UUID creation, transactional edits and sync capture |
-| `data/sync/` | Models/codecs, fenced capture/canonical batches, inert protected publication, durable head claiming/replay, outcome/retry bookkeeping, atomic acknowledgment and an inert bounded push driver, unused HTTP/session components; [details](sync/implementation.md) |
+| `data/sync/` | Models/codecs, fenced capture/canonical batches, inert protected publication, durable head claiming/replay, outcome/retry bookkeeping, atomic acknowledgment, an inert bounded push driver and incremental checkpoint transactions, unused HTTP/session components; [details](sync/implementation.md) |
 
 `FeatureRepositories.kt` exposes narrow interfaces to state holders; reusable/leaf composables receive values and callbacks.
 `ui/GymRepositoryProvider.kt` supplies `rememberGymRepository()` and optional internal `LocalGymRepositoryOverride` for
@@ -107,8 +107,11 @@ canonical publication refuses incompatible physical identities instead of overwr
   insufficient authority without fresh transactional checks. An inert `sync/engine/PushDeliveryLoop` now composes these
   seams under one required shared owner: freeze/check/send one head outside Room, classify, acknowledge atomically,
   then continue within a strict 1..100 budget. Failure stops without in-run retry or successor bypass; only committed
-  acknowledgments count. The app constructs none of it; pull/checkpoint/convergence and activation remain outstanding.
-  The [implementation reference](sync/implementation.md#bounded-push-delivery) owns details.
+  acknowledgments count. The same admitted run now reads/checks opaque incremental checkpoint capabilities and commits
+  complete canonical batches with cursor-only advancement under full row/baseline/session/epoch fences, preserving
+  last-success and visible intent. The app constructs none of it; HTTP pull, shared push/pull orchestration, convergence
+  and activation remain outstanding. The [implementation reference](sync/implementation.md#bounded-push-delivery) and
+  [checkpoint boundary](sync/implementation.md#incremental-checkpoint-transactions) own details.
 - All existing repository mutation families use in-transaction session fencing and local capture. Default signed-out
   edits create no upload work or canonical/cache rows and use hard deletion. Account-bound internal paths advance
   independent generation watermarks and dirty publication bookkeeping together with domain/outbox writes. The ledger

@@ -126,6 +126,23 @@ interface SyncDao {
     @Query("SELECT * FROM sync_state WHERE account_id = :accountId")
     suspend fun getSyncState(accountId: String): SyncStateEntity?
 
+    /**
+     * Advances only the pull cursor from the exact previously observed cursor to the
+     * committed batch cursor. Never inserts a missing row; only the cursor column
+     * changes and last-success stays untouched. Full row and baseline checks remain
+     * the transaction caller's responsibility. Callers must verify the affected
+     * count is exactly one and recheck the expected post-write row before commit.
+     */
+    @Query(
+        """UPDATE sync_state SET cursor = :nextCursor
+            WHERE account_id = :accountId AND cursor = :expectedCursor""",
+    )
+    suspend fun advancePullCursor(
+        accountId: String,
+        expectedCursor: String,
+        nextCursor: String,
+    ): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDeviceState(state: SyncDeviceStateEntity)
 

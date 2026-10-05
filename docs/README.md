@@ -7,21 +7,25 @@
 
 1. **One home per fact.** Update the owning document below; link to it elsewhere instead of copying its narrative.
 2. **Keep current, planned, and historical separate.** Implemented does not mean activated; approved design does not
-   mean implemented; task acceptance does not authorize the next task.
+   mean implemented; acceptance evidence alone is not authorization. Automatic next-slice work and scoped acceptance
+   commits follow the owner's separate [standing workflow rule](coordinator-workflow.md#coordinator-rotation-and-automatic-continuation).
 3. **Read progressively.** Start with the pickup route, then read only the references needed for the authorized task.
    Do not recursively ingest `docs/` or use the archive as routine orientation.
 4. **Replace, do not prepend.** Rewrite stale status and remove superseded instructions. Do not accumulate “the owner
    subsequently…” paragraphs or explanations that earlier current-state paragraphs are historical.
 5. **Preserve decisions, not session noise.** Keep invariants, design rationale, unresolved risks, and reproducible
    verification procedures. Leave pane IDs, intermediate fixes, temporary paths, old dirty-tree inventories, and commit
-   receipts out of active docs. Discover live repository/agent state at pickup.
+   receipts out of active docs; pass accepted commit hashes in the successor prompt instead. Discover live
+   repository/agent state at pickup.
 6. **Evidence is scoped and dated.** Record actual commands, results, environment, and unverified gates in one acceptance
    review. Never present an old/cached/filtered run as a new/full pass or copy test-count progressions into every document.
 7. **Close tasks deliberately.** Extract durable implementation/design facts and unresolved obligations before archiving
    the completed specification/review. Keep incomplete and deferred slices in the roadmap. Do not update old records to
    pretend they describe today.
 8. **Validate documentation changes.** Check relative links/anchors, new-file whitespace, and `git diff --check`; preserve
-   unrelated changes. Documentation cleanup does not authorize code, configuration, deployment, commits, or pushes.
+   unrelated changes. Documentation maintenance alone does not authorize implementation or pane rotation. The
+   [slice workflow](coordinator-workflow.md#coordinator-rotation-and-automatic-continuation) owns scoped commit/continuation
+   permission; configuration, deployment and pushes still need separate authorization.
 
 ## Reading routes
 
