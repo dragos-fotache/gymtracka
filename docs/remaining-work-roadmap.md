@@ -21,7 +21,7 @@ snapshot publication. Accepted personal slices never imply completion of their d
 
 ## Status and dependencies
 
-Statuses below reflect accepted delivery through R08a. “Pending” requires eligibility under explicit/standing authority
+Statuses below reflect accepted delivery through R08b. “Pending” requires eligibility under explicit/standing authority
 and a bounded pickup spec, not another approval for each eligible next slice. “Deferred” remains required for its later
 milestone and is not automatically brought forward. Historical M-series assignments are not a second execution plan.
 
@@ -34,7 +34,7 @@ milestone and is not automatically brought forward. Historical M-series assignme
 | R05 canonical Room / local intent | **a storage/capture watermarks, b canonical batches and c protected publication accepted**; production activation remains later integration | R02b and approved integration design |
 | R06 durable push | **a claiming/exact replay, b outcomes/retry, c atomic canonical acknowledgment and d bounded delivery loop accepted**; production activation remains later integration | R03b, R04, R05 |
 | R07 incremental pull | **a checkpoint transactions, b bounded HTTP pull, c shared push-first/valid-tail orchestration and package gates accepted** | R06; b after a, c after b |
-| R08 bootstrap/full resync | **a durable staging storage accepted; b bounded download validation next eligible; c complete baseline/absence/publication recovery pending** | R05–R07; b after a, c after b |
+| R08 bootstrap/full resync | **a durable staging storage and b bounded HTTP download validation accepted; c complete baseline/absence/publication recovery next eligible** | R05–R07; b after a, c after b |
 | R09 account transitions/import | Pending | R04, R08; production activation also needs R12a |
 | R10 engine convergence/recovery | Core a pending; expanded b before public release | R03b/c, R06–R09 |
 | R11 Google identity/proofs | Personal sign-in/out a/b pending; lifecycle c deferred | Relevant R02, R04 |
@@ -125,12 +125,13 @@ staging migration and inert same-run storage, strict whole-record/progress owner
 explicit discard/restart recovery, preserving canonical/domain/outbox/checkpoint/other scopes. Staging alone is NOT
 complete bootstrap, absence authority or activation.
 
-**R08b bounded frozen-snapshot download validation** is next eligible: reuse existing admitted ownership/storage,
-snapshot API/codecs/secure HTTP/refresh; validate/fence actual responses and failure/cancellation/expiry categories,
-continue with exact staged tokens/fixed limit and bounded invocation work without a permanent account-size cap.
-Do not replace the storage foundation or publish partial canonical/domain data. **R08c complete canonical baseline,
-absence and publication recovery** follows. Settle one bounded normative specification at each pickup; complete-graph,
-old-unchanged/empty account, atomic baseline/absence/newer-intent and publication recovery gates remain outstanding.
+[R08b bounded frozen-snapshot download validation](archive/remaining-work/R08b-review.md) accepts actual pushEmpty-gated
+HTTP download on the same admitted run, exact staged tokens/fixed limit and response/failure/cancellation/expiry fences.
+Same-run bounded continuation has no permanent account-size cap; durable read/restart never grants append authority.
+Downloaded remains inert transport/staging progress, not a validated account graph or canonical/domain publication.
+**R08c complete canonical baseline, absence and publication recovery** is next eligible. Settle one bounded normative
+specification at each pickup; complete-graph, old-unchanged/empty account, atomic baseline/absence/newer-intent and
+publication recovery gates remain outstanding.
 
 ### R09 — Account transitions and import/replace
 

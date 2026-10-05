@@ -1,10 +1,11 @@
 # Active task specifications
 
 **No implementation task is currently open here.**
-[R08a durable snapshot staging storage](../archive/remaining-work/R08a-review.md), R07a–c, R06a–d and R05a–c are accepted.
-R08b bounded frozen-snapshot download validation is next dependency-ready under the
+[R08b bounded frozen-snapshot HTTP download](../archive/remaining-work/R08b-review.md), R08a, R07a–c, R06a–d and R05a–c are accepted.
+R08c complete canonical baseline/absence/publication recovery is next dependency-ready under the
 [standing workflow](../coordinator-workflow.md#coordinator-rotation-and-automatic-continuation).
-Its fresh coordinator must settle concrete driver/API/harness facts and one bounded normative specification before delegation.
+Its fresh coordinator must settle concrete complete-stage/validation/publication/recovery seams and ONE bounded spec
+before independent delegation; full R08 package gates remain outstanding.
 See [current pickup](../coordinator-handoff.md) and [roadmap](../remaining-work-roadmap.md).
 Production remains signed-out/local-only; accepted inert components do not authorize activation.
 

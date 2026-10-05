@@ -253,10 +253,12 @@ R08a now persists staging safely enough to recognize incomplete work after proce
 recovery is **explicit discard-and-restart**, not cross-run resume: only a stage begun/chained in the same live admitted
 run can append. Durable reread yields an abandonable observation, never new append authority. A downloaded stage
 remains outside canonical/domain publication and is not complete bootstrap. Existing storage validates whole records/
-progress without resolving account-wide dependencies; R08b still owns actual bounded HTTP download and R08c complete
-baseline/absence/publication recovery. Budgets must bound invocation work, never become a permanent account-size cap;
-continuation within a live uninterrupted run is distinct from cross-run recovery. Frozen requests/outbox are unaffected. Expired snapshot
-and invalid token are distinct failures. Do not combine pages from a fresh snapshot with a prior stage.
+progress without resolving account-wide dependencies; R08b now implements actual bounded HTTP download on that same
+admitted run after fenced push Empty. Only its own LimitReached result permits same-run bounded continuation;
+transport failures/expiry retain stages for explicit recovery. R08c still owns complete baseline/absence/publication
+recovery. Budgets must bound invocation work, never become a permanent account-size cap; continuation within a live
+uninterrupted run is distinct from cross-run recovery. Frozen requests/outbox are unaffected. Expired snapshot and
+invalid token are distinct failures. Do not combine pages from a fresh snapshot with a prior stage.
 
 A complete empty account is valid. It can remove cached cloud roots only in the complete publication transaction;
 separate local data is untouched except its explicitly confirmed replace choice. Initial sign-in has no visible account

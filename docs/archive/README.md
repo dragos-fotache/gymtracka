@@ -42,6 +42,7 @@ Enduring Android design is maintained in [the active integration design](../sync
 | R07b bounded incremental HTTP pull | [Spec](remaining-work/R07b-task.md) | [Review](remaining-work/R07b-review.md) |
 | R07c shared push-before-pull / valid tail | [Spec](remaining-work/R07c-task.md) | [Review](remaining-work/R07c-review.md) |
 | R08a durable snapshot staging storage | [Spec](remaining-work/R08a-task.md) | [Review](remaining-work/R08a-review.md) |
+| R08b bounded frozen-snapshot HTTP download | [Spec](remaining-work/R08b-task.md) | [Review](remaining-work/R08b-review.md) |
 
 [R03 split](remaining-work/R03-task.md) and [R04 split](remaining-work/R04-task.md) are historical planning records;
 outstanding lifecycle and durable account-integration requirements remain in the active roadmap. The

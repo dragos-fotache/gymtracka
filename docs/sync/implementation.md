@@ -416,9 +416,46 @@ there is no second owner, public unguarded writer or network transaction.
 
 A `downloaded` stage proves only stored terminal page/progress validity, NOT actual transport exhaustion, a complete
 validated graph, complete bootstrap, canonical baseline/absence, last-success, convergence or visible publication.
-R08b still owns bounded HTTP download validation under uninterrupted shared ownership; R08c owns complete canonical
-baseline/absence/publication recovery. R09 authority/journal, R12a real edit/timer barriers and R10 convergence still
-precede activation. Existing secure HTTP/refresh and protected publisher are reused, never constructed by this storage.
+The bounded driver below now validates actual transport pages; R08c still owns complete canonical baseline/absence/
+publication recovery. R09 authority/journal, R12a real edit/timer barriers and R10 convergence still precede activation.
+Existing secure HTTP/refresh and protected publisher are reused, never constructed by this storage.
+
+## Bounded frozen-snapshot download
+
+`sync/engine/SnapshotDeliveryLoop(store, api, nowMillis)` is inert and explicitly constructed. Its `start(run, stageId,
+maxPushMutations, maxPages, pageLimit)` runs on an already admitted `PushRun`: only an actual fenced push `Empty`
+authorizes begin and actual `GymSyncApi.snapshot` calls. Every other push stop returns `SnapshotStartResult` with null
+`download`; a retained stage returns push-only `Blocked(SNAPSHOT_STAGE)`, never implicit read/abandon around intent.
+The driver creates no admission/owner/Mutex; caller must pair API/store/run to the same authorized service/account/session
+and hold ONE application-owned `PushRunOwner` per physical DB uninterrupted across all network work.
+
+- Canonical stage UUID, push budget1..100, page budget1..100 and fixed page limit1..500/default200 validate before clocks/
+  Room/HTTP. Initial request token is null; later requests use the exact staged continuation/fixed limit. Before every
+  fetch, cancellation and exact stage checks run. Whole typed pages are synchronously deep-owned through existing codecs
+  before any suspending post-response fence; malformed, empty terminal and failure/expiry results cannot bypass fencing.
+- Whole pages append through R08a's current capability and retained baseline/root/token/source/history validation.
+  Cross-page model, storage and fence errors, unexpected exceptions and cancellation propagate unchanged. Earlier commits
+  survive. No durable stage read is used to chain, no new invocation-limited uniqueness set replaces retained evidence,
+  and no partial record/account publication occurs.
+- `SnapshotDownloadResult` counts only THIS invocation's returned page/record commits and exposes the latest exact stage.
+  A validated committed terminal page returns `Downloaded`, including at budget; a nonterminal boundary returns
+  `LimitReached` without another fetch/probe. `continueDownload(run, previous, maxPages)` accepts ONLY this driver's
+  LimitReached result with the existing same-run capability; no begin/push/reread or owner gap. Repeated bounded calls
+  in the uninterrupted run have no total account-size/page/history ceiling. Results have no public constructor/copy;
+  their fixed displays redact identity, tokens, bodies and failures.
+- Only typed exceptions from actual snapshot API calls become transport stops, after exact stage/cancellation checks.
+  Authentic `SnapshotExpired` returns `RestartRequired` with pages retained for explicit valid abandon/NEW UUID/null-token
+  restart. Every other category/instance, including invalid or wrong-context tokens, remains `Failed` without retry,
+  cleanup or recovery inference. Existing refresh decoration owns its unchanged auth retry; this driver adds none.
+- Failed/uncertain writes require durable reread; retired capabilities are not commit evidence. Read/restart stays
+  nonappendable. Newer capture after begin remains allowed and unchanged; source checkpoint/last-success/baseline,
+  canonical/domain/outbox/watermarks/device/catalogue/other scopes remain untouched except legitimate preceding push
+  effects and allowed capture. A new intent racing Empty→begin fails the existing empty-outbox begin fence.
+
+Downloaded now summarizes actual validated terminal transport/staging progress for that uninterrupted chain, NOT full
+account graph validation, canonical baseline/absence, bootstrap, last-success, publication or convergence. The existing
+incremental shared driver's recovery signal is not automatically routed here. R08c/R09/R10/R12 and activation remain
+separate dependent gates; production constructs none of these drivers.
 
 ## Models, codecs, and durable identity
 

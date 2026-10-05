@@ -6,86 +6,91 @@
 
 ## Next eligible task and authority
 
-**R08b — bounded frozen-snapshot download validation** is next dependency-ready under the owner's
+**R08c — complete canonical baseline, absence and publication recovery** is next dependency-ready under the owner's
 [standing local-commit/rotation/continuation rule](coordinator-workflow.md#coordinator-rotation-and-automatic-continuation).
-A fresh coordinator first verifies minimal pickup readiness, reports it asynchronously to the outgoing live coordinator
-and remains read-only until ownership release. After release it may settle one bounded normative specification and
-implement R08b without another next-slice approval. Readiness is not a completed design audit; expand concrete source/
-contract/harness reading after release, before specification/delegation. Bring every unresolved blocker/question to the
-user. No activation, push, deployment, private configuration or live Google/account/personal-device action is authorized.
+Fresh coordinator verifies minimal scope/authority/dependency/gate/live-state readiness, reports asynchronously to outgoing
+live coordinator and stays read-only until release. Readiness is not a completed design/contract/code audit. After release,
+read concrete applicable authoritative sections/source/API/harness, settle ONE bounded normative spec and independent
+allowlists/proportional gates/stop before delegation. Bring every unresolved blocker/question to user. No activation,
+push, deployment, private configuration or live Google/account/personal-device action is authorized.
 
-[R08a](archive/remaining-work/R08a-review.md) accepts durable inert staging storage and its Room10→11 migration after
-accepted R07a–c/R06/R05/R04. No implementation specification is currently open. R08b should compose actual snapshot
-HTTP download on the SAME admitted `PushRun`, using its begin/read/check/append/abandon storage and existing
-`GymSyncApi.snapshot`, snapshot models/codecs, secure HTTP and refresh decoration. Settle concrete driver/budget/result/
-harness facts on pickup; do not recreate storage/owners or speculate on complete publication APIs.
-
-Reuse [staging storage](sync/implementation.md#frozen-snapshot-staging-storage),
-[shared push-first ownership](sync/implementation.md#shared-push-before-pull-and-valid-tail),
+[R08b](archive/remaining-work/R08b-review.md) accepts bounded actual frozen-snapshot HTTP download after R08a/R07/R06/R05.
+No implementation spec remains open. Reuse Room11 staging begin/read/check/append/abandon on the SAME admitted `PushRun`,
+`SnapshotDeliveryLoop` start/continue and redacted results, existing snapshot models/codecs/`GymSyncApi`/secure HTTP/refresh,
+canonical ledger/batches/protected publisher and R07 checkpoint/shared driver. No replacement owner/API/codec/storage.
+See [staging storage](sync/implementation.md#frozen-snapshot-staging-storage),
+[bounded download](sync/implementation.md#bounded-frozen-snapshot-download),
 [canonical batches](sync/implementation.md#fenced-canonical-batches),
 [protected publication](sync/implementation.md#protected-publication) and
 [snapshot design](sync/integration-design.md#5-frozen-snapshots-and-full-resync).
-Consult task-relevant shared frozen snapshot/token/retention, typed failure and wire-type requirements, not the entire
-[contract map](../shared-docs/docs/backend-contract/README.md). Existing continuation validation now requires nonempty,
-not nonblank, and preserves whitespace exactly; no token interpretation/normalization or permanent content/history cap.
+Read task-relevant frozen snapshot/token/retention, graph/domain/persistence/publication and wire requirements, not the
+entire shared contract map during pickup.
 
-R08a stores one account/stage with immutable origin session/epoch/fixed limit, original full checkpoint/baseline
-observation, pinned frozen baseline and complete records/continuation/page evidence. Whole typed pages are deep-owned
-before suspension; strict retained validation rejects corruption/duplicate roots/cycles/missing nonterminal progress.
-A stage begun/chained in a live admitted run can continue there. Durable read/restart yields ONLY a nonappendable
-observation for explicit exact-stage abandonment and NEW-stage/null-token restart; no cross-run resume or implicit
-cleanup. Work budgets must not become a permanent account-size cap or silently truncate complete records.
-Selected stages, including downloaded/corrupt origin metadata, block ordinary push/pull until explicitly completed or
-abandoned. Foreign scopes are unaffected. Begin requires ANY selected-account outbox presence=false; local capture after
-begin remains allowed and unchanged. Downloaded storage is NOT actual HTTP exhaustion, a complete validated graph,
-canonical baseline/absence, last-success, convergence or visible publication.
+## Accepted capability and invariant boundaries
 
-R08b must fence actual data, terminal pages and failures/cancellation alike under uninterrupted shared ownership, retain
-exact token/limit/baseline context and earlier committed pages, and distinguish explicit snapshot expiry from invalid/
-foreign/wrong-context tokens. Invalid tokens never imply bootstrap/cleanup. Cancellation/uncertain commits require
-honest durable reread, not retired-token success inference. Preserve newer intent, exact frozen uncertain request IDs/
-bytes, domain/outbox/watermarks/canonical checkpoint/last-success/other scopes/catalogue. Pair API/store to the same
-authorized service/account/session and explicitly share ONE application-owned `PushRunOwner` per physical DB across
-network intervals. Only fenced push Empty authorizes following download; retained/rejected/corrupt/oversize/deferred/
-auth/failure/budget stops never authorize recovery around intent. Limits never probe heads; push cursors are not checkpoints.
+- One application-owned `PushRunOwner` per physical DB must span network/commit/publication coordination. API/store/run
+  bind the same authorized service/account/session. Only actual fenced push Empty authorizes following download;
+  retained/rejected/corrupt/oversize/deferred/auth/failure/budget stops never authorize recovery around intent. Limits
+  never probe heads; push cursors are not checkpoints. Selected stages, including downloaded/corrupt headers, block
+  ordinary push/pull until explicitly completed or abandoned. Begin requires ANY selected outbox EXISTS=false;
+  capture AFTER begin remains allowed and unchanged.
+- `SnapshotDeliveryLoop.start(run,stageId,maxPushMutations,maxPages,pageLimit)` is admitted-only/push-gated.
+  `continueDownload(run,previous,maxPages)` accepts ONLY this driver's LimitReached result with the existing same-run
+  capability. Invocation budgets1..100 pages and fixed1..500 records per page do not impose permanent account-size caps.
+  Live begin/append/driver chaining can continue in ONE uninterrupted run; durable read/restart is ONLY a nonappendable
+  observation for explicit exact valid-stage abandon and NEW UUID/null-token restart, not cross-run append authority.
+- Whole typed pages are owned/validated before post-response suspension. Exact stage/account/session/epoch/fixed limit,
+  full original checkpoint/baseline observation, frozen baseline/root/token/page evidence and cancellation fences apply
+  to data, terminal, malformed and typed failure/expiry results. Only authentic SnapshotExpired requests explicit restart;
+  invalid/foreign/wrong-context tokens never infer cleanup. Failed/uncertain writes require durable reread; retirement is
+  not commit evidence. Earlier returned push/page commits remain durable after later failure. No automatic cancellation
+  cleanup or publication/last-success exists in the downloader.
+- Downloaded storage alone proves stored terminal progress, not actual HTTP exhaustion. R08b driver Downloaded summarizes
+  validated terminal transport/staging for its uninterrupted chain, still NOT complete account graph/bootstrap/canonical
+  baseline/absence/last-success/publication/convergence. Constructible generic summaries must not become authority.
+- Preserve domain/outbox/watermarks/canonical checkpoint/last-success/newer intent/other scopes/catalogue and exact frozen
+  uncertain IDs+bytes. Reuse existing protection/capture transactions, not incremental/staged absence deletion.
+  Existing publication advances epoch; eventual callers must use the returned epoch.
 
-**R08c complete canonical baseline/absence/publication recovery** is separate and dependent on R08b. Only a complete
-validated frozen account snapshot can establish absence/baseline, including unchanged old roots and a valid empty account
-with later-page dependencies. Never infer deletion from ordinary incremental/staged absence or publish partial data.
-Existing protected publication advances epoch; eventual callers must use its returned epoch. R09 durable Room/vault
-journal/authority, R12a real finite-edit/timer barriers and R10 two-store convergence still precede app activation.
+## R08c scope and required gates
 
-## Capability and verification boundary
+Settle concrete complete-stage validation/transaction/publication/recovery interfaces against authoritative code after
+release. Only a complete validated frozen account snapshot can establish canonical absence/baseline, including old
+unchanged roots, later-page dependencies and a valid empty account. Never publish partial/staged data or infer deletion
+from ordinary incremental absence. Validate complete graph and physical collisions under correct scope/fences; preserve
+old/local projection while newer intent exists. Distinguish canonical baseline establishment from protected visible
+publication and their crash/uncertain-commit/restart evidence. Do not infer personal replace/sign-out/account authority.
 
-Production remains signed-out/local-only. Room11 retains prior catalogue/domain/capture/canonical/outbox/checkpoint
-storage and adds independent staging headers/records/tokens; schemas1–11 are preserved, bundled source asset stays v1.
-No complete bootstrap, bounded snapshot HTTP driver, durable Room-authority adapter/journal, Google/account UI, transition
-or engine convergence, live edit/timer publication barrier or scheduler is constructed by the app.
-See [architecture](architecture.md) and [implemented sync components](sync/implementation.md).
+R08c closes the R08 package: declared full unfiltered instrumentation, explicit assembly/lint/APK and applicable isolated
+real backend package/integration gates deferred by R08b remain obligations, with exact task-relevant selection before
+new delegation. Real Room complete empty/old-unchanged account, middle/final failure, later reference, concurrent edit,
+restart/switch/expiry and atomic baseline/absence/publication gates remain outstanding. Unavailable required tools/models/
+gates are user blockers; no substitute/skipped gate. Any entity change requires version bump/data-preserving migration,
+KSP/export/every-supported-start plus copied bundled v1 coverage; verify live version before assigning changes.
 
-R08a's review records fresh full offline JVM, full unfiltered instrumentation, every-supported-start1–10→11 plus copied
-real-v1/populated-v10 migrations, production/KSP/Android-test compilation, assembly/lint and targeted APK preservation.
-No required R08a gate was substituted/deferred. These are not API24/hostedCI/backend/Google/two-store convergence or
-activated-app evidence. Required R08b gates are selected proportionately BEFORE delegation; unavailable gates/tools/
-models remain user blockers. Do not assume an emulator/backend is running or inherit historical resource ownership.
+Production remains signed-out/local-only. Room11 retains prior17 entity definitions and adds R08a's3 independent staging
+entities; exported1–11 and bundled sourceDB v1 are unchanged. No complete bootstrap/full baseline/absence recovery,
+durable Room/vault authority/journal, Google/account UI, live publication/edit/timer barrier, scheduler or engine
+convergence is constructed by the app. R09 authority/journal, R12a real finite-edit/timer barriers and R10 convergence still
+precede activation; do not pull them forward under R08c.
 
-## Risks, boundaries and pickup checklist
+## Evidence, risks and live pickup checklist
 
+- R08b review owns actual fresh full offline JVM, focused new driver/fence plus existing staging/pull/shared-driver Room
+  gates and compilation evidence; initial Kotlin/import/race-fixture failures are honestly retained. R08b deliberately
+  did not repeat full unfiltered instrumentation/explicit assembly/lint/APK/backend; R08a review owns prior full/device/
+  migrations/packaging evidence. Neither proves API24/hostedCI/Google/two-store convergence/activation.
 - Strict [legacy accepted-auth replay](sync/implementation.md#legacy-auth-replay-limitation) remains unresolved: preserve
-  original uncertain key/body; no rounding/rewrite/new key, blanket revocation or inferred credential/cache deletion.
-- Stored vault phases/process-local leases are not durable Room authorization or sign-out. Admission cannot recall
-  network bytes or prove cancellation rolled back synchronous storage commits.
+  original uncertain key/body, never round/rewrite/rekey, revoke broadly or infer credential/cache deletion. Stored vault
+  phases/process-local leases are not durable Room authority/sign-out; admission cannot recall already-sent network bytes.
 - Phone LAN/away HTTPS/private connectivity, OAuth audience/signing and authorized device/account inputs remain live
-  milestone blockers, not deterministic R08b blockers. Backend access is isolated operational build/start/black-box HTTP
-  ONLY if a declared gate requires it; never backend source/private configuration/personal fixtures/suite.
-- Verify BOTH live trees/indexes/untracked/HEADs and actual roles/models/resource ownership. Preserve subsequent user
-  changes and accepted commits. Completed R08a Worker/QA conversations require fresh native
-  `meta/muse-spark-1.3-contributor`/high sessions, never reuse across slices.
-- Use supplied unchanged guide/context and minimal reading route for readiness. After release, settle ONE normative
-  R08b spec with concrete interfaces/harness, independent read/write allowlists, safety/race/restart obligations,
-  proportional tests/gates and exact stop BEFORE delegation. Reports are fully async, never reply waits/polling.
-- Serialize EVERY Gradle command through explicit sole slots. Any further entity change needs data-preserving migration,
-  KSP/export/all-supported-start/copied-v1 coverage; verify live version before assigning it, never destructive fallback.
-- At accepted gates update owning docs/archive evidence/spec, commit ONLY accepted scoped changes locally (no push),
-  start a fresh exact-model coordinator, obtain asynchronous readiness, transfer live role and close ONLY your own pane
-  LAST. Do not pull R08c/R09/R10/R12/activation forward in R08b.
+  milestone blockers. Backend is isolated operational build/start/black-box HTTP ONLY if a declared gate requires it;
+  no backend source/private configuration/personal fixtures/suite or live account/Google actions.
+- Verify BOTH live trees/indexes/untracked/HEADs and actual roles/models/resources. Preserve subsequent user work and
+  accepted commits; never amend/rewrite. Completed R08b Worker/QA conversations must be replaced ONLY in task-owned
+  panes by fresh native `meta/muse-spark-1.3-contributor`/high sessions after release, with source independence.
+- Test-owned emulator/private Android/AVD home were stopped/removed. Default ADB server/Gradle/Kotlin daemons preserved;
+  no active build/Gradle slot/resource owner transfers. Do not assume any backend/device running. Serialize EVERY Gradle.
+- Reports fully async: never --wait/agent wait/acknowledgment polling. At accepted gates update owning docs/archive
+  evidence/spec, commit ONLY scoped accepted slice locally(no push), launch one fresh exact-model next coordinator,
+  receive asynchronous readiness, transfer live role and close ONLY your own pane LAST.

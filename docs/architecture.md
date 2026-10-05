@@ -126,6 +126,11 @@ canonical baseline or visible publication; see [staging boundaries](sync/impleme
   The same admitted run now owns inert begin/read/check/append/abandon snapshot storage over Room11. Selected durable
   stages block ordinary push/pull; whole pages remain outside canonical/domain data. New capture stays protected;
   restart/uncertain writes require observation, explicit abandonment and a new stage, never implicit resume/cleanup.
+  Inert `SnapshotDeliveryLoop.start(run, ...)` now follows only fenced push Empty into actual bounded snapshot HTTP on
+  that same admitted run; pages are owned before response fences and appended through the existing stage chain.
+  Same-driver LimitReached results can continue only in the uninterrupted run, without a permanent account-size cap;
+  durable restart cannot resume. Downloaded is transport/staging progress, not full graph/baseline/absence/publication.
+  See [bounded download](sync/implementation.md#bounded-frozen-snapshot-download) for its failure/recovery boundary.
   The app constructs none of it; complete bootstrap, durable authority, convergence and activation remain outstanding.
   The [shared driver](sync/implementation.md#shared-push-before-pull-and-valid-tail),
   [push](sync/implementation.md#bounded-push-delivery), [checkpoint](sync/implementation.md#incremental-checkpoint-transactions)
