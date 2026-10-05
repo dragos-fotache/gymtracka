@@ -86,8 +86,9 @@ transaction use. Batch writes and dirty marking roll back together on failure/ca
 
 Inert [head claiming/replay admission](#durable-head-claiming-and-replay-admission),
 [atomic canonical acknowledgment](#atomic-canonical-acknowledgment), a
-[bounded push driver](#bounded-push-delivery) and [incremental checkpoint transactions](#incremental-checkpoint-transactions)
-exist, but no HTTP pull engine, staging, vault/Room journal or production publication activation exists.
+[bounded push driver](#bounded-push-delivery), [incremental checkpoint transactions](#incremental-checkpoint-transactions)
+and [bounded incremental pull](#bounded-incremental-pull) exist, but no shared push/pull engine, staging,
+vault/Room journal or production publication activation exists.
 The independent ledger is not itself a visible projection.
 
 ### Protected publication
@@ -189,9 +190,9 @@ retry policy. It reuses Room v10 without entity/schema changes; production const
 
 Classification remains separate from acknowledgment: accepted handling itself applies/removes nothing. The inert
 [bounded push driver](#bounded-push-delivery) supplies HTTP push orchestration; the separate
-[checkpoint seam](#incremental-checkpoint-transactions) adds no HTTP pull loop, recovery/discard/reset API,
-publication invocation or app activation. A previously
-returned accepted snapshot or successful check is insufficient write authority; the acknowledgment operation below
+[checkpoint seam](#incremental-checkpoint-transactions) and [bounded pull driver](#bounded-incremental-pull)
+add no recovery/discard/reset API, publication invocation or app activation. A previously returned accepted snapshot
+or successful check is insufficient write authority; the acknowledgment operation below
 rechecks live admission and durable context atomically.
 
 ## Atomic canonical acknowledgment
@@ -254,8 +255,9 @@ store and share one required `PushRunOwner` per physical database; the driver cr
   subsequent session change.
 
 This is bounded push orchestration, not a complete running sync engine or durable session authority. R07a's
-[checkpoint transactions](#incremental-checkpoint-transactions) exist; R07b/c still own HTTP pull and shared push/pull
-orchestration, R08 complete bootstrap, R09 the Room/session journal, R10 convergence and R12 live publication/UI reconciliation.
+[checkpoint transactions](#incremental-checkpoint-transactions) and [bounded pull driver](#bounded-incremental-pull)
+exist; R07c still owns shared push/pull orchestration and tail/last-success integration, R08 complete bootstrap,
+R09 the Room/session journal, R10 convergence and R12 live publication/UI reconciliation.
 
 ## Incremental checkpoint transactions
 
@@ -285,11 +287,44 @@ Production constructs none of it.
   identity and last-success stay unchanged. Explicit unknown DELETE persists evidence without fabricating a domain row;
   unresolved references may arrive in later batches. Absence never becomes deletion or snapshot absence.
 
-This is a transaction primitive, not a paging/HTTP policy or running engine. R07b must validate complete ordered pages
-and run progress/cycles; R07c must compose uninterrupted push-before-pull ownership, block retained errors, and establish
-valid-tail/last-success behavior. It must not nest existing driver admission. R08 establishes complete baselines, R09
-supplies durable authority, and R12a supplies live publication barriers. No HTTP, expiry/bootstrap recovery, publication,
-last-success update or convergence claim is produced by this seam.
+This is a transaction primitive, not a paging/HTTP policy or running engine. The [bounded pull driver](#bounded-incremental-pull)
+validates complete ordered pages and run progress/cycles; R07c must compose uninterrupted push-before-pull ownership,
+block retained errors, and establish valid-tail/last-success behavior without nested driver admission. R08 establishes
+complete baselines, R09 supplies durable authority, and R12a supplies live publication barriers. No HTTP,
+expiry/bootstrap recovery, publication, last-success update or convergence claim is produced by this seam.
+
+## Bounded incremental pull
+
+`sync/engine/PullDeliveryLoop(api).pull(run, maxPages, pageLimit)` is an inert explicitly constructed HTTP pull driver.
+It receives an **already admitted `PushRun`**, owns no store admission/mutex/owner, and can be composed within eventual
+R07c's uninterrupted shared ownership. The caller must pair API/store with the same authorized service/account/session
+and share one `PushRunOwner` per physical database. Production constructs none of it.
+
+- Strict page budget 1..100 and page limit 1..200 (both default 100) reject before checkpoint/HTTP work. Limits count
+  complete pages/batches, never bytes or changes; no domain-size cap/truncation is introduced. Seen IDs/cursors are
+  bounded by at most 20,000 batches per invocation, not durable lifetime history.
+- A single initial checkpoint read needs complete baseline and a nonnull cursor. Missing eligibility returns an R08
+  recovery requirement without HTTP/null-cursor bootstrap. Corrupt storage and stale admission propagate unchanged.
+- Every fetch uses the exact current checkpoint outside Room, after a read-only fence/cancellation check. A complete
+  typed page is deeply owned and validated synchronously immediately after API return, **before** the suspending
+  post-response checkpoint check. That check fences malformed, empty-tail, failure/recovery and data results alike.
+- Complete page shape/count/hasMore/last-boundary and every batch ID/cursor are validated before its first commit,
+  including repetition versus earlier pages and the initial opaque boundary. Strings stay exact, never interpreted or
+  ordered lexically. Returned order and each batch's own boundary enforce contiguous client checkpoint progression;
+  opaque tokens cannot prove service-internal commit ordering. Empty terminal tail preserves its input cursor.
+- Complete batches commit sequentially through `applyNextPullBatch` with fresh returned checkpoint chaining. Only a
+  returned commit counts. A later transport/malformed-page/storage/canonical/cancellation failure leaves earlier commits
+  durable; failed/uncertain commits stop and recovery rereads durable state, never reuses a retired token or page tail.
+- Only typed exceptions from the actual API call become transport stops: explicit `CursorExpired` requests R08;
+  invalid/foreign/wrong-context/auth/transient/unknown failures retain their exact category/instance without bootstrap,
+  retry or cleanup. Unexpected errors, storage/canonical/fence errors and cancellation propagate. Existing supplied
+  refresh decoration owns its one unchanged 401 retry; the driver adds none.
+- A validated terminal page returns `Tail`, including at the budget; a nonterminal budget boundary returns `LimitReached`
+  without another fetch/probe. These are bounded transport summaries, not last-success/convergence/publication claims.
+  Domain data/newer intent/outbox/watermarks/baseline/epochs/last-success/other scopes remain protected by R07a.
+
+Shared push-before-pull policy, retained-rejection blocking and tail/last-success integration remain R07c; bootstrap,
+durable authority, live edit/timer barriers, convergence and app activation remain their later roadmap gates.
 
 ## Models, codecs, and durable identity
 

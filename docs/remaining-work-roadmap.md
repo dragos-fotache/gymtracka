@@ -21,7 +21,7 @@ snapshot publication. Accepted personal slices never imply completion of their d
 
 ## Status and dependencies
 
-Statuses below reflect accepted delivery through R07a. “Pending” requires eligibility under explicit/standing authority
+Statuses below reflect accepted delivery through R07b. “Pending” requires eligibility under explicit/standing authority
 and a bounded pickup spec, not another approval for each eligible next slice. “Deferred” remains required for its later
 milestone and is not automatically brought forward. Historical M-series assignments are not a second execution plan.
 
@@ -33,7 +33,7 @@ milestone and is not automatically brought forward. Historical M-series assignme
 | R04 session recovery | a vault, b refresh, c startup/session recovery seams accepted; durable Room integration remains R09 | R03a/c; c uses a/b |
 | R05 canonical Room / local intent | **a storage/capture watermarks, b canonical batches and c protected publication accepted**; production activation remains later integration | R02b and approved integration design |
 | R06 durable push | **a claiming/exact replay, b outcomes/retry, c atomic canonical acknowledgment and d bounded delivery loop accepted**; production activation remains later integration | R03b, R04, R05 |
-| R07 incremental pull | **a fenced batch/checkpoint transactions accepted**; b bounded HTTP loop and c shared push-before-pull orchestration pending | R06; b after a, c after b |
+| R07 incremental pull | **a fenced batch/checkpoint transactions and b bounded HTTP loop accepted**; c shared push-before-pull orchestration pending | R06; b after a, c after b |
 | R08 bootstrap/full resync | Pending | R05–R07 |
 | R09 account transitions/import | Pending | R04, R08; production activation also needs R12a |
 | R10 engine convergence/recovery | Core a pending; expanded b before public release | R03b/c, R06–R09 |
@@ -82,8 +82,8 @@ remains R09; live edit/timer leases and observation remain R12. Accepted store e
 [R06d](archive/remaining-work/R06d-review.md) bounded push delivery are accepted over Room v10.
 The explicitly constructed inert driver composes these seams under the shared run owner, sending one exact head outside
 Room and continuing only after atomic acknowledgment. No further R06 implementation slice remains. No accepted slice
-activates sync; R07a checkpoint transactions are accepted, while HTTP pull and shared push/pull orchestration still need
-bounded pickup specs and their prerequisite gates under the standing continuation rule.
+activates sync; R07a checkpoint transactions and R07b bounded HTTP pull are accepted. R07c shared push/pull
+orchestration still needs a bounded pickup specification and package gates under the standing continuation rule.
 
 Serialize account/session runs; claim/freeze the explicit sequence head transactionally, then perform HTTP outside Room.
 Recover uncertain requests unchanged. Canonical outcome and exact request/generation/affected-root acknowledgment commit
@@ -103,9 +103,10 @@ in an incremental page never means deletion.
 
 **Gate:** replay/empty tail, page failure/checkpoint rollback, active replacement/dependencies, protected edits and switch/
 cancellation. [R07a review](archive/remaining-work/R07a-review.md) accepts the inert fenced batch/checkpoint transactions
-on Room v10; R07b's bounded HTTP pull loop is the next eligible slice. R07c owns shared push-before-pull orchestration,
+on Room v10; [R07b review](archive/remaining-work/R07b-review.md) accepts bounded HTTP pull on an already admitted run.
+R07c is the next eligible slice: shared uninterrupted push-before-pull orchestration, retained-error policy,
 valid-tail/last-success integration and full package gates. The standing workflow permits a fresh coordinator to pick up
-R07b and, after its acceptance, R07c; each needs its own bounded specification. No implementation task is currently open.
+R07c with its own bounded specification. No implementation task is currently open.
 
 ### R08 — Staged bootstrap and full resync
 

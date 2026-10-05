@@ -10,7 +10,8 @@ actual boundaries. R05a supplies independent canonical storage and transactional
 record/batch application. R05c adds an inert protected publisher; R06a adds inert serialized durable head claiming and
 exact replay admission; R06b adds inert single-head outcome classification and retry/error bookkeeping; R06c adds inert
 atomic canonical acknowledgment; R06d adds an inert bounded push delivery driver; R07a adds inert incremental batch/
-checkpoint transactions on that same admitted run. Production projection activation, HTTP pull, shared push/pull
+checkpoint transactions on that same admitted run; R07b adds bounded incremental HTTP pull receiving an already
+admitted run. Production projection activation, shared push/pull
 orchestration, convergence, snapshots, the durable
 Room-authority adapter/journal, account transitions and cross-feature
 publication barriers remain planned. Stored vault phases and explicit refresh leases alone never
@@ -186,8 +187,11 @@ run(scope fence):
   only fenced outbox emptiness, not a valid pull tail/bootstrap or convergence. Failure stops immediately with durable
   retry/error context and no in-run delay. R07a's [checkpoint seam](implementation.md#incremental-checkpoint-transactions)
   commits one complete canonical batch with its boundary on that same run, without last-success/publication or HTTP.
-  R07b/c must add ordered paging and uninterrupted push-before-pull composition; bootstrap/publication and user-facing
-  activation remain later integration.
+  R07b's [bounded pull driver](implementation.md#bounded-incremental-pull) accepts an already admitted `PushRun` with
+  no store admission or second owner/mutex. It validates/owns whole pages before suspension, fences transport results,
+  detects run cycles and chains complete batches within strict page/count budgets. R07c must add uninterrupted
+  push-before-pull composition and tail/last-success integration; it must not nest existing push driver admission.
+  Bootstrap/publication and user-facing activation remain later integration.
 - Frozen means possibly transmitted forever, even if socket construction/cancellation occurred early. Transient failure
   never makes it coalescible. Process restart selects the same frozen head and unchanged ID/bytes/child plans.
 - `duplicate` is accepted only if it carries the original accepted batch; duplicate rejection remains rejection.

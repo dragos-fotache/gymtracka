@@ -1,13 +1,13 @@
 # Active task specifications
 
 **No implementation task is currently open here.**
-[R07a fenced batch/checkpoint transactions](../archive/remaining-work/R07a-review.md),
-[R06d bounded durable push delivery](../archive/remaining-work/R06d-review.md), R06a/b/c and R05a/b/c are accepted.
-R07b bounded HTTP pull is the next eligible slice under the owner's
-[standing workflow rule](../coordinator-workflow.md#coordinator-rotation-and-automatic-continuation); its fresh coordinator
-must prepare a bounded pickup specification. R07c shared push-before-pull orchestration follows R07b acceptance.
-See [current pickup](../coordinator-handoff.md) and [the roadmap](../remaining-work-roadmap.md).
-Production remains signed-out/local-only; accepted inert components do not authorize app activation.
+[R07b bounded incremental HTTP pull](../archive/remaining-work/R07b-review.md),
+[R07a checkpoint transactions](../archive/remaining-work/R07a-review.md), R06a–d and R05a–c are accepted.
+R07c shared push-before-pull orchestration, tail/last-success integration and package gates is the next eligible slice
+under the owner's [standing workflow](../coordinator-workflow.md#coordinator-rotation-and-automatic-continuation).
+Its fresh coordinator must prepare a concrete bounded specification before delegation.
+See [current pickup](../coordinator-handoff.md) and [roadmap](../remaining-work-roadmap.md).
+Production remains signed-out/local-only; accepted inert components do not authorize activation.
 
 Create `RNN-task.md` (or subtask equivalent) only when that planning slice is authorized. Include the concrete contract,
 allowlists, independent acceptance tests, proportional gates and stop condition from
