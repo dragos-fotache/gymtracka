@@ -58,6 +58,13 @@ abstract class SyncCanonicalDao {
     @Query("INSERT OR IGNORE INTO sync_account_cache (account_id) VALUES (:accountId)")
     internal abstract suspend fun insertAccountCache(accountId: String)
 
+    /** Clears dirty and advances both publication epochs atomically. Caller verifies count. */
+    @Query(
+        """UPDATE sync_account_cache SET projection_dirty = 0, cache_epoch = :newEpoch,
+            materialized_epoch = :newEpoch WHERE account_id = :accountId""",
+    )
+    internal abstract suspend fun publishProjection(accountId: String, newEpoch: Long): Int
+
     @Query("UPDATE sync_account_cache SET projection_dirty = 1 WHERE account_id = :accountId")
     internal abstract suspend fun markProjectionDirty(accountId: String): Int
 

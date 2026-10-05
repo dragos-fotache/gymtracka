@@ -1,7 +1,7 @@
 # Implemented Android sync components
 
 These components exist, but the production app remains signed-out/local-only. **Implemented is not activated.**
-No running engine, visible canonical publication, staged bootstrap, durable account transition, Google UI, or scheduler is wired
+No running engine, activated canonical publication, staged bootstrap, durable account transition, Google UI, or scheduler is wired
 into the app. The [roadmap](../remaining-work-roadmap.md) owns delivery status; the
 [integration design](integration-design.md) owns approved future coordination. The
 [shared contract](../../shared-docs/docs/backend-contract/README.md) remains the service authority.
@@ -45,7 +45,7 @@ read-only; internal reservation updates touch only the watermark and never repla
 
 Separate `sync_account_cache` holds incomplete-baseline, cache epoch, projection-dirty and materialized-epoch fields.
 It is not Room/vault authorization. Keeping it separate from `sync_state` prevents the existing cursor replacement API
-from resetting publication bookkeeping. No caller marks a real baseline complete or publishes remote data yet.
+from resetting publication bookkeeping. No production caller establishes a complete baseline or activates publication.
 
 Changed account captures use checked `max(domain generation, ledger watermark) + 1` for the target and every affected
 root. Domain metadata, ledger reservation/advance, account dirty marker and outbox commit in the same fenced transaction;
@@ -81,11 +81,45 @@ transaction use. Batch writes and dirty marking roll back together on failure/ca
   projection dirty. Baseline-complete/materialized epoch, domain graph/metadata, outbox bytes/order/errors, device identity
   and cursor/last-success remain unchanged. The writer never calls repository capture or emits upload work.
 - Unresolved references, multiple intermediate active roots and physical local/foreign/bundled PK collisions can be stored
-  independently; complete graph and global physical collision checks are required before future visible publication.
+  independently; the protected publisher validates the complete graph and physical identities before materialization.
   Existing snapshot_absent evidence blocks lower/equal restoration; R05b does not create absence or invent delete revisions.
 
-No visible projection, exact claim/ack/checkpoint engine, staging, or vault/Room journal exists yet. Global physical Room
-primary-key collisions must be refused at future publication, never overwritten or remapped.
+No exact claim/ack/checkpoint engine, staging, vault/Room journal or production publication activation exists yet.
+The independent ledger is not itself a visible projection.
+
+### Protected publication
+
+R05c's inert `ProjectionStore` and focused `SyncProjectionDao` reuse Room v10 without entity/schema changes.
+The app constructs no publisher.
+
+- A required `ProjectionPublicationBarrier` acquires a short bound lease outside Room after its caller-owned pause/drain.
+  There is no permissive default or live edit/timer implementation. Nested publication is rejected before acquisition;
+  every returned lease closes once after the fenced transaction, including blocked/failing/cancelled paths.
+- Any selected-account outbox row protects the entire visible account graph, without parsing/filtering state, payload,
+  version or error. Protection precedes incomplete-baseline handling and canonical graph validation. Foreign outbox rows
+  do not block the account. Missing/incomplete baseline never publishes; clean equal-epoch retry is an unchanged no-op.
+- Complete publication validates strict retained bodies/counters and family reservations, all resulting references and
+  global lookups, at most one active workout, and current physical family roles/parents/owners before replacement.
+  Local/foreign/bundled collisions fail closed without remapping. Workout/routine/exercise namespaces remain independent.
+  Surviving other-scope references to an obsolete selected custom prevent its removal.
+- Explicit account-scoped deletes/inserts rebuild ordered workout/routine graphs; surviving customs update in place and
+  relationships replace without root `INSERT OR REPLACE` cascades. Customs precede referencing children. IDs, fields,
+  null/empty distinctions, optional metadata/quantity, timestamps and configured/recorded rest remain exact; embedded
+  reference labels never overwrite global/current exercise names. Delete/absence/reservation evidence creates no fake root.
+- Every owned root's maximum domain/ledger generation survives removal and rematerialization as an independent watermark.
+  Publication emits no outbox work and changes no canonical revision/body/state/row epoch, cursor/last success, device
+  identity, other scope or catalogue data. Only watermarks and account publication bookkeeping may change.
+- Every actual complete graph publication atomically increments `cache_epoch` and sets `materialized_epoch` to that new
+  value while clearing dirty. This existing-v10 monotonic signal covers custom renames at unchanged parent revisions;
+  callers must use the returned epoch, since prior-epoch callbacks become stale. Overflow rolls back; blocked/no-op/error
+  paths never advance it or establish a baseline. Canonical row epochs may remain older than the account epoch.
+- Durable fences and lease validity recheck after graph writes; cancellation rolls back uncommitted changes. Projection-
+  owned SQLite failures use fixed safe storage errors without raw causes; barrier/lease-origin failures preserve identity.
+  A caller-supplied lease must release without blocking/throwing; cleanup failure is not proof of rollback after commit.
+
+Current canonical/physical bindings are not account-lifetime removed-child reservation storage. R08 still owns baseline,
+complete snapshot/absence establishment; R09 owns durable transition authority, and R12a owns the real finite-edit/timer
+barrier before any live publication or account activation. These components do not authorize those integrations.
 
 ## Models, codecs, and durable identity
 

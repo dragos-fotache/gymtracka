@@ -22,7 +22,7 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/`.
 | `ui/activeworkout/` | Active screen, compact exercise/set controls, timer UI and feature state |
 | `ui/util/WorkoutFormatters.kt` | Shared derived calculations and locale-aware parsing/formatting |
 | `data/gym/GymRepository.kt` | Application-facing persistence, UUID creation, transactional edits and sync capture |
-| `data/sync/` | Models/codecs, fenced capture/canonical batches, unused HTTP/session components; [details](sync/implementation.md) |
+| `data/sync/` | Models/codecs, fenced capture/canonical batches and inert protected publication, unused HTTP/session components; [details](sync/implementation.md) |
 
 `FeatureRepositories.kt` exposes narrow interfaces to state holders; reusable/leaf composables receive values and callbacks.
 `ui/GymRepositoryProvider.kt` supplies `rememberGymRepository()` and optional internal `LocalGymRepositoryOverride` for
@@ -91,7 +91,7 @@ blank/empty autosaves are distinct from save/start eligibility validation.
 
 Each future entity change requires a version bump, data-preserving migration, schema export/KSP, all supported starting
 versions, and a copied real v1 asset test. Domain table UUID primary keys remain global within each physical table;
-future canonical publication must not overwrite another scope on collision.
+canonical publication refuses incompatible physical identities instead of overwriting/remapping another scope.
 
 ## Persistence and state flow
 
@@ -103,9 +103,11 @@ future canonical publication must not overwrite another scope on collision.
   independent generation watermarks and dirty publication bookkeeping together with domain/outbox writes. The ledger
   survives physical root removal; generations advance beyond both domain and ledger values. The inert canonical batch
   writer separately applies complete revisioned observations under account/session/cache-epoch fences, without changing
-  visible domain data or outbox/cursor state. No protected publication or account UI is delivered. See
-  [capture boundaries](sync/implementation.md#room-and-local-capture) and
-  [canonical batches](sync/implementation.md#fenced-canonical-batches).
+  visible domain data or outbox/cursor state. The inert protected publisher requires an injected pause/drain lease,
+  protects the entire account graph while any account outbox row remains, and publishes a validated complete baseline
+  atomically with generation preservation and a checked account epoch signal. No live barrier, account UI or production
+  publication activation exists. See [capture boundaries](sync/implementation.md#room-and-local-capture),
+  [canonical batches](sync/implementation.md#fenced-canonical-batches) and [protected publication](sync/implementation.md#protected-publication).
 - `ActiveWorkoutState.awaitPendingEdits()` tracks finite accepted edits with retained failures, rather than joining the
   endless elapsed-time ticker. The screen registers its workout/owner-specific drain with `GymAppState`; finish request
   and confirmation both wait, and disposal detaches only the matching registration.

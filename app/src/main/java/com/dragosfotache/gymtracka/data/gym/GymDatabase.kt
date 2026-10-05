@@ -41,6 +41,7 @@ abstract class GymDatabase : RoomDatabase() {
     abstract fun syncDao(): SyncDao
     abstract fun syncCaptureDao(): SyncCaptureDao
     abstract fun syncCanonicalDao(): SyncCanonicalDao
+    abstract fun syncProjectionDao(): SyncProjectionDao
 
     companion object {
         private const val DATABASE_NAME = "gym.db"

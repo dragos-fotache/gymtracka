@@ -1,8 +1,9 @@
 # Active task specifications
 
-**No implementation task is currently open here.** R05a/b are accepted; R05c protected publication requires specific
-owner authorization and a new bounded specification. See [current pickup](../coordinator-handoff.md) and
-[the roadmap](../remaining-work-roadmap.md).
+**No implementation task is currently open here.** R05a/b/c are accepted. R06 durable push is the next proposed
+package and requires specific owner authorization and a new bounded specification. See
+[current pickup](../coordinator-handoff.md) and [the roadmap](../remaining-work-roadmap.md).
+Production remains signed-out/local-only; accepted inert stores do not authorize app activation.
 
 Create `RNN-task.md` (or subtask equivalent) only when that planning slice is authorized. Include the concrete contract,
 allowlists, independent acceptance tests, and stop condition from [coordinator workflow](../coordinator-workflow.md).
