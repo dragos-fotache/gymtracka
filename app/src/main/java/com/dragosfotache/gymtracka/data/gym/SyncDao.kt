@@ -103,6 +103,23 @@ interface SyncDao {
     @Query("DELETE FROM sync_outbox WHERE mutation_id = :mutationId AND account_id = :accountId")
     suspend fun deleteMutation(mutationId: String, accountId: String)
 
+    /**
+     * Removes exactly the acknowledged frozen head row. The expected predicates pin
+     * the delete to the head verified in the same transaction. Callers must verify
+     * the affected count is exactly one and the row is absent afterward.
+     */
+    @Query(
+        """DELETE FROM sync_outbox
+            WHERE mutation_id = :mutationId AND account_id = :accountId
+                AND state = :expectedState AND attempt_count = :expectedAttempts""",
+    )
+    suspend fun deleteExactFrozenHead(
+        mutationId: String,
+        accountId: String,
+        expectedState: String,
+        expectedAttempts: Int,
+    ): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertSyncState(state: SyncStateEntity)
 

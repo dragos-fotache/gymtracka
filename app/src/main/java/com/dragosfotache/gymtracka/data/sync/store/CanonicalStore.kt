@@ -100,13 +100,13 @@ class CanonicalTransaction internal constructor(
 
 /**
  * Shared owned-batch writer used by both the single-batch convenience and composed
- * transactions. Callers supply an already deep-owned batch; this helper rechecks
+ * transactions (including push acknowledgment). Callers supply an already deep-owned batch; this helper rechecks
  * fences, validates retained evidence, arbitrates revisions, validates family
  * bindings (including retained-only consistency for all-no-op batches), and commits
  * selected writes with dirty marking atomically. Must run inside the caller's
  * active Room transaction; never opens its own transaction or the network.
  */
-private suspend fun applyOwnedCanonicalBatch(
+internal suspend fun applyOwnedCanonicalBatch(
     database: GymDatabase,
     accountId: String,
     sessionGeneration: Long,

@@ -84,8 +84,9 @@ transaction use. Batch writes and dirty marking roll back together on failure/ca
   independently; the protected publisher validates the complete graph and physical identities before materialization.
   Existing snapshot_absent evidence blocks lower/equal restoration; R05b does not create absence or invent delete revisions.
 
-Inert [head claiming/replay admission](#durable-head-claiming-and-replay-admission) now exists, but no canonical outcome/
-acknowledgment/checkpoint engine, staging, vault/Room journal or production publication activation exists.
+Inert [head claiming/replay admission](#durable-head-claiming-and-replay-admission) and
+[atomic canonical acknowledgment](#atomic-canonical-acknowledgment) exist, but no delivery/checkpoint engine,
+staging, vault/Room journal or production publication activation exists.
 The independent ledger is not itself a visible projection.
 
 ### Protected publication
@@ -148,9 +149,9 @@ snapshots over Room v10. No schema change or app construction is involved.
 Every future caller for one physical database must explicitly share the same application-owned owner; this is not a
 multiprocess lease, registry or durable vault/Room authorization. Restart creates a new live run and reclaims the same
 frozen identity. Successful checking is only admission evidence at that boundary: later R06 outcome/ack transactions
-must recheck atomically with their writes. The store sends no HTTP, applies no canonical outcome, removes no outbox work and activates no engine/publication.
-Single-head classification and retry/error bookkeeping are implemented below; atomic acknowledgment and delivery
-orchestration remain outstanding.
+must recheck atomically with their writes. Claiming itself sends no HTTP, applies no canonical outcome and removes no outbox work.
+Single-head classification/retry bookkeeping and atomic canonical acknowledgment are implemented below;
+delivery orchestration and engine/publication activation remain outstanding.
 
 ## Single-head push outcomes and retry/error handling
 
@@ -184,9 +185,43 @@ retry policy. It reuses Room v10 without entity/schema changes; production const
   cursor/last-success, newer tail intent and other-scope rows remain unchanged. Owned SQLite failures keep fixed safe
   diagnostics and no raw causes; result displays omit batches, IDs, payloads and service-issued codes.
 
-There is no canonical result application, exact row removal/root acknowledgment, HTTP driver/loop, pull checkpoint,
-recovery/discard/reset API, publication or app activation. R06c must atomically recheck live claim/fences with canonical
-application and exact acknowledgment; a previously returned accepted snapshot or successful check is insufficient.
+Classification remains separate from acknowledgment: accepted handling itself applies/removes nothing. There is no
+HTTP driver/loop, pull checkpoint, recovery/discard/reset API, publication invocation or app activation. A previously
+returned accepted snapshot or successful check is insufficient write authority; the acknowledgment operation below
+rechecks live admission and durable context atomically.
+
+## Atomic canonical acknowledgment
+
+R06c adds inert `PushRun.acknowledgeAccepted`, reusing the same handling mutex, conservative consumed-claim tokens and
+Room v10 without schema/entity changes. The app constructs no push store or engine.
+
+- Accepted snapshots privately bind the originating account and exact immutable frozen-row identity, including sequence,
+  version, wrapper/request bytes and local effects. Attempt/retry bookkeeping and live run/session/epoch are excluded so
+  fresh admission of unchanged durable work can reuse a prior snapshot. Before suspension, acknowledgment deep-owns and
+  revalidates provenance, outcome identity/status, complete batch and target operation. An A snapshot cannot acknowledge
+  B merely because IDs/bytes match; changed same-account bytes also fail closed.
+- Inside one transaction, live capability/session/cache fences and every exact explicit-head field are checked again.
+  All local affected roots need independent reservations at or above frozen generation. Existing physical roots must be
+  owned/custom, pending, and carry valid generation/revision metadata covered by their watermark. Vanished physical roots
+  may settle on reservation evidence alone; no root is fabricated. Invalid context retains the frozen head with fixed
+  `ack_context_corrupt` recovery context and blocks successors, without canonical/domain/cache writes.
+- Complete canonical application uses the existing R05b writer and revision/family arbitration in the same transaction
+  as metadata acknowledgment and exact row removal. Extra cloud effects are stored, not local acknowledgment context.
+  Obsolete accepted duplicates still remove the exact request without restoring older canonical winners; equal conflicts
+  and malformed retained evidence roll back the entire acknowledgment.
+- Only affected physical roots whose domain generation **and watermark** exactly equal the frozen effect become synced.
+  Their server revision becomes the highest positive physical/retained canonical evidence, never an invented revision.
+  Synced means that exact generation's command settled, not business-field equality with canonical or account convergence.
+  Newer generations/watermarks preserve all metadata; business rows/children/tombstones, watermarks and other outbox rows
+  remain unchanged. Physical account tombstones remain pending while newer intent exists, with nonnull deletion time.
+- Token consumption precedes canonical/metadata/removal write attempts and survives rollback or uncertain commit; it is
+  not acknowledgment evidence. Exact pre-removal identity, removal count/absence, affected metadata/watermarks, remaining
+  account outbox rows and final admission/fences/cancellation are checked before commit. A canceled child cannot reuse
+  the token while its parent run survives; recovery reclaims unchanged frozen identity. Owned SQLite errors remain safe.
+- Successful acknowledgment marks projection dirty even for an all-no-op batch. Baseline/cache/materialized epochs,
+  cursor/last-success, device identity, catalogue and other scopes stay untouched. No capture, publication, successor claim,
+  HTTP, pull checkpoint or convergence signal is produced. Complete baseline and a real publication lease remain required
+  before visible materialization; R09 still owns durable session authority and R12a the live edit/timer barrier.
 
 ## Models, codecs, and durable identity
 

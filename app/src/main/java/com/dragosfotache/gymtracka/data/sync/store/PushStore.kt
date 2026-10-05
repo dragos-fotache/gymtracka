@@ -32,12 +32,14 @@ import kotlin.coroutines.CoroutineContext
  * exact request, and fences replay/late callback admission. A future caller can
  * perform HTTP outside Room while holding this run's ownership.
  *
- * This slice performs no HTTP, acknowledgment/removal, retry loops or engine
- * work. R06b adds single-head outcome classification with durable rejection,
- * invalid-response, size and retry/error persistence plus bounded backoff
- * scheduling under the same claim/session/cache fencing. Returning a claim
- * never means delivered or converged. Production constructs neither this
- * store nor an engine.
+ * This slice performs no HTTP, retry loops or engine work. R06b adds single-head
+ * outcome classification with durable rejection, invalid-response, size and
+ * retry/error persistence plus bounded backoff scheduling under the same
+ * claim/session/cache fencing. R06c adds atomic single-head acknowledgment
+ * committing the complete accepted canonical batch, exact frozen removal and
+ * generation-scoped metadata acknowledgment in one fenced transaction.
+ * Returning a claim never means delivered or converged. Production constructs
+ * neither this store nor an engine.
  */
 class PushRunOwner {
     internal val mutex = Mutex()
@@ -403,7 +405,11 @@ class PushRun internal constructor(
                     when (decision) {
                         is PushResultDecision.Accepted -> {
                             currentCoroutineContext().ensureActive()
-                            PushOutcomeResult.Accepted(decision.outcome)
+                            PushOutcomeResult.Accepted(
+                                decision.outcome,
+                                claim.accountId,
+                                claim.row.copy(),
+                            )
                         }
                         is PushResultDecision.Rejected -> {
                             persistClaimOutcome(
@@ -561,6 +567,158 @@ class PushRun internal constructor(
                                 retryAfterMillis = null,
                             )
                             PushFailureResult.Retained(MALFORMED_RESPONSE_CODE)
+                        }
+                    }
+                }
+                currentCoroutineContext().ensureActive()
+                outcome
+            } catch (_: SQLiteException) {
+                currentCoroutineContext().ensureActive()
+                throw PushStorageException()
+            }
+        }
+    }
+
+    /**
+     * Atomically acknowledges one complete accepted canonical batch for the exact
+     * claimed head: applies the whole batch with R05b arbitration/family
+     * validation, acknowledges generation-scoped local root metadata, removes
+     * only the selected exact frozen row, and marks the account projection dirty.
+     * The accepted snapshot is data, not write authority: its private origin
+     * provenance, mutation binding, status, batch and envelope target are owned
+     * and revalidated before the first suspension, and every field of the exact
+     * current explicit head plus all live fences is rechecked inside Room before
+     * writes. Invalid local context retains the exact frozen head with a fixed
+     * safe error and returns RetainedCorruption without canonical/domain/cache
+     * writes. Performs no HTTP and claims no successor.
+     */
+    suspend fun acknowledgeAccepted(
+        claim: PushClaim,
+        accepted: PushOutcomeResult.Accepted,
+    ): PushAcknowledgmentResult {
+        val ownedBatch = validatedAcceptedBatch(claim, accepted)
+        if (claim.run !== this) {
+            throw IllegalStateException("Push claim belongs to another run")
+        }
+        if (claim.accountId != accountId ||
+            claim.sessionGeneration != sessionGeneration ||
+            claim.expectedCacheEpoch != expectedCacheEpoch
+        ) {
+            throw StalePushClaimException()
+        }
+        requireAdmitted()
+        if (database.inTransaction()) {
+            throw IllegalStateException("Push claim requires no active transaction")
+        }
+        currentCoroutineContext().ensureActive()
+        return handlingMutex.withLock {
+            if (claim in consumedClaims) {
+                throw StalePushClaimException()
+            }
+            try {
+                val outcome = database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    val head = database.syncDao().getOutboxHead(accountId)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    if (head != claim.row || claim in consumedClaims) {
+                        throw StalePushClaimException()
+                    }
+                    val effects = decodeDurableRequest(
+                        parseStrictJsonObject(claim.row.payloadJson),
+                    ).affectedRoots
+                    val outboxBefore = database.syncDao().getOutboxForAccount(accountId)
+                    when (val context = validateAckContext(database, accountId, effects)) {
+                        is AckContext.Invalid -> {
+                            persistClaimOutcome(
+                                claim,
+                                newState = "frozen",
+                                errorCode = ACK_CONTEXT_CORRUPT_CODE,
+                                errorMessage = ACK_CONTEXT_CORRUPT_MESSAGE,
+                                retryAfterMillis = null,
+                            )
+                            PushAcknowledgmentResult.RetainedCorruption
+                        }
+                        is AckContext.Valid -> {
+                            // Fail-closed retry token: consumed before any
+                            // canonical/metadata/removal write attempt and never
+                            // released, so rollback or uncertain commit still
+                            // requires fresh admission of the same frozen identity.
+                            consumedClaims.add(claim)
+                            val canonical = applyOwnedCanonicalBatch(
+                                database,
+                                accountId,
+                                sessionGeneration,
+                                expectedCacheEpoch,
+                                ownedBatch,
+                            )
+                            currentCoroutineContext().ensureActive()
+                            requireAdmitted()
+                            val (acknowledgedRoots, expectations) = applyAckMetadataUpdates(
+                                database,
+                                accountId,
+                                context.roots,
+                            )
+                            val preRemove = database.syncDao().getOutboxMutation(
+                                claim.row.mutationId,
+                                accountId,
+                            )
+                            currentCoroutineContext().ensureActive()
+                            requireAdmitted()
+                            if (preRemove != claim.row) {
+                                throw StalePushClaimException()
+                            }
+                            val deleted = database.syncDao().deleteExactFrozenHead(
+                                claim.row.mutationId,
+                                accountId,
+                                claim.row.state,
+                                claim.row.attemptCount,
+                            )
+                            if (deleted != 1) {
+                                throw IllegalStateException("Push head changed during transaction")
+                            }
+                            if (database.syncDao().getOutboxMutation(
+                                    claim.row.mutationId,
+                                    accountId,
+                                ) != null
+                            ) {
+                                throw IllegalStateException("Push head changed during transaction")
+                            }
+                            database.syncCanonicalDao().insertAccountCache(accountId)
+                            if (database.syncCanonicalDao().markProjectionDirty(accountId) != 1) {
+                                throw IllegalStateException("Account cache changed during transaction")
+                            }
+                            recheckAckMetadata(database, expectations)
+                            recheckAckWatermarks(database, accountId, context.roots)
+                            val outboxAfter = database.syncDao().getOutboxForAccount(accountId)
+                            if (outboxAfter.size != outboxBefore.size - 1 ||
+                                outboxAfter.any { it.mutationId == claim.row.mutationId }
+                            ) {
+                                throw IllegalStateException("Push head changed during transaction")
+                            }
+                            val afterById = outboxAfter.associateBy { it.mutationId }
+                            for (row in outboxBefore) {
+                                if (row.mutationId == claim.row.mutationId) {
+                                    continue
+                                }
+                                if (afterById[row.mutationId] != row) {
+                                    throw IllegalStateException("Push head changed during transaction")
+                                }
+                            }
+                            if (database.syncDao().getOutboxHead(accountId) == claim.row) {
+                                throw IllegalStateException("Push head changed during transaction")
+                            }
+                            currentCoroutineContext().ensureActive()
+                            requireAdmitted()
+                            checkCanonicalFences(
+                                database,
+                                accountId,
+                                sessionGeneration,
+                                expectedCacheEpoch,
+                            )
+                            currentCoroutineContext().ensureActive()
+                            PushAcknowledgmentResult.Acknowledged(canonical, acknowledgedRoots)
                         }
                     }
                 }

@@ -1,5 +1,6 @@
 package com.dragosfotache.gymtracka.data.sync.store
 
+import com.dragosfotache.gymtracka.data.gym.SyncOutboxEntity
 import com.dragosfotache.gymtracka.data.sync.codec.decodeMutationOutcome
 import com.dragosfotache.gymtracka.data.sync.codec.encodeMutationOutcome
 import com.dragosfotache.gymtracka.data.sync.model.MutationOutcomeModel
@@ -43,9 +44,31 @@ sealed class PushOutcomeResult {
      */
     class Accepted internal constructor(
         private val snapshot: MutationOutcomeModel,
+        private val sourceAccountId: String,
+        private val sourceRow: SyncOutboxEntity,
     ) : PushOutcomeResult() {
         val outcome: MutationOutcomeModel
             get() = decodeMutationOutcome(encodeMutationOutcome(snapshot))
+
+        /**
+         * Immutable origin-provenance binding check. Requires the claim's account
+         * and exact original frozen row identity (sequence, mutation ID,
+         * aggregate type/ID, kind, local generation, payload version and exact
+         * wrapper bytes). Attempt/retry bookkeeping and live run/session/epoch
+         * are excluded, so unchanged durable replay may reuse an earlier snapshot
+         * with fresh admission. Never exposes the retained identity.
+         */
+        internal fun matchesClaim(accountId: String, row: SyncOutboxEntity): Boolean {
+            return accountId == sourceAccountId &&
+                row.sequence == sourceRow.sequence &&
+                row.mutationId == sourceRow.mutationId &&
+                row.aggregateType == sourceRow.aggregateType &&
+                row.aggregateId == sourceRow.aggregateId &&
+                row.mutationType == sourceRow.mutationType &&
+                row.localGeneration == sourceRow.localGeneration &&
+                row.payloadVersion == sourceRow.payloadVersion &&
+                row.payloadJson == sourceRow.payloadJson
+        }
 
         override fun toString(): String = "Accepted"
     }

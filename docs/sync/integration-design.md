@@ -8,8 +8,8 @@ The original R01 design was approved on 2026-10-03. Existing model, transport, v
 parts of this foundation, including inert startup recovery seams; [sync implementation](implementation.md) describes their
 actual boundaries. R05a supplies independent canonical storage and transactional capture watermarks; R05b now adds inert fenced canonical
 record/batch application. R05c adds an inert protected publisher; R06a adds inert serialized durable head claiming and
-exact replay admission; R06b adds inert single-head outcome classification and retry/error bookkeeping. Production
-projection activation, atomic canonical acknowledgment/delivery engine, snapshots, the durable
+exact replay admission; R06b adds inert single-head outcome classification and retry/error bookkeeping; R06c adds inert
+atomic canonical acknowledgment. Production projection activation, delivery engine, snapshots, the durable
 Room-authority adapter/journal, account transitions and cross-feature
 publication barriers remain planned. Stored vault phases and explicit refresh leases alone never
 authorize activation. Preserve the unresolved
@@ -86,7 +86,7 @@ journal additions remain future specifications:
 | Storage | Required logical fields and constraints |
 |---|---|
 | `sync_canonical_roots` | PK `(account_id, aggregate_type, aggregate_id)`; nullable highest observed positive revision; state `unobserved`, `upsert`, `delete`, or `snapshot_absent`; validated complete canonical JSON only for upsert; local-generation watermark; cache epoch. No FK cascade from domain tables |
-| Account cache metadata (`sync_account_cache`, delivered R05a) | Account PK; complete-baseline flag; cache epoch; projection-dirty flag; materialized epoch. Existing opaque cursor/last success stay in `sync_state`; admission reuses immutable session/cache epoch, the frozen row's attempt count and a live run capability. Single-head bookkeeping additionally uses conservative process-local write tokens; atomic canonical acknowledgment remains later R06 work |
+| Account cache metadata (`sync_account_cache`, delivered R05a) | Account PK; complete-baseline flag; cache epoch; projection-dirty flag; materialized epoch. Existing opaque cursor/last success stay in `sync_state`; admission reuses immutable session/cache epoch, the frozen row's attempt count and a live run capability. Outcome bookkeeping and atomic acknowledgment additionally use conservative process-local write tokens; delivery orchestration remains later R06 work |
 | Snapshot session + records (R08) | Run/session/account/generation, fixed page limit, baseline, continuation and seen-token/progress state, download phase; record PK `(stage_id,type,id)` to reject duplicates. No visible-domain FKs |
 | Transition journal (R09) | Singleton current operation ID, phase, source/target account and generation, local choice, captured source generations/IDs, import preparation/completion state; original import snapshots/error context if needed. **No credentials/Google proofs** |
 
@@ -147,7 +147,9 @@ happy paths.
   `snapshot_absent`, retaining their known revision evidence without inventing a deletion revision. Increment cache epoch.
   Reject stale run/claim/page callbacks from before publication; no uncertain push runs concurrently with snapshots.
   Pulls start at the new baseline under the new epoch. Absence in an incremental page is never deletion.
-- Persist canonical result and exact outbox acknowledgment in one fenced transaction. A delayed duplicate accepted batch
+- The inert [atomic acknowledgment boundary](implementation.md#atomic-canonical-acknowledgment) now persists canonical
+  result and exact outbox acknowledgment in one fenced transaction. Accepted snapshots privately bind account and exact
+  durable row identity, but live admission/fences/context still recheck with writes. A delayed duplicate accepted batch
   may be older than current canonical state: still acknowledge the exact request, never restore its old winner.
 - Affected-root bindings are acknowledgment context for *local* effects, not a promise that the server deleted exactly
   the locally known old active. A start can delete another cloud active the client never saw; apply the whole returned
@@ -188,7 +190,8 @@ run(scope fence):
   [single-head implementation](implementation.md#single-head-push-outcomes-and-retryerror-handling) uses deterministic
   admission-count backoff and conservative write-attempt token consumption, not persistence/ack evidence. Failed or
   uncertain bookkeeping attempts require fresh admission of unchanged frozen identity; accepted/auth read-only checks
-  leave admission available for atomic acknowledgment. `413 request_too_large` retains intent
+  leave admission available for atomic acknowledgment, which shares that mutex/token discipline and marks dirty even
+  for an all-obsolete result without advancing epochs/checkpoints. `413 request_too_large` retains intent
   and requires explicit recovery/configuration; do not split a semantic mutation or endlessly retry unchanged bytes.
 - Permanent rejection stores code and fixed safe presentation/recovery context; stop all dependent sending.
   **Personal policy: do not pull around a retained rejection.** The canonical/projection design could support it, but

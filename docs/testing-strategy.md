@@ -87,7 +87,7 @@ future assignments. Total test count alone does not explain delivery time or jus
 | Wire/HTTP | Raw duplicates, family identities, durable exact bytes, auth scalar/expiry validation, operation-aware errors, fixed-origin TLS/redirect/retry refusal, framing/UTF-8/cancellation |
 | Vault/refresh/recovery | Real codec/CAS restart, JCA crypto, Android Keystore/file/backup placement, pending-first durable-before-send rotation, unchanged request retry, startup authority/visibility precedence, recovered-handle fencing and cancellation races |
 | Real service | All 17 kinds/imports, complete canonical results, no-effect rejection, replay/account isolation/pull/snapshot, challenge/refresh/logout and invalid Google-proof rejection |
-| Durable push store seams | Real Room explicit-head/replay ownership/fencing plus complete single-head result classification, owned accepted snapshots, retained rejection/413/malformed errors, bounded retry/reopen, identical-due callback consumption, conservative failed-write tokens, gated input ownership, actual late response/newer intent and post-write cancellation/fence rollback; no atomic canonical acknowledgment or delivery engine |
+| Durable push store seams | Real Room explicit-head/replay ownership/fencing, complete outcome/retry classification, exact accepted provenance and atomic canonical/removal/metadata acknowledgment; all-three-family and DELETE-target paths, newer generation/watermark/tombstone preservation, old duplicate winners, retained corruption and successor blocking, reopen, concurrent settlement, canceled-child/live-run token consumption and post-write head/watermark/fence/storage rollback; no delivery engine |
 | Still outstanding | Engine convergence, complete baseline/snapshot establishment, journal/account flows, live publication/edit/timer barriers and UI observation, actual Google, WorkManager and live deployment/lifecycle gates; see roadmap |
 
 ## Standard commands
@@ -195,9 +195,11 @@ v1 asset to add user data. Seed tests are not Android JVM/device tests.
 - Prove pre-suspension input ownership with a transaction-executor admission barrier and a separate query executor.
   Start the handler `UNDISPATCHED` inside an inherited `coroutineScope`, await its captured transaction runnable, then
   mutate inputs before admission. A generic first-query callback can race earlier/background work during capture.
-- Query callbacks run before their SQL executes. To cancel after a bookkeeping write, observe its UPDATE and cancel
-  on the following head read, assert the hook fired, and compare complete persisted state after rollback. Merely
-  cancelling on the UPDATE callback does not prove post-write cancellation.
+- Query callbacks run before their SQL executes. To cancel after a bookkeeping/canonical write, observe the write and
+  cancel on the following query, assert the hook fired, and compare complete persisted state after rollback. Merely
+  cancelling on the write callback does not prove post-write cancellation. For canceled-child token checks, launch
+  through an explicit inherited `coroutineScope` inside the live run: a `runTest` receiver's `async` can lose the run
+  context marker. Keep the parent run active to prove old-token rejection plus unchanged fresh readmission.
 
 ## CI
 
@@ -214,8 +216,8 @@ stays in the linked reviews; consult only when assessing coverage freshness or i
 
 | Layer | Latest relevant recorded evidence | Limitation |
 |---|---|---|
-| Offline JVM/compilation | [R06b review](archive/remaining-work/R06b-review.md): fresh 811 unique JVM cases / 49 classes; Kotlin/KSP and Android-test compilation | Inert outcome/retry storage; no atomic canonical acknowledgment, engine, Room-authority adapter or new backend gate. Broad assembly/lint/APK gates deferred to R06 package completion |
-| Focused push-store device | [R06b review](archive/remaining-work/R06b-review.md): 86 unique filtered API 37 cases / 6 classes (27 new outcomes/retry, 59 claiming/replay regressions) | Not a fresh full instrumentation or API 24 pass; unfiltered regression deferred to R06 package completion |
+| Offline JVM/compilation | [R06c review](archive/remaining-work/R06c-review.md): fresh 811 unique JVM cases / 49 classes; Kotlin/KSP and Android-test compilation | Inert atomic acknowledgment, not a delivery engine, Room-authority adapter or new backend gate. Broad assembly/lint/APK gates deferred to R06 package completion after delivery-loop delivery |
+| Focused push/canonical device | [R06c review](archive/remaining-work/R06c-review.md): 185 unique filtered API 37 cases / 9 classes (28 new acknowledgment, 86 push and 71 canonical regressions) | Not a fresh full instrumentation or API 24 pass; unfiltered regression deferred to R06 package completion after delivery-loop delivery |
 | Vault device | [R04a review](archive/remaining-work/R04a-review.md): 27 filtered API 37 tests | Not full instrumentation, API 24, or live OEM/cloud transfer |
 | Auth/real service | [R03c review](archive/remaining-work/R03c-review.md): 6 filtered API 37 auth tests; unchanged auth 10/10 and broad HTTP 56/56 after service correction | Backend rerun was not a new offline/device run; legacy replay remains unresolved |
 | Full instrumentation | [R06a review](archive/remaining-work/R06a-review.md): 425 unique unfiltered cases / 28 classes on isolated API 37 16 KB-page emulator; includes 59 R06a claiming/replay cases and 3 migration methods | No API 24, live phone/Google, hosted CI, engine convergence or activated-app publication evidence |

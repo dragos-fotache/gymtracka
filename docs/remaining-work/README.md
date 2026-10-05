@@ -1,10 +1,10 @@
 # Active task specifications
 
-**No implementation task is currently open here.** [R06b outcome/retry handling](../archive/remaining-work/R06b-review.md)
-and R06a/R05a/b/c are accepted. R06c atomic canonical acknowledgment is the next proposed slice and requires specific
-owner authorization plus its own bounded specification. See [current pickup](../coordinator-handoff.md) and
-[the roadmap](../remaining-work-roadmap.md). Production remains signed-out/local-only; accepted inert store components
-do not authorize app activation.
+**No implementation task is currently open here.**
+[R06c atomic canonical acknowledgment](../archive/remaining-work/R06c-review.md), R06a/b and R05a/b/c are accepted.
+R06d bounded durable push delivery loop is the next proposed slice and needs specific owner authorization plus its own
+bounded specification. See [current pickup](../coordinator-handoff.md) and [the roadmap](../remaining-work-roadmap.md).
+Production remains signed-out/local-only; accepted inert stores do not authorize app activation.
 
 Create `RNN-task.md` (or subtask equivalent) only when that planning slice is authorized. Include the concrete contract,
 allowlists, independent acceptance tests, and stop condition from [coordinator workflow](../coordinator-workflow.md).

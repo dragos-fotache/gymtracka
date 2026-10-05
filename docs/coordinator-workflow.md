@@ -26,7 +26,10 @@
 
 The established roles are `gym-worker` (production) and `gym-qa` (tests), using Pi Muse Spark 1.3 Contributor at high
 reasoning (`meta/muse-spark-1.3-contributor`). Verify live availability/model before reuse; do not silently substitute.
-When explicitly using Herdr, read its skill and verify the required environment before controlling agents.
+The owner has explicitly authorized future coordinators to use Herdr for this project's agent coordination without
+asking again. This standing permission covers inspecting live agents and coordinating the authorized slice, not new task
+scope, unrelated panes, configuration changes or delivery operations. Read the Herdr skill and verify the required
+environment before controlling agents.
 
 - Give both roles the same normative behavior/API specification and disjoint read/write allowlists.
 - Worker must not inspect tests, fixtures, reports, or QA work. QA must not inspect production declarations,

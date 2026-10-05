@@ -36,6 +36,7 @@ Enduring Android design is maintained in [the active integration design](../sync
 | R05c protected publication | [Spec](remaining-work/R05c-task.md) | [Review](remaining-work/R05c-review.md) |
 | R06a durable head claiming/replay | [Spec](remaining-work/R06a-task.md) | [Review](remaining-work/R06a-review.md) |
 | R06b single-head outcomes/retry | [Spec](remaining-work/R06b-task.md) | [Review](remaining-work/R06b-review.md) |
+| R06c atomic canonical acknowledgment | [Spec](remaining-work/R06c-task.md) | [Review](remaining-work/R06c-review.md) |
 
 [R03 split](remaining-work/R03-task.md) and [R04 split](remaining-work/R04-task.md) are historical planning records;
 outstanding lifecycle and durable account-integration requirements remain in the active roadmap. The

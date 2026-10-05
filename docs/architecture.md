@@ -22,7 +22,7 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/`.
 | `ui/activeworkout/` | Active screen, compact exercise/set controls, timer UI and feature state |
 | `ui/util/WorkoutFormatters.kt` | Shared derived calculations and locale-aware parsing/formatting |
 | `data/gym/GymRepository.kt` | Application-facing persistence, UUID creation, transactional edits and sync capture |
-| `data/sync/` | Models/codecs, fenced capture/canonical batches, inert protected publication, durable head claiming/replay and outcome/retry bookkeeping, unused HTTP/session components; [details](sync/implementation.md) |
+| `data/sync/` | Models/codecs, fenced capture/canonical batches, inert protected publication, durable head claiming/replay, outcome/retry bookkeeping and atomic acknowledgment, unused HTTP/session components; [details](sync/implementation.md) |
 
 `FeatureRepositories.kt` exposes narrow interfaces to state holders; reusable/leaf composables receive values and callbacks.
 `ui/GymRepositoryProvider.kt` supplies `rememberGymRepository()` and optional internal `LocalGymRepositoryOverride` for
@@ -101,9 +101,11 @@ canonical publication refuses incompatible physical identities instead of overwr
 - Inert push storage reuses the v10 outbox with a required shared single-process run owner, transactional explicit-
   head freezing and exact session/epoch/row callback checks. Single-head outcome handling returns read-only owned
   accepted snapshots or persists rejection/retained errors and bounded retry timing. Conservative process-local
-  write tokens prevent callback reuse even after identical scheduling or failed/uncertain writes. There is no HTTP,
-  canonical application/acknowledgment, cursor publication or app activation; the
-  [implementation reference](sync/implementation.md#single-head-push-outcomes-and-retryerror-handling) owns details.
+  write tokens prevent callback reuse even after identical scheduling or failed/uncertain writes. Inert acknowledgment
+  commits complete canonical application, exact frozen-row removal and generation-scoped metadata together, preserving
+  newer intent and marking projection dirty. Accepted snapshots privately bind account/exact durable identity but remain
+  insufficient authority without fresh transactional checks. There is no HTTP driver, cursor publication or app
+  activation; the [implementation reference](sync/implementation.md#atomic-canonical-acknowledgment) owns details.
 - All existing repository mutation families use in-transaction session fencing and local capture. Default signed-out
   edits create no upload work or canonical/cache rows and use hard deletion. Account-bound internal paths advance
   independent generation watermarks and dirty publication bookkeeping together with domain/outbox writes. The ledger

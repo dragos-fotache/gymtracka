@@ -55,15 +55,45 @@ interface SyncCaptureDao {
     )
     suspend fun updateWorkoutMetadata(id: String, generation: Long, state: String)
 
+    /**
+     * Acknowledges one workout root at its settled generation. Only the server
+     * revision and sync state change; generations and business data stay intact.
+     * Callers must verify the affected count is exactly one.
+     */
+    @Query(
+        "UPDATE workouts SET server_revision = :serverRevision, sync_state = :state WHERE id = :id",
+    )
+    suspend fun acknowledgeWorkoutMetadata(id: String, serverRevision: Long?, state: String): Int
+
     @Query(
         "UPDATE routines SET local_generation = :generation, sync_state = :state WHERE id = :id",
     )
     suspend fun updateRoutineMetadata(id: String, generation: Long, state: String)
 
+    /**
+     * Acknowledges one routine root at its settled generation. Only the server
+     * revision and sync state change; generations and business data stay intact.
+     * Callers must verify the affected count is exactly one.
+     */
+    @Query(
+        "UPDATE routines SET server_revision = :serverRevision, sync_state = :state WHERE id = :id",
+    )
+    suspend fun acknowledgeRoutineMetadata(id: String, serverRevision: Long?, state: String): Int
+
     @Query(
         "UPDATE exercises SET local_generation = :generation, sync_state = :state WHERE id = :id",
     )
     suspend fun updateExerciseMetadata(id: String, generation: Long, state: String)
+
+    /**
+     * Acknowledges one custom exercise root at its settled generation. Only the
+     * server revision and sync state change; generations and business data stay
+     * intact. Callers must verify the affected count is exactly one.
+     */
+    @Query(
+        "UPDATE exercises SET server_revision = :serverRevision, sync_state = :state WHERE id = :id",
+    )
+    suspend fun acknowledgeExerciseMetadata(id: String, serverRevision: Long?, state: String): Int
 
     @Query(
         "SELECT * FROM sync_outbox WHERE account_id = :accountId ORDER BY sequence DESC LIMIT 1",
