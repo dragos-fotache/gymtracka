@@ -1,10 +1,10 @@
 # Active task specifications
 
 **No implementation task is currently open here.**
-[R07c shared push-before-pull / valid tail](../archive/remaining-work/R07c-review.md), R07a/b, R06a–d and R05a–c are accepted.
-R08a staged bootstrap storage foundations is next dependency-ready under the
+[R08a durable snapshot staging storage](../archive/remaining-work/R08a-review.md), R07a–c, R06a–d and R05a–c are accepted.
+R08b bounded frozen-snapshot download validation is next dependency-ready under the
 [standing workflow](../coordinator-workflow.md#coordinator-rotation-and-automatic-continuation).
-Its fresh coordinator must settle concrete schema/storage/harness facts and one bounded normative specification before delegation.
+Its fresh coordinator must settle concrete driver/API/harness facts and one bounded normative specification before delegation.
 See [current pickup](../coordinator-handoff.md) and [roadmap](../remaining-work-roadmap.md).
 Production remains signed-out/local-only; accepted inert components do not authorize activation.
 

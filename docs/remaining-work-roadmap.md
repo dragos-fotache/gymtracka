@@ -21,7 +21,7 @@ snapshot publication. Accepted personal slices never imply completion of their d
 
 ## Status and dependencies
 
-Statuses below reflect accepted delivery through R07c. “Pending” requires eligibility under explicit/standing authority
+Statuses below reflect accepted delivery through R08a. “Pending” requires eligibility under explicit/standing authority
 and a bounded pickup spec, not another approval for each eligible next slice. “Deferred” remains required for its later
 milestone and is not automatically brought forward. Historical M-series assignments are not a second execution plan.
 
@@ -34,7 +34,7 @@ milestone and is not automatically brought forward. Historical M-series assignme
 | R05 canonical Room / local intent | **a storage/capture watermarks, b canonical batches and c protected publication accepted**; production activation remains later integration | R02b and approved integration design |
 | R06 durable push | **a claiming/exact replay, b outcomes/retry, c atomic canonical acknowledgment and d bounded delivery loop accepted**; production activation remains later integration | R03b, R04, R05 |
 | R07 incremental pull | **a checkpoint transactions, b bounded HTTP pull, c shared push-first/valid-tail orchestration and package gates accepted** | R06; b after a, c after b |
-| R08 bootstrap/full resync | Pending; **a staging storage foundations next eligible**, then download validation and complete baseline/publication recovery | R05–R07 |
+| R08 bootstrap/full resync | **a durable staging storage accepted; b bounded download validation next eligible; c complete baseline/absence/publication recovery pending** | R05–R07; b after a, c after b |
 | R09 account transitions/import | Pending | R04, R08; production activation also needs R12a |
 | R10 engine convergence/recovery | Core a pending; expanded b before public release | R03b/c, R06–R09 |
 | R11 Google identity/proofs | Personal sign-in/out a/b pending; lifecycle c deferred | Relevant R02, R04 |
@@ -53,7 +53,7 @@ Dependencies are capability gates, not a mandate to implement every independent 
   may inject controllable barriers; the live app must never substitute a no-op while screens accept edits.
 - Initial sign-in needs R08's complete snapshot; null-cursor incremental pull is not bootstrap. Core R10 must pass before
   user-facing activation. R09 journal tests can precede R12a, but visible activation cannot.
-- Room v10, existing mutation capture/watermarks, all 17 kinds, codecs, transport, vault, refresh and inert recovery seams are
+- Room v11, existing mutation capture/watermarks, all 17 kinds, codecs, transport, vault, refresh, inert staging/recovery seams are
   foundations to reuse, not tasks to recreate. The retired simulator is not a prerequisite or backlog item.
 
 ## Outstanding acceptance outcomes
@@ -108,7 +108,8 @@ on Room v10; [R07b review](archive/remaining-work/R07b-review.md) accepts bounde
 [R07c review](archive/remaining-work/R07c-review.md) accepts uninterrupted shared push-first orchestration,
 retained-error policy, exact-checkpoint valid-tail/last-success bookkeeping and full R07 package instrumentation/
 assembly/lint/APK gates. Outstanding newer intent, publication and convergence stay separate from bounded tail.
-No further R07 slice remains; R08a staging storage foundations is next eligible under the standing workflow.
+No further R07 slice remains; R08a staging storage foundations is accepted and R08b bounded download validation is next
+eligible under the standing workflow.
 No implementation task is currently open.
 
 ### R08 — Staged bootstrap and full resync
@@ -119,9 +120,17 @@ new local intent. Recover explicit 90-day cursor expiry and accounts with no bas
 stages cannot replace visible cache or destroy separate local data selected for replacement.
 
 **Gate:** real Room empty/old-unchanged accounts, middle/final failure, out-of-order references, concurrent edits, restart,
-switch/expiry and atomic publication. Bounded **R08a staging storage foundations** is next: verify current schema/code and
-specify its data-preserving staging migration/inert storage before delegation. Download validation and complete baseline/
-publication recovery follow; staging alone is not complete bootstrap or activation.
+switch/expiry and atomic publication. [R08a review](archive/remaining-work/R08a-review.md) accepts the Room10→11 durable
+staging migration and inert same-run storage, strict whole-record/progress ownership, selected-stage exclusion and
+explicit discard/restart recovery, preserving canonical/domain/outbox/checkpoint/other scopes. Staging alone is NOT
+complete bootstrap, absence authority or activation.
+
+**R08b bounded frozen-snapshot download validation** is next eligible: reuse existing admitted ownership/storage,
+snapshot API/codecs/secure HTTP/refresh; validate/fence actual responses and failure/cancellation/expiry categories,
+continue with exact staged tokens/fixed limit and bounded invocation work without a permanent account-size cap.
+Do not replace the storage foundation or publish partial canonical/domain data. **R08c complete canonical baseline,
+absence and publication recovery** follows. Settle one bounded normative specification at each pickup; complete-graph,
+old-unchanged/empty account, atomic baseline/absence/newer-intent and publication recovery gates remain outstanding.
 
 ### R09 — Account transitions and import/replace
 

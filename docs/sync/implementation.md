@@ -1,7 +1,7 @@
 # Implemented Android sync components
 
 These components exist, but the production app remains signed-out/local-only. **Implemented is not activated.**
-No running engine, activated canonical publication, staged bootstrap, durable account transition, Google UI, or scheduler is wired
+No running engine, activated canonical publication, complete bootstrap, durable account transition, Google UI, or scheduler is wired
 into the app. The [roadmap](../remaining-work-roadmap.md) owns delivery status; the
 [integration design](integration-design.md) owns approved future coordination. The
 [shared contract](../../shared-docs/docs/backend-contract/README.md) remains the service authority.
@@ -10,7 +10,8 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/data/
 
 ## Room and local capture
 
-Room v10 retains the v9 root metadata: nullable account/server revision/deletion time, local generation, and sync state
+Room v11 retains the v9 root metadata and v10 canonical ledger/publication bookkeeping. Independent staging is
+[described below](#frozen-snapshot-staging-storage). Root metadata remains: nullable account/server revision/deletion time, local generation, and sync state
 (default `local_only`). `sync_outbox` stores explicit sequence order, immutable mutation identity/version/payload and
 local affected-root bindings; `sync_state` stores account cursor state; `sync_device_state` distinguishes active and
 privately cached account; `catalogue_state` stores catalogue metadata. These storage fields do not implement sign-out.
@@ -88,7 +89,8 @@ Inert [head claiming/replay admission](#durable-head-claiming-and-replay-admissi
 [atomic canonical acknowledgment](#atomic-canonical-acknowledgment), a
 [bounded push driver](#bounded-push-delivery), [incremental checkpoint transactions](#incremental-checkpoint-transactions)
 and [bounded incremental pull](#bounded-incremental-pull) exist, composed by the inert
-[shared push-before-pull driver](#shared-push-before-pull-and-valid-tail). No staged bootstrap, vault/Room journal,
+[shared push-before-pull driver](#shared-push-before-pull-and-valid-tail). Inert
+[snapshot staging storage](#frozen-snapshot-staging-storage) exists, but no complete bootstrap, vault/Room journal,
 convergence integration or production publication activation exists.
 The independent ledger is not itself a visible projection.
 
@@ -368,6 +370,55 @@ there is no nested admission, release/reacquire gap, additional owner or backgro
 No complete bootstrap, durable Room/vault authority, live edit/timer barrier, engine convergence or production activation
 is implied. Existing inert publication still advances epoch when used; eventual callers must use its returned epoch.
 Those integrations remain R08/R09/R10/R12 and their later activation gates.
+
+## Frozen-snapshot staging storage
+
+R08a adds a data-preserving **Room10→11** migration and inert storage on the SAME admitted `PushRun`/handling Mutex.
+Production constructs no store/driver. One required application-owned `PushRunOwner` per physical DB remains mandatory;
+there is no second owner, public unguarded writer or network transaction.
+
+- `sync_snapshot_stages` has a unique account and stage UUID, origin generation/epoch, fixed1..500 page limit,
+  exact original sync-state presence/cursor/last-success and baseline-complete observation, frozen baseline/continuation,
+  phase and checked page/record counters. `sync_snapshot_records` keeps whole strict canonical record bodies with
+  stage/type/root PK and unique page/position; `sync_snapshot_tokens` retains exact outbound continuations with
+  stage/token PK and unique page number. Children cascade ONLY from their stage; no canonical/domain FKs.
+  Migration leaves every prior table/byte/sequence unchanged and starts all3 tables empty. Schemas1–11 are retained.
+- `beginSnapshotStage(stageId,pageLimit=200)` requires no selected stage and ANY selected-account outbox presence=false,
+  without interpreting/parsing/filtering around retained errors or uncertain intent. It binds the complete original
+  source observation, retires an old pull token before writes, inserts only the initial header, and rechecks durable
+  initial-zero evidence, source/outbox/session/epoch/cancellation before returning an appendable capability.
+  Missing cache/checkpoint stays absent; staging fabricates no canonical baseline or cursor.
+- `appendSnapshotPage(stage,page)` deep-owns/validates the entire typed page BEFORE suspension, then commits complete
+  records, continuation and header progress atomically under exact current-token/header/source/origin/live fences.
+  Every root key is unique across pages, even for identical content; one exact frozen baseline and fixed limit persist.
+  Nonterminal pages are nonempty, all outbound tokens are new by exact equality and terminal continuation is null.
+  Reuse existing codecs; snapshot continuations require nonempty, not nonblank, preserving whitespace exactly.
+  No token interpretation, record split/truncation, permanent history/content cap or canonical revision arbitration.
+- Strict retained validation checks source/header/counter shape, record type/ID/revision/body agreement, consecutive
+  page/position and token evidence, EVERY nonterminal page and optional empty terminal. It compares actual evidence
+  counts before iterating; corrupt Long-sized counters never become fabricated iteration/allocation targets.
+  Later-page dependencies, family namespace overlaps and intermediate multiple active roots can stage; complete-account
+  graph/physical collision validation and absence authority remain separate R08 validation/publication obligations.
+- `readSnapshotStage()` supersedes earlier tokens and returns only a nonappendable recovery observation, including
+  after reopen or uncertain writes. `checkSnapshotStage` validates exact current capability/durable evidence; appendable
+  capabilities additionally recheck origin/source fences. `abandonSnapshotStage` explicitly deletes only that exact
+  valid selected stage/children under CURRENT authorization, even if its old origin/source differs. Other stages/scopes
+  remain untouched. Corrupt retained evidence fails closed/preserved; invalid/foreign HTTP tokens never imply cleanup.
+- Personal recovery is **discard-and-restart**, not cross-run resume. Read/restart never adopts append authority.
+  Write attempts retire capabilities before the first write, including rollback/uncertain commit; returned commit and
+  active resumption alone install fresh tokens. Recovery rereads durable state and explicitly abandons before a NEW
+  stage UUID/null initial request. Cancellation/run close perform no automatic cleanup; earlier pages remain durable.
+- Durable selected-account stages, including downloaded/corrupt headers, block `claimHead` with `SNAPSHOT_STAGE` before
+  head selection/freezing and reject claim checks/outcomes/acks plus all incremental checkpoint/batch/tail operations.
+  Foreign stages do not block. Existing budget exhaustion still never probes a head. Same-account local capture after
+  begin remains allowed; stage operations never rewrite newer domain intent, outbox bytes/generations/watermarks, cache,
+  canonical/checkpoint/last-success, device/catalogue or other-scope data.
+
+A `downloaded` stage proves only stored terminal page/progress validity, NOT actual transport exhaustion, a complete
+validated graph, complete bootstrap, canonical baseline/absence, last-success, convergence or visible publication.
+R08b still owns bounded HTTP download validation under uninterrupted shared ownership; R08c owns complete canonical
+baseline/absence/publication recovery. R09 authority/journal, R12a real edit/timer barriers and R10 convergence still
+precede activation. Existing secure HTTP/refresh and protected publisher are reused, never constructed by this storage.
 
 ## Models, codecs, and durable identity
 

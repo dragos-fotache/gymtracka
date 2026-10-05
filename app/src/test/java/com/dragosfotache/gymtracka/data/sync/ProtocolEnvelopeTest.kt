@@ -562,6 +562,56 @@ class ProtocolEnvelopeTest {
     }
 
     @Test
+    fun snapshotWhitespaceToken_nonemptyPreservedExactlyAndEmptyRejected() {
+        // Owner resolution (R08a): minimal nonblank→nonempty correction.
+        // Whitespace-only NONEMPTY opaque tokens are valid and preserved
+        // exactly; absent/empty continuations stay rejected. Representative
+        // raw decode/encode exact-string coverage only; the existing
+        // snapshotPages_acceptOnlyUniqueUpsertsWithTokenRules matrix stands.
+        val wsToken = "  \t "
+        val records = JSONArray(
+            listOf(upsertJson("workout", WORKOUT, 3L, workoutRecordJson())),
+        )
+        val decoded = decodeSnapshotResult(
+            JSONObject().apply {
+                put("records", records)
+                put("baselineCursor", "baseline-1")
+                put("nextPageToken", wsToken)
+                put("hasMore", true)
+            }.toString(),
+        )
+        assertEquals(wsToken, decoded.nextPageToken)
+        assertEquals(decoded, decodeSnapshotResult(encodeSnapshotResult(decoded).toString()))
+        assertEquals(
+            wsToken,
+            decodeSnapshotResult(encodeSnapshotResult(decoded).toString()).nextPageToken,
+        )
+
+        // Empty-string continuation on a nonterminal page stays rejected.
+        assertRejects {
+            decodeSnapshotResult(
+                JSONObject().apply {
+                    put("records", records)
+                    put("baselineCursor", "baseline-1")
+                    put("nextPageToken", "")
+                    put("hasMore", true)
+                }.toString(),
+            )
+        }
+        // Whitespace continuation on a terminal page stays rejected.
+        assertRejects {
+            decodeSnapshotResult(
+                JSONObject().apply {
+                    put("records", records)
+                    put("baselineCursor", "baseline-1")
+                    put("nextPageToken", wsToken)
+                    put("hasMore", false)
+                }.toString(),
+            )
+        }
+    }
+
+    @Test
     fun directModels_validateFullAggregateShapeAndNormalize() {
         // Invalid status with otherwise matching identity/revision.
         val badStatus = WorkoutRecordModel(

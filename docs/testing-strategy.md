@@ -80,7 +80,7 @@ future assignments. Total test count alone does not explain delivery time or jus
 | Area | Existing coverage / expansion boundary |
 |---|---|
 | Domain persistence | Finish cleanup/renumbering/rollback, cascades, history defaults, replacement identity, cloning, routines/custom guards |
-| Room v10, capture, canonical batches and publication | Every v1–9 start and real asset; outbox order/identity/coalescing, scoped mutation families, independent generation ledger/cache bookkeeping, exact-byte migration preservation, fenced complete canonical batches/revisions/deletions/family bindings, strict retained evidence, deep-owned inputs, account-wide protection, complete-graph/physical collision validation, publication epoch/generation preservation, lease provenance and post-write rollback/cancellation/overflow/Room reopen |
+| Room v11, capture, canonical batches and publication | Every v1–10 start and real asset; independent staging migration with exact prior-table/schema/sequence preservation; outbox order/identity/coalescing, scoped mutation families, independent generation ledger/cache bookkeeping, exact-byte migration preservation, fenced complete canonical batches/revisions/deletions/family bindings, strict retained evidence, deep-owned inputs, account-wide protection, complete-graph/physical collision validation, publication epoch/generation preservation, lease provenance and post-write rollback/cancellation/overflow/Room reopen |
 | Pure logic and feature state | Locale formatting, naming/filtering, validation, ordered autosave, failure/cancellation and stale-load guards |
 | App/timer | Active discovery/replacement/finish/discard, finite edit drains, serial terminal writes, ownership/at-most-once persistence, clock and hardware behavior |
 | Compose/app flows | Catalogue/picker/editor/routine/set/history controls; actual startup, custom edit/add, workout finish/history, routine start and perform-again journeys |
@@ -91,7 +91,8 @@ future assignments. Total test count alone does not explain delivery time or jus
 | Incremental checkpoint transactions | Real Room eligible/null/corrupt boundary admission, exact opaque cursor and full-row/session/epoch fences, same-run token chaining/retirement, complete batch plus cursor rollback, revision no-op progress, newer intent/scope/watermark preservation, owned-input mutation, trigger/cancellation faults and file reopen; primitive owns no HTTP/push-first policy |
 | Bounded incremental pull | Real Room + scripted transport: whole-page ownership before post-response suspension, complete replacement/later dependency, opaque chaining/count/budgets/cycles/empty tail, exact typed failures versus R08 recovery, earlier commits after later failure/reopen, stale data/tail/failure fences, queued/HTTP/post-write cancellation and shared admitted ownership; standalone pull writes no last-success |
 | Shared push-first driver and valid tail | Real Room/scripted transport: uninterrupted push/pull/tail ownership, retained/budget stop policy, exact boundary/standalone compatibility, separate outstanding newer intent, full-row/null-safe last-success fences, exact equal/backward clock, pre/post presence, trigger rollback/count-zero/session/epoch/row/baseline faults, canceled-child retirement and durable reopen/reread. Bounded valid tail is not account convergence or publication |
-| Still outstanding | Engine convergence, complete baseline/snapshot establishment, journal/account flows, live publication/edit/timer barriers and UI observation, actual Google, WorkManager and live deployment/lifecycle gates; see roadmap |
+| Frozen-snapshot staging storage | Real Room whole-page/record ownership, strict retained bodies/progress and corrupt Long counters, root/token/baseline/limit rules, absent source, newer-intent and scope preservation, stage exclusion, exact capability/source/session/epoch fences, trigger/count-zero/post-write cancellation rollback and explicit abandon/reopen recovery; downloaded is not bootstrap/publication |
+| Still outstanding | Bounded snapshot HTTP download, engine convergence, complete baseline/snapshot establishment, journal/account flows, live publication/edit/timer barriers and UI observation, actual Google, WorkManager and live deployment/lifecycle gates; see roadmap |
 
 ## Standard commands
 
@@ -197,6 +198,10 @@ v1 asset to add user data. Seed tests are not Android JVM/device tests.
 - Dispose composition and cancel/join owned state scopes before closing Room. Isolated interaction tests may preload
   state; actual app flows must verify normal factories without preload, using the internal repository override and
   no-op timer hardware. Inspect unmerged semantics/logcat before guessing at loading failures.
+- Preservation oracles belong after any deliberately allowed capture/admission and before the operation under test.
+  Resetting outbox rows does not remove physical domain UUIDs; reuse existing rows or use distinct fixture identities.
+  Exact schema comparison excludes new tables by `sqlite_master.tbl_name`, including their PK autoindices, not just
+  named-index whitelists. Retain complete old-table/sequence comparisons and demonstrate the next allocation.
 - Coroutine exception identity assertions belong inside the actual caller, not across `async.await` stack recovery.
   Gate actual I/O/cancellation entry and check the intended child context; a test receiver's context can select its parent.
 - Prove pre-suspension input ownership with a transaction-executor admission barrier and a separate query executor.
@@ -223,11 +228,12 @@ stays in the linked reviews; consult only when assessing coverage freshness or i
 
 | Layer | Latest relevant recorded evidence | Limitation |
 |---|---|---|
-| Offline JVM/compilation | [R07c review](archive/remaining-work/R07c-review.md): fresh full offline JVM and production/KSP/Android-test compilation | Shared bounded inert orchestration, not complete bootstrap/convergence, Room-authority adapter or new backend gate |
-| Debug assembly/lint/APK | [R07c review](archive/remaining-work/R07c-review.md): explicit debug assembly/lint passed, no new findings; packaged asset/notices preserved and checked test/backend/JDBC helpers excluded | Existing newer-version warning; targeted packaging gate, not release/security audit |
-| Vault device | [R07c review](archive/remaining-work/R07c-review.md): 27 vault cases included in the full API 37 regression | No API 24 or live OEM/cloud transfer |
+| Offline JVM/compilation | [R08a review](archive/remaining-work/R08a-review.md): fresh full offline JVM812/49 and production/KSP/Android-test compilation | Inert staging/nonempty opaque-token compatibility, not complete bootstrap/convergence, durable authority or new backend gate |
+| Debug assembly/lint/APK | [R08a review](archive/remaining-work/R08a-review.md): explicit debug assembly/lint passed, no new findings; packaged asset/notices preserved and checked test/backend/JDBC helpers excluded | Existing newer-version warning; targeted packaging gate, not release/security audit |
+| Vault device | [R08a review](archive/remaining-work/R08a-review.md): 27 vault cases included in the full API 37 regression | No API 24 or live OEM/cloud transfer |
 | Real service | [R03c review](archive/remaining-work/R03c-review.md): unchanged auth 10/10 and broad HTTP 56/56 after service correction | No new backend run at R06d; legacy replay remains unresolved |
-| Full instrumentation | [R07c review](archive/remaining-work/R07c-review.md): fresh 585 unique unfiltered cases / 49 classes on isolated API 37 16 KB-page emulator; includes new23 shared-driver/tail cases, R07a/b and existing migration/persistence/sync/HTTP/vault/Compose/app-flow regression | No API 24, live phone/Google, hosted CI, two-store convergence or activated-app publication evidence |
+| Full instrumentation | [R08a review](archive/remaining-work/R08a-review.md): fresh620 unique unfiltered cases / 52 classes on isolated API37 16KB-page emulator; includes new35 staging/migration cases, every-supported-start1–10→11/copied-v1, R07 and existing persistence/sync/HTTP/vault/Compose/app-flow regression | No API 24, live phone/Google, hosted CI, two-store convergence or activated-app publication evidence |
+| Focused staging/migrations | [R08a review](archive/remaining-work/R08a-review.md): separately executed21 stage / 13 fence / 1 populated10 migration / 3 existing all-start/asset/historical migration cases | Filtered evidence stays scoped; complete baseline/download/publication gates remain R08b/c |
 | Focused shared-driver/tail Room | [R07c review](archive/remaining-work/R07c-review.md): separately executed 3 new classes before the full package gate; R07a/b checkpoint/paging cases included in full regression | Filtered evidence remains scoped; full and packaging gate claims come only from their separate executions |
 | Launcher | [Retirement review](archive/fake-retirement-review.md): 11 Python launcher tests | Not freshly rerun by later session slices |
 

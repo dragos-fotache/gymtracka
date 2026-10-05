@@ -3,7 +3,13 @@ package com.dragosfotache.gymtracka.data.sync.store
 import android.database.sqlite.SQLiteException
 import androidx.room.withTransaction
 import com.dragosfotache.gymtracka.data.gym.GymDatabase
+import com.dragosfotache.gymtracka.data.gym.SyncSnapshotRecordEntity
+import com.dragosfotache.gymtracka.data.gym.SyncSnapshotStageEntity
+import com.dragosfotache.gymtracka.data.gym.SyncSnapshotTokenEntity
 import com.dragosfotache.gymtracka.data.gym.SyncStateEntity
+import com.dragosfotache.gymtracka.data.sync.api.DEFAULT_SNAPSHOT_LIMIT
+import com.dragosfotache.gymtracka.data.sync.api.MAX_SNAPSHOT_LIMIT
+import com.dragosfotache.gymtracka.data.sync.api.MIN_SNAPSHOT_LIMIT
 import com.dragosfotache.gymtracka.data.sync.api.SyncApiException
 import com.dragosfotache.gymtracka.data.sync.codec.decodeDurableRequest
 import com.dragosfotache.gymtracka.data.sync.codec.decodePushResult
@@ -16,9 +22,11 @@ import com.dragosfotache.gymtracka.data.sync.model.MutationKind
 import com.dragosfotache.gymtracka.data.sync.model.MutationOutcomeModel
 import com.dragosfotache.gymtracka.data.sync.model.MutationStatus
 import com.dragosfotache.gymtracka.data.sync.model.PushResultModel
+import com.dragosfotache.gymtracka.data.sync.model.SnapshotResultModel
 import com.dragosfotache.gymtracka.data.sync.model.SyncBatchModel
 import com.dragosfotache.gymtracka.data.sync.model.SyncModelException
 import com.dragosfotache.gymtracka.data.sync.model.UnsupportedDurableVersionException
+import com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
@@ -171,6 +179,17 @@ class PushRun internal constructor(
      */
     private var currentPullCheckpoint: PullCheckpoint? = null
 
+    /**
+     * The run's one current snapshot-stage token, or null when no stage is
+     * admitted. Guarded by [handlingMutex]. Tokens are fresh objects that are
+     * never reused, so clearing this field retires every prior token forever:
+     * a new read or begin attempt clears it (even on a failed attempt) and a
+     * page commit or abandonment clears it immediately before any write.
+     * Read-only checks never clear. Under the handling Mutex, referential
+     * comparison against this field alone decides whether a token is current.
+     */
+    private var currentSnapshotStage: SnapshotStage? = null
+
     internal fun close() {
         open = false
     }
@@ -178,6 +197,41 @@ class PushRun internal constructor(
     private suspend fun requireAdmitted() {
         if (!open || currentCoroutineContext()[PushRunScope.Key]?.run !== this) {
             throw IllegalStateException("Push run is not admitted")
+        }
+    }
+
+    private fun requireStageToken(stage: SnapshotStage) {
+        if (stage.run !== this) {
+            throw IllegalStateException("Snapshot stage belongs to another run")
+        }
+        if (stage.accountId != accountId ||
+            stage.sessionGeneration != sessionGeneration ||
+            stage.expectedCacheEpoch != expectedCacheEpoch
+        ) {
+            throw StaleSnapshotStageException()
+        }
+    }
+
+    /**
+     * Selected-account durable stage presence without parsing any header,
+     * record or token bytes. Foreign-account stages never match. Must run
+     * inside the caller's active fenced transaction.
+     */
+    private suspend fun hasSelectedSnapshotStage(): Boolean {
+        if (!database.inTransaction()) {
+            throw IllegalStateException("Snapshot stage check requires an active transaction")
+        }
+        return database.syncSnapshotDao().getStageForAccount(accountId) != null
+    }
+
+    /**
+     * Rejects a durable selected-account stage inside the caller's active
+     * fenced transaction. Ordinary push/pull work stays excluded until the
+     * stage is explicitly completed or abandoned.
+     */
+    private suspend fun requireNoSnapshotStage() {
+        if (hasSelectedSnapshotStage()) {
+            throw SnapshotStageActiveException()
         }
     }
 
@@ -217,6 +271,11 @@ class PushRun internal constructor(
             throw IllegalStateException("Push claim requires an active transaction")
         }
         checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+        currentCoroutineContext().ensureActive()
+        if (hasSelectedSnapshotStage()) {
+            currentCoroutineContext().ensureActive()
+            return PushHeadResult.Blocked(PushBlockReason.SNAPSHOT_STAGE)
+        }
         currentCoroutineContext().ensureActive()
         val dao = database.syncDao()
         val head = dao.getOutboxHead(accountId) ?: run {
@@ -353,6 +412,7 @@ class PushRun internal constructor(
                 database.withTransaction {
                     currentCoroutineContext().ensureActive()
                     checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    requireNoSnapshotStage()
                     val head = database.syncDao().getOutboxHead(accountId)
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
@@ -409,6 +469,7 @@ class PushRun internal constructor(
                 val outcome = database.withTransaction {
                     currentCoroutineContext().ensureActive()
                     checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    requireNoSnapshotStage()
                     val head = database.syncDao().getOutboxHead(accountId)
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
@@ -497,6 +558,7 @@ class PushRun internal constructor(
                 val outcome = database.withTransaction {
                     currentCoroutineContext().ensureActive()
                     checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    requireNoSnapshotStage()
                     val head = database.syncDao().getOutboxHead(accountId)
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
@@ -632,6 +694,7 @@ class PushRun internal constructor(
                 val outcome = database.withTransaction {
                     currentCoroutineContext().ensureActive()
                     checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    requireNoSnapshotStage()
                     val head = database.syncDao().getOutboxHead(accountId)
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
@@ -822,6 +885,7 @@ class PushRun internal constructor(
                 val observed = database.withTransaction {
                     currentCoroutineContext().ensureActive()
                     checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    requireNoSnapshotStage()
                     currentCoroutineContext().ensureActive()
                     val cache = database.syncCanonicalDao().getAccountCache(accountId)
                     val state = database.syncDao().getSyncState(accountId)
@@ -899,6 +963,7 @@ class PushRun internal constructor(
                 database.withTransaction {
                     currentCoroutineContext().ensureActive()
                     checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    requireNoSnapshotStage()
                     val cache = database.syncCanonicalDao().getAccountCache(accountId)
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
@@ -981,6 +1046,7 @@ class PushRun internal constructor(
                 val canonical = database.withTransaction {
                     currentCoroutineContext().ensureActive()
                     checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    requireNoSnapshotStage()
                     val cache = database.syncCanonicalDao().getAccountCache(accountId)
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
@@ -1113,6 +1179,7 @@ class PushRun internal constructor(
                 val observedPresence = database.withTransaction {
                     currentCoroutineContext().ensureActive()
                     checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    requireNoSnapshotStage()
                     val cache = database.syncCanonicalDao().getAccountCache(accountId)
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
@@ -1181,6 +1248,461 @@ class PushRun internal constructor(
             } catch (_: SQLiteException) {
                 currentCoroutineContext().ensureActive()
                 throw PullStorageException()
+            }
+        }
+    }
+
+    /**
+     * Begins one durable frozen-snapshot stage for the selected account with an
+     * explicit stage ID and fixed page limit. Caller UUID/limit mistakes fail
+     * before storage with the existing argument/model validation. In exactly one
+     * Room transaction this requires no retained selected stage, an empty
+     * selected-account outbox in any state, and the exact origin source
+     * observation, retires any previously admitted pull checkpoint, inserts only
+     * the initial header, then rechecks source, baseline, outbox, header and
+     * fences before commit. A retained stage, any outbox row, a corrupt source
+     * row or a foreign stage-ID collision fails closed without overwriting
+     * anything. Returns the appendable token only after commit and resumption.
+     */
+    suspend fun beginSnapshotStage(
+        stageId: String,
+        pageLimit: Int = DEFAULT_SNAPSHOT_LIMIT,
+    ): SnapshotStage {
+        requireWorkoutUuid(stageId, "stageId")
+        if (pageLimit < MIN_SNAPSHOT_LIMIT || pageLimit > MAX_SNAPSHOT_LIMIT) {
+            throw IllegalArgumentException("Snapshot page limit must be within 1..500")
+        }
+        requireAdmitted()
+        if (database.inTransaction()) {
+            throw IllegalStateException("Snapshot staging requires no active transaction")
+        }
+        currentCoroutineContext().ensureActive()
+        return handlingMutex.withLock {
+            // A begin attempt supersedes the previous stage token, even on failure.
+            currentSnapshotStage = null
+            try {
+                val validated = database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    currentCoroutineContext().ensureActive()
+                    if (database.syncSnapshotDao().getStageForAccount(accountId) != null) {
+                        throw SnapshotStageActiveException()
+                    }
+                    currentCoroutineContext().ensureActive()
+                    if (database.syncDao().hasOutboxForAccount(accountId)) {
+                        throw SnapshotStageIntentException()
+                    }
+                    currentCoroutineContext().ensureActive()
+                    val sourceState = database.syncDao().getSyncState(accountId)
+                    if (sourceState != null) {
+                        validateSnapshotSourceState(sourceState)
+                    }
+                    val sourceBaselineComplete =
+                        database.syncCanonicalDao().getAccountCache(accountId)?.baselineComplete
+                            ?: false
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    // Retire any previously admitted pull checkpoint before the
+                    // first staging write; read-only checks never retire.
+                    currentPullCheckpoint = null
+                    val initial = SyncSnapshotStageEntity(
+                        stageId = stageId,
+                        accountId = accountId,
+                        sessionGeneration = sessionGeneration,
+                        cacheEpoch = expectedCacheEpoch,
+                        pageLimit = pageLimit,
+                        sourceStatePresent = sourceState != null,
+                        sourceCursor = sourceState?.cursor,
+                        sourceLastSuccessMillis = sourceState?.lastSuccessMillis,
+                        sourceBaselineComplete = sourceBaselineComplete,
+                        baselineCursor = null,
+                        nextPageToken = null,
+                        phase = SNAPSHOT_STAGE_DOWNLOADING,
+                        pageCount = 0L,
+                        recordCount = 0L,
+                    )
+                    database.syncSnapshotDao().insertStage(initial)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    if (database.syncSnapshotDao().getStage(stageId) != initial) {
+                        throw StaleSnapshotStageException()
+                    }
+                    val reread = readValidatedSnapshotStage(database, accountId)
+                        ?: throw StaleSnapshotStageException()
+                    if (reread.header != initial) {
+                        throw StaleSnapshotStageException()
+                    }
+                    if (database.syncDao().hasOutboxForAccount(accountId)) {
+                        throw SnapshotStageIntentException()
+                    }
+                    if (database.syncDao().getSyncState(accountId) != sourceState) {
+                        throw StaleSnapshotStageException()
+                    }
+                    val rereadBaseline =
+                        database.syncCanonicalDao().getAccountCache(accountId)?.baselineComplete
+                            ?: false
+                    if (rereadBaseline != sourceBaselineComplete) {
+                        throw StaleSnapshotStageException()
+                    }
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    reread
+                }
+                currentCoroutineContext().ensureActive()
+                requireAdmitted()
+                val token = validated
+                    .toSnapshotToken(
+                        this,
+                        accountId,
+                        sessionGeneration,
+                        expectedCacheEpoch,
+                        canAppend = true,
+                    )
+                currentSnapshotStage = token
+                token
+            } catch (_: SQLiteException) {
+                currentCoroutineContext().ensureActive()
+                throw SnapshotStageStorageException()
+            }
+        }
+    }
+
+    /**
+     * Coherently reads the selected-account stage with its complete retained
+     * evidence without changing any stored data. Every durable read supersedes
+     * the prior stage token, even on null or failure. Returns an abandonable
+     * observation that can never append, or null when no stage is retained.
+     * Origin and source fences may differ from current admission: that means
+     * recovery observation, never append authority. Corrupt retained evidence
+     * fails closed as a storage error and is preserved.
+     */
+    suspend fun readSnapshotStage(): SnapshotStage? {
+        requireAdmitted()
+        if (database.inTransaction()) {
+            throw IllegalStateException("Snapshot staging requires no active transaction")
+        }
+        currentCoroutineContext().ensureActive()
+        return handlingMutex.withLock {
+            currentSnapshotStage = null
+            try {
+                val validated = database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    val result = readValidatedSnapshotStage(database, accountId)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    result
+                }
+                currentCoroutineContext().ensureActive()
+                requireAdmitted()
+                if (validated == null) {
+                    return@withLock null
+                }
+                val token = validated.toSnapshotToken(
+                    this,
+                    accountId,
+                    sessionGeneration,
+                    expectedCacheEpoch,
+                    canAppend = false,
+                )
+                currentSnapshotStage = token
+                token
+            } catch (_: SQLiteException) {
+                currentCoroutineContext().ensureActive()
+                throw SnapshotStageStorageException()
+            }
+        }
+    }
+
+    /**
+     * Read-only fenced validation that the retained stage still matches the
+     * token's exact observed header with coherent valid evidence. Foreign,
+     * superseded or recovery tokens used for appends are stale; an appendable
+     * token additionally requires the origin fence and the complete source
+     * binding still exact. Recovery observations skip old source fences solely
+     * to permit explicit same-account abandonment. Never consumes the token.
+     */
+    suspend fun checkSnapshotStage(stage: SnapshotStage) {
+        requireStageToken(stage)
+        requireAdmitted()
+        if (database.inTransaction()) {
+            throw IllegalStateException("Snapshot staging requires no active transaction")
+        }
+        currentCoroutineContext().ensureActive()
+        handlingMutex.withLock {
+            if (currentSnapshotStage !== stage) {
+                throw StaleSnapshotStageException()
+            }
+            try {
+                database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    val validated = readValidatedSnapshotStage(database, accountId)
+                        ?: throw StaleSnapshotStageException()
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    if (validated.header != stage.header) {
+                        throw StaleSnapshotStageException()
+                    }
+                    if (stage.canAppend) {
+                        if (validated.header.sessionGeneration != sessionGeneration ||
+                            validated.header.cacheEpoch != expectedCacheEpoch
+                        ) {
+                            throw StaleSnapshotStageException()
+                        }
+                        requireExactSnapshotSource(database, accountId, validated.header)
+                    }
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                }
+                currentCoroutineContext().ensureActive()
+                requireAdmitted()
+            } catch (_: SQLiteException) {
+                currentCoroutineContext().ensureActive()
+                throw SnapshotStageStorageException()
+            }
+        }
+    }
+
+    /**
+     * Atomically stages one complete owned snapshot page: the entire typed page
+     * is deep-owned and validated before the first suspension, so caller mutation
+     * after suspension cannot change it. In exactly one Room transaction this
+     * rechecks the appendable current token, downloading phase, exact retained
+     * header, origin fence and unchanged source binding, binds the frozen
+     * baseline on the first page and matches it exactly later, rejects duplicate
+     * cross-page roots and repeated continuations before writes, then inserts
+     * records with the new continuation and advances header and checked counters
+     * atomically. The token retires immediately before the first write and is
+     * never restored on rollback or uncertain commit; only the returned commit
+     * installs the fresh token. Earlier committed pages survive later failure.
+     * A terminal commit still establishes no baseline, absence, publication or
+     * success. Local capture during download stays allowed: the outbox is never
+     * rechecked here and staging never changes domain, outbox or watermarks.
+     */
+    suspend fun appendSnapshotPage(stage: SnapshotStage, page: SnapshotResultModel): SnapshotStage {
+        val owned = ownedSnapshotPage(page)
+        checkOwnedPageAgainstStage(owned, stage)
+        requireStageToken(stage)
+        requireAdmitted()
+        if (database.inTransaction()) {
+            throw IllegalStateException("Snapshot staging requires no active transaction")
+        }
+        currentCoroutineContext().ensureActive()
+        return handlingMutex.withLock {
+            if (currentSnapshotStage !== stage) {
+                throw StaleSnapshotStageException()
+            }
+            if (!stage.canAppend || stage.downloaded) {
+                throw StaleSnapshotStageException()
+            }
+            try {
+                val committed = database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    val validated = readValidatedSnapshotStage(database, accountId)
+                        ?: throw StaleSnapshotStageException()
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    if (validated.header != stage.header) {
+                        throw StaleSnapshotStageException()
+                    }
+                    if (validated.header.sessionGeneration != sessionGeneration ||
+                        validated.header.cacheEpoch != expectedCacheEpoch
+                    ) {
+                        throw StaleSnapshotStageException()
+                    }
+                    requireExactSnapshotSource(database, accountId, validated.header)
+                    if (validated.header.phase != SNAPSHOT_STAGE_DOWNLOADING) {
+                        throw StaleSnapshotStageException()
+                    }
+                    val header = validated.header
+                    val newBaseline = if (header.pageCount == 0L) {
+                        owned.baselineCursor
+                    } else {
+                        if (owned.baselineCursor != header.baselineCursor) {
+                            throw SyncModelException("Snapshot page changed the frozen baseline")
+                        }
+                        header.baselineCursor
+                    }
+                    val retainedKeys = validated.records
+                        .map { it.aggregateType to it.aggregateId }
+                        .toSet()
+                    for (change in owned.records) {
+                        if ((change.aggregateType.wireValue to change.aggregateId) in retainedKeys) {
+                            throw SyncModelException("Snapshot page repeats a staged aggregate")
+                        }
+                    }
+                    val retainedTokens = validated.tokens.map { it.pageToken }.toSet()
+                    val newToken = if (owned.hasMore) {
+                        val token = owned.nextPageToken
+                            ?: throw SyncModelException("Snapshot page is missing its continuation")
+                        if (token == header.nextPageToken || token in retainedTokens) {
+                            throw SyncModelException("Snapshot page repeats a staged continuation")
+                        }
+                        token
+                    } else {
+                        null
+                    }
+                    if (header.pageCount == Long.MAX_VALUE) {
+                        throw SnapshotStageStorageException()
+                    }
+                    val newPage = header.pageCount + 1L
+                    if (header.recordCount > Long.MAX_VALUE - owned.records.size.toLong()) {
+                        throw SnapshotStageStorageException()
+                    }
+                    val newRecordCount = header.recordCount + owned.records.size.toLong()
+                    val newPhase = if (owned.hasMore) {
+                        SNAPSHOT_STAGE_DOWNLOADING
+                    } else {
+                        SNAPSHOT_STAGE_DOWNLOADED
+                    }
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    // Fail-closed retirement: clear the current token immediately
+                    // before any record/token/header write attempt and never
+                    // restore it, so rollback or uncertain commit still requires
+                    // a durable reread. Read-only checks never clear the token.
+                    currentSnapshotStage = null
+                    val dao = database.syncSnapshotDao()
+                    if (owned.records.isNotEmpty()) {
+                        dao.insertRecords(
+                            owned.records.mapIndexed { index, change ->
+                                SyncSnapshotRecordEntity(
+                                    stageId = header.stageId,
+                                    aggregateType = change.aggregateType.wireValue,
+                                    aggregateId = change.aggregateId,
+                                    serverRevision = change.revision,
+                                    canonicalJson = stagedRecordJson(change),
+                                    pageNumber = newPage,
+                                    recordPosition = index.toLong(),
+                                )
+                            },
+                        )
+                    }
+                    if (newToken != null) {
+                        dao.insertToken(
+                            SyncSnapshotTokenEntity(
+                                stageId = header.stageId,
+                                pageToken = newToken,
+                                pageNumber = newPage,
+                            ),
+                        )
+                    }
+                    val advanced = dao.advanceStage(
+                        stageId = header.stageId,
+                        accountId = accountId,
+                        expectedPhase = header.phase,
+                        expectedPageCount = header.pageCount,
+                        expectedRecordCount = header.recordCount,
+                        baselineCursor = newBaseline,
+                        nextPageToken = newToken,
+                        phase = newPhase,
+                        pageCount = newPage,
+                        recordCount = newRecordCount,
+                    )
+                    if (advanced != 1) {
+                        throw StaleSnapshotStageException()
+                    }
+                    val expected = header.copy(
+                        baselineCursor = newBaseline,
+                        nextPageToken = newToken,
+                        phase = newPhase,
+                        pageCount = newPage,
+                        recordCount = newRecordCount,
+                    )
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    val reread = readValidatedSnapshotStage(database, accountId)
+                        ?: throw StaleSnapshotStageException()
+                    if (reread.header != expected) {
+                        throw StaleSnapshotStageException()
+                    }
+                    requireExactSnapshotSource(database, accountId, header)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    reread
+                }
+                currentCoroutineContext().ensureActive()
+                requireAdmitted()
+                val token = committed.toSnapshotToken(
+                    this,
+                    accountId,
+                    sessionGeneration,
+                    expectedCacheEpoch,
+                    canAppend = true,
+                )
+                currentSnapshotStage = token
+                token
+            } catch (_: SQLiteException) {
+                currentCoroutineContext().ensureActive()
+                throw SnapshotStageStorageException()
+            }
+        }
+    }
+
+    /**
+     * Explicitly abandons exactly the admitted stage with stage-only child
+     * cascade. Recovery observations may abandon under the current fences
+     * without matching the old origin or source observation, and abandonment
+     * never requires an empty outbox nor changes domain, cache or checkpoint
+     * state. The token retires immediately before the delete and is never
+     * restored. Cancellation or run close without a committed delete retains
+     * the stage; nothing cleans up automatically.
+     */
+    suspend fun abandonSnapshotStage(stage: SnapshotStage) {
+        requireStageToken(stage)
+        requireAdmitted()
+        if (database.inTransaction()) {
+            throw IllegalStateException("Snapshot staging requires no active transaction")
+        }
+        currentCoroutineContext().ensureActive()
+        handlingMutex.withLock {
+            if (currentSnapshotStage !== stage) {
+                throw StaleSnapshotStageException()
+            }
+            try {
+                database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    val validated = readValidatedSnapshotStage(database, accountId)
+                        ?: throw StaleSnapshotStageException()
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    if (validated.header != stage.header) {
+                        throw StaleSnapshotStageException()
+                    }
+                    // Fail-closed retirement before the delete attempt; never
+                    // restored on rollback or uncertain commit.
+                    currentSnapshotStage = null
+                    val dao = database.syncSnapshotDao()
+                    val deleted = dao.deleteStage(stage.stageId, accountId)
+                    if (deleted != 1) {
+                        throw StaleSnapshotStageException()
+                    }
+                    if (dao.getStage(stage.stageId) != null ||
+                        dao.getRecords(stage.stageId).isNotEmpty() ||
+                        dao.getTokens(stage.stageId).isNotEmpty()
+                    ) {
+                        throw StaleSnapshotStageException()
+                    }
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                }
+                currentCoroutineContext().ensureActive()
+                requireAdmitted()
+            } catch (_: SQLiteException) {
+                currentCoroutineContext().ensureActive()
+                throw SnapshotStageStorageException()
             }
         }
     }

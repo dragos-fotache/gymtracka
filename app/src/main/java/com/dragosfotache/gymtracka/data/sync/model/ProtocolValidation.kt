@@ -110,7 +110,7 @@ fun validateSnapshotResult(result: SnapshotResultModel): SnapshotResultModel {
     }
     val token = result.nextPageToken
     if (result.hasMore) {
-        if (token.isNullOrBlank()) throw SyncModelException("Snapshot hasMore requires a next page token")
+        if (token.isNullOrEmpty()) throw SyncModelException("Snapshot hasMore requires a next page token")
     } else if (token != null) {
         throw SyncModelException("Terminal snapshot page must not carry a page token")
     }

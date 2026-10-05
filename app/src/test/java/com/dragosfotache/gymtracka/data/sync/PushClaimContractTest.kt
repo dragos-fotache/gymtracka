@@ -44,6 +44,7 @@ class PushClaimContractTest {
                 PushBlockReason.UNSUPPORTED_VERSION,
                 PushBlockReason.CORRUPT,
                 PushBlockReason.ATTEMPTS_EXHAUSTED,
+                PushBlockReason.SNAPSHOT_STAGE,
             ),
             PushBlockReason.entries.toSet(),
         )

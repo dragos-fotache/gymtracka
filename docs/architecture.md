@@ -22,7 +22,7 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/`.
 | `ui/activeworkout/` | Active screen, compact exercise/set controls, timer UI and feature state |
 | `ui/util/WorkoutFormatters.kt` | Shared derived calculations and locale-aware parsing/formatting |
 | `data/gym/GymRepository.kt` | Application-facing persistence, UUID creation, transactional edits and sync capture |
-| `data/sync/` | Models/codecs, fenced capture/canonical batches, inert protected publication, durable head claiming/replay, outcome/retry bookkeeping, atomic acknowledgment, inert bounded push/pull and shared push-first drivers, incremental checkpoint/valid-tail transactions, unused HTTP/session components; [details](sync/implementation.md) |
+| `data/sync/` | Models/codecs, fenced capture/canonical batches, inert protected publication, durable head claiming/replay, outcome/retry bookkeeping, atomic acknowledgment, inert bounded push/pull and shared push-first drivers, incremental checkpoint/valid-tail transactions, durable inert snapshot staging, unused HTTP/session components; [details](sync/implementation.md) |
 
 `FeatureRepositories.kt` exposes narrow interfaces to state holders; reusable/leaf composables receive values and callbacks.
 `ui/GymRepositoryProvider.kt` supplies `rememberGymRepository()` and optional internal `LocalGymRepositoryOverride` for
@@ -35,7 +35,7 @@ they do not alter production startup or authorize cached-account presentation.
 
 `app/src/main/assets/databases/gym.db` is the unchanged **version-1 source catalogue**. Room copies it into app-private
 storage and migrates the runtime database. Never add user-data tables to the asset or use destructive migration fallback.
-Runtime `GymDatabase` is **version 10**; exported versions 1–10 are retained in `app/schemas/`.
+Runtime `GymDatabase` is **version 11**; exported versions 1–11 are retained in `app/schemas/`.
 
 ### Catalogue and custom exercises
 
@@ -88,10 +88,16 @@ blank/empty autosaves are distinct from save/start eligibility validation.
 | 7 → 8 | `exercises.is_user_created`, default false |
 | 8 → 9 | Root account/revision/generation/state/deletion metadata and indexes; outbox, account cursor, device/session and catalogue state tables |
 | 9 → 10 | Independent account/type/root canonical ledger and separate account publication bookkeeping; unobserved generation reservations backfilled without fabricating canonical records/baselines |
+| 10 → 11 | Independent snapshot stage headers, whole records and durable continuation/page evidence; old tables/bytes/sequence unchanged, new tables empty |
 
 Each future entity change requires a version bump, data-preserving migration, schema export/KSP, all supported starting
 versions, and a copied real v1 asset test. Domain table UUID primary keys remain global within each physical table;
 canonical publication refuses incompatible physical identities instead of overwriting/remapping another scope.
+
+`sync_snapshot_stages`, `sync_snapshot_records` and `sync_snapshot_tokens` store inert frozen-snapshot staging independently
+of domain/canonical tables. Child FKs cascade only from their stage. One stage per account binds origin session/epoch,
+fixed limit, original full checkpoint/baseline observation and frozen page baseline/progress. Downloaded is not a complete
+canonical baseline or visible publication; see [staging boundaries](sync/implementation.md#frozen-snapshot-staging-storage).
 
 ## Persistence and state flow
 
@@ -117,6 +123,9 @@ canonical publication refuses incompatible physical identities instead of overwr
   tail transaction. Only fenced push Empty authorizes pull; budget/error/auth stops never probe or bypass the head.
   A validated terminal callback updates only last-success with full-row/baseline/session/epoch/cancellation fences and
   conservative token retirement, reporting outstanding local work separately. No projection/convergence is claimed.
+  The same admitted run now owns inert begin/read/check/append/abandon snapshot storage over Room11. Selected durable
+  stages block ordinary push/pull; whole pages remain outside canonical/domain data. New capture stays protected;
+  restart/uncertain writes require observation, explicit abandonment and a new stage, never implicit resume/cleanup.
   The app constructs none of it; complete bootstrap, durable authority, convergence and activation remain outstanding.
   The [shared driver](sync/implementation.md#shared-push-before-pull-and-valid-tail),
   [push](sync/implementation.md#bounded-push-delivery), [checkpoint](sync/implementation.md#incremental-checkpoint-transactions)

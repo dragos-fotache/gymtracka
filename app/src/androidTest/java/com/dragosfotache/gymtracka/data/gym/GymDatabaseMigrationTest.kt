@@ -30,15 +30,15 @@ class GymDatabaseMigrationTest {
 
     @Test
     fun everySupportedVersion_migratesToCurrentSchemaAndPreservesAvailableData() {
-        for (startVersion in 1..9) {
-            val databaseName = "migration-$startVersion-to-10.db"
+        for (startVersion in 1..10) {
+            val databaseName = "migration-$startVersion-to-11.db"
             migrationHelper.createDatabase(databaseName, startVersion).use { database ->
                 seedLegacyDatabase(database, startVersion)
             }
 
             migrationHelper.runMigrationsAndValidate(
                 databaseName,
-                10,
+                11,
                 true,
                 *GymDatabase.MIGRATIONS,
             ).use { database ->
@@ -79,6 +79,9 @@ class GymDatabaseMigrationTest {
             assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM catalogue_state"))
             assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM sync_canonical_roots"))
             assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM sync_account_cache"))
+            assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM sync_snapshot_stages"))
+            assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM sync_snapshot_records"))
+            assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM sync_snapshot_tokens"))
         } finally {
             database.close()
         }
@@ -764,6 +767,9 @@ class GymDatabaseMigrationTest {
         assertEquals(0, database.singleInt("SELECT COUNT(*) FROM sync_device_state"))
         assertEquals(0, database.singleInt("SELECT COUNT(*) FROM catalogue_state"))
         assertEmptyCanonicalTables(database)
+        assertEquals(0, database.singleInt("SELECT COUNT(*) FROM sync_snapshot_stages"))
+        assertEquals(0, database.singleInt("SELECT COUNT(*) FROM sync_snapshot_records"))
+        assertEquals(0, database.singleInt("SELECT COUNT(*) FROM sync_snapshot_tokens"))
     }
 
     private fun assertEmptyCanonicalTables(database: SupportSQLiteDatabase) {

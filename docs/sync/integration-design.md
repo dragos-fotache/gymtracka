@@ -12,7 +12,9 @@ exact replay admission; R06b adds inert single-head outcome classification and r
 atomic canonical acknowledgment; R06d adds an inert bounded push delivery driver; R07a adds inert incremental batch/
 checkpoint transactions on that same admitted run; R07b adds bounded incremental HTTP pull receiving an already
 admitted run. R07c adds an inert shared push-first driver and separate fenced valid-tail/last-success transaction.
-Production projection activation, convergence, snapshots, the durable Room-authority adapter/journal, account
+R08a adds inert durable whole-page snapshot staging on the same run with the data-preserving Room10→11 migration;
+actual bounded download and complete baseline/absence/publication recovery remain planned.
+Production projection activation, convergence, complete snapshots, the durable Room-authority adapter/journal, account
 transitions and cross-feature publication barriers remain planned. Stored vault phases and explicit refresh leases alone never
 authorize activation. Preserve the unresolved
 [legacy auth replay limitation](implementation.md#legacy-auth-replay-limitation) in all recovery work.
@@ -82,14 +84,13 @@ Room storage boundaries below retain the approved design. R05a has delivered the
 `sync_account_cache` in v10; exact current fields/capture/migration behavior are owned by
 [the implementation reference](implementation.md#canonical-ledger-and-capture-watermarks). R05b adds
 [fenced canonical batch writers](implementation.md#fenced-canonical-batches), preserving watermarks and marking dirty
-without incrementing cache epochs or changing visible data. R05c's protected publisher reuses this storage; snapshot/
-journal additions remain future specifications:
+without incrementing cache epochs or changing visible data. R05c's protected publisher reuses this storage; snapshot staging storage is delivered in R08a; complete snapshot/journal integration remains future work:
 
 | Storage | Required logical fields and constraints |
 |---|---|
 | `sync_canonical_roots` | PK `(account_id, aggregate_type, aggregate_id)`; nullable highest observed positive revision; state `unobserved`, `upsert`, `delete`, or `snapshot_absent`; validated complete canonical JSON only for upsert; local-generation watermark; cache epoch. No FK cascade from domain tables |
 | Account cache metadata (`sync_account_cache`, delivered R05a) | Account PK; complete-baseline flag; cache epoch; projection-dirty flag; materialized epoch. Existing opaque cursor/last success stay in `sync_state`; admission reuses immutable session/cache epoch, the frozen row's attempt count and a live run capability. Outcome bookkeeping and atomic acknowledgment additionally use conservative process-local write tokens; bounded push orchestration reuses these seams without advancing pull checkpoints or epochs |
-| Snapshot session + records (R08) | Run/session/account/generation, fixed page limit, baseline, continuation and seen-token/progress state, download phase; record PK `(stage_id,type,id)` to reject duplicates. No visible-domain FKs |
+| Snapshot staging (R08a delivered Room11) | Unique account/stage; origin session/epoch, fixed limit, original full checkpoint/baseline observation, frozen baseline/continuation and phase/counters; whole records PK `(stage_id,type,id)` plus page/position; durable exact continuation/page evidence. Stage-only child cascades, no visible-domain/canonical FKs. Read/restart observes for explicit abandon/new-stage restart, never resumes append authority |
 | Transition journal (R09) | Singleton current operation ID, phase, source/target account and generation, local choice, captured source generations/IDs, import preparation/completion state; original import snapshots/error context if needed. **No credentials/Google proofs** |
 
 A generation watermark survives domain rematerialization/removal; canonical writes must not lower a local generation.
@@ -248,8 +249,13 @@ Repeat the same page limit. Validate baseline consistency, unique root keys acro
 nonterminal pages, continuation cycles and terminal absence of a token. References may be on later pages. Stage whole
 aggregates; never truncate a record/batch to meet a local memory limit. No new domain-size cap is introduced.
 
-Persist staging safely enough to recognize incomplete work after process death. First personal implementation may
-**discard and restart** incomplete stages rather than resume them; frozen requests/outbox are unaffected. Expired snapshot
+R08a now persists staging safely enough to recognize incomplete work after process death. The adopted personal
+recovery is **explicit discard-and-restart**, not cross-run resume: only a stage begun/chained in the same live admitted
+run can append. Durable reread yields an abandonable observation, never new append authority. A downloaded stage
+remains outside canonical/domain publication and is not complete bootstrap. Existing storage validates whole records/
+progress without resolving account-wide dependencies; R08b still owns actual bounded HTTP download and R08c complete
+baseline/absence/publication recovery. Budgets must bound invocation work, never become a permanent account-size cap;
+continuation within a live uninterrupted run is distinct from cross-run recovery. Frozen requests/outbox are unaffected. Expired snapshot
 and invalid token are distinct failures. Do not combine pages from a fresh snapshot with a prior stage.
 
 A complete empty account is valid. It can remove cached cloud roots only in the complete publication transaction;
@@ -372,8 +378,10 @@ barrier; app integration must not silently replace it with a no-op while composi
 ## 8. Migration boundaries and acceptance matrix
 
 R05a delivered the **data-preserving v9→v10 migration** for canonical ledger/publication state and capture watermarks.
-R05b canonical batches and R05c protected publication reuse v10 without entity/schema changes. Plan separate coherent migrations at R08a (staging) and R09a (transition journal/device phases); their exact SQL/schema
-versions are assigned only after checking the current branch on pickup. Combine adjoining changes only if they are one
+R05b canonical batches and R05c protected publication reuse v10 without entity/schema changes. R08a delivered the
+**data-preserving v10→v11 staging migration** while preserving all prior entity definitions/bytes and the v1 asset.
+The R09a transition journal/device-phase migration remains separate; assign its exact schema version only after
+checking the live branch on pickup. Combine adjoining changes only if they are one
 reviewed deliverable, not to avoid migration
 coverage. No entity change without KSP/export, preserved snapshots, all supported starts and copied v1 asset tests.
 

@@ -30,6 +30,11 @@ enum class PushBlockReason {
     UNSUPPORTED_VERSION,
     CORRUPT,
     ATTEMPTS_EXHAUSTED,
+    /**
+     * A durable selected-account snapshot stage excludes ordinary push/pull
+     * until explicit completion or abandonment.
+     */
+    SNAPSHOT_STAGE,
 }
 
 /**

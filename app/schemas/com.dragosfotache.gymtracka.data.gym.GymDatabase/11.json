@@ -1,0 +1,1342 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 11,
+    "identityHash": "7632eadf2dcf0de1c1be6e45e5a79b11",
+    "entities": [
+      {
+        "tableName": "muscle_groups",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `slug` TEXT NOT NULL, `name` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "slug",
+            "columnName": "slug",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "equipment",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `type` TEXT NOT NULL, `usage_type` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "usageType",
+            "columnName": "usage_type",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "exercises",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `type` TEXT NOT NULL, `difficulty_level` TEXT, `force_type` TEXT, `mechanics` TEXT, `category` TEXT, `instructions` TEXT, `is_user_created` INTEGER NOT NULL DEFAULT 0, `account_id` TEXT, `server_revision` INTEGER, `local_generation` INTEGER NOT NULL DEFAULT 0, `sync_state` TEXT NOT NULL DEFAULT 'local_only', `deleted_at_millis` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "difficultyLevel",
+            "columnName": "difficulty_level",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "forceType",
+            "columnName": "force_type",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mechanics",
+            "columnName": "mechanics",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "instructions",
+            "columnName": "instructions",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isUserCreated",
+            "columnName": "is_user_created",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "accountId",
+            "columnName": "account_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "serverRevision",
+            "columnName": "server_revision",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "localGeneration",
+            "columnName": "local_generation",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "syncState",
+            "columnName": "sync_state",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'local_only'"
+          },
+          {
+            "fieldPath": "deletedAtMillis",
+            "columnName": "deleted_at_millis",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_exercises_account_id_deleted_at_millis",
+            "unique": false,
+            "columnNames": [
+              "account_id",
+              "deleted_at_millis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_exercises_account_id_deleted_at_millis` ON `${TABLE_NAME}` (`account_id`, `deleted_at_millis`)"
+          }
+        ]
+      },
+      {
+        "tableName": "exercise_muscle_groups",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`exercise_id` TEXT NOT NULL, `muscle_group_id` TEXT NOT NULL, `type` TEXT NOT NULL, PRIMARY KEY(`exercise_id`, `muscle_group_id`, `type`), FOREIGN KEY(`exercise_id`) REFERENCES `exercises`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`muscle_group_id`) REFERENCES `muscle_groups`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "exerciseId",
+            "columnName": "exercise_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "muscleGroupId",
+            "columnName": "muscle_group_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "exercise_id",
+            "muscle_group_id",
+            "type"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "exercises",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "exercise_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "muscle_groups",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "muscle_group_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "exercise_equipment",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`exercise_id` TEXT NOT NULL, `equipment_id` TEXT NOT NULL, `num_items` INTEGER, PRIMARY KEY(`exercise_id`, `equipment_id`), FOREIGN KEY(`exercise_id`) REFERENCES `exercises`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`equipment_id`) REFERENCES `equipment`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "exerciseId",
+            "columnName": "exercise_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "equipmentId",
+            "columnName": "equipment_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "numberOfItems",
+            "columnName": "num_items",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "exercise_id",
+            "equipment_id"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "exercises",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "exercise_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "equipment",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "equipment_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "workouts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL DEFAULT '', `started_at_millis` INTEGER NOT NULL, `finished_at_millis` INTEGER, `status` TEXT NOT NULL DEFAULT 'active', `account_id` TEXT, `server_revision` INTEGER, `local_generation` INTEGER NOT NULL DEFAULT 0, `sync_state` TEXT NOT NULL DEFAULT 'local_only', `deleted_at_millis` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "startedAtMillis",
+            "columnName": "started_at_millis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "finishedAtMillis",
+            "columnName": "finished_at_millis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'active'"
+          },
+          {
+            "fieldPath": "accountId",
+            "columnName": "account_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "serverRevision",
+            "columnName": "server_revision",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "localGeneration",
+            "columnName": "local_generation",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "syncState",
+            "columnName": "sync_state",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'local_only'"
+          },
+          {
+            "fieldPath": "deletedAtMillis",
+            "columnName": "deleted_at_millis",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_workouts_account_id_deleted_at_millis",
+            "unique": false,
+            "columnNames": [
+              "account_id",
+              "deleted_at_millis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_workouts_account_id_deleted_at_millis` ON `${TABLE_NAME}` (`account_id`, `deleted_at_millis`)"
+          }
+        ]
+      },
+      {
+        "tableName": "workout_exercises",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `workout_id` TEXT NOT NULL, `exercise_id` TEXT NOT NULL, `position` INTEGER NOT NULL, `notes` TEXT NOT NULL DEFAULT '', `rest_duration_seconds` INTEGER NOT NULL DEFAULT 30, PRIMARY KEY(`id`), FOREIGN KEY(`workout_id`) REFERENCES `workouts`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`exercise_id`) REFERENCES `exercises`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "workoutId",
+            "columnName": "workout_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exerciseId",
+            "columnName": "exercise_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "restDurationSeconds",
+            "columnName": "rest_duration_seconds",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "30"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_workout_exercises_workout_id",
+            "unique": false,
+            "columnNames": [
+              "workout_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_workout_exercises_workout_id` ON `${TABLE_NAME}` (`workout_id`)"
+          },
+          {
+            "name": "index_workout_exercises_exercise_id",
+            "unique": false,
+            "columnNames": [
+              "exercise_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_workout_exercises_exercise_id` ON `${TABLE_NAME}` (`exercise_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "workouts",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "workout_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "exercises",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "exercise_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "workout_sets",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `workout_exercise_id` TEXT NOT NULL, `position` INTEGER NOT NULL, `repetitions` INTEGER, `weight_kg` REAL, `is_completed` INTEGER NOT NULL DEFAULT 0, `rest_seconds` INTEGER, PRIMARY KEY(`id`), FOREIGN KEY(`workout_exercise_id`) REFERENCES `workout_exercises`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "workoutExerciseId",
+            "columnName": "workout_exercise_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "repetitions",
+            "columnName": "repetitions",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "weightKg",
+            "columnName": "weight_kg",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "isCompleted",
+            "columnName": "is_completed",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "restSeconds",
+            "columnName": "rest_seconds",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_workout_sets_workout_exercise_id",
+            "unique": false,
+            "columnNames": [
+              "workout_exercise_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_workout_sets_workout_exercise_id` ON `${TABLE_NAME}` (`workout_exercise_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "workout_exercises",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "workout_exercise_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "routines",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `is_draft` INTEGER NOT NULL DEFAULT 0, `account_id` TEXT, `server_revision` INTEGER, `local_generation` INTEGER NOT NULL DEFAULT 0, `sync_state` TEXT NOT NULL DEFAULT 'local_only', `deleted_at_millis` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isDraft",
+            "columnName": "is_draft",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "accountId",
+            "columnName": "account_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "serverRevision",
+            "columnName": "server_revision",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "localGeneration",
+            "columnName": "local_generation",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "syncState",
+            "columnName": "sync_state",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'local_only'"
+          },
+          {
+            "fieldPath": "deletedAtMillis",
+            "columnName": "deleted_at_millis",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_routines_account_id_deleted_at_millis",
+            "unique": false,
+            "columnNames": [
+              "account_id",
+              "deleted_at_millis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_routines_account_id_deleted_at_millis` ON `${TABLE_NAME}` (`account_id`, `deleted_at_millis`)"
+          }
+        ]
+      },
+      {
+        "tableName": "routine_exercises",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `routine_id` TEXT NOT NULL, `exercise_id` TEXT NOT NULL, `position` INTEGER NOT NULL, `rest_duration_seconds` INTEGER NOT NULL DEFAULT 30, PRIMARY KEY(`id`), FOREIGN KEY(`routine_id`) REFERENCES `routines`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`exercise_id`) REFERENCES `exercises`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "routineId",
+            "columnName": "routine_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exerciseId",
+            "columnName": "exercise_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "restDurationSeconds",
+            "columnName": "rest_duration_seconds",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "30"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_routine_exercises_routine_id",
+            "unique": false,
+            "columnNames": [
+              "routine_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_routine_exercises_routine_id` ON `${TABLE_NAME}` (`routine_id`)"
+          },
+          {
+            "name": "index_routine_exercises_exercise_id",
+            "unique": false,
+            "columnNames": [
+              "exercise_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_routine_exercises_exercise_id` ON `${TABLE_NAME}` (`exercise_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "routines",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "routine_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "exercises",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "exercise_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "routine_sets",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `routine_exercise_id` TEXT NOT NULL, `position` INTEGER NOT NULL, `repetitions` INTEGER, `weight_kg` REAL, PRIMARY KEY(`id`), FOREIGN KEY(`routine_exercise_id`) REFERENCES `routine_exercises`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "routineExerciseId",
+            "columnName": "routine_exercise_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "repetitions",
+            "columnName": "repetitions",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "weightKg",
+            "columnName": "weight_kg",
+            "affinity": "REAL"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_routine_sets_routine_exercise_id",
+            "unique": false,
+            "columnNames": [
+              "routine_exercise_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_routine_sets_routine_exercise_id` ON `${TABLE_NAME}` (`routine_exercise_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "routine_exercises",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "routine_exercise_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "sync_outbox",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`sequence` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `mutation_id` TEXT NOT NULL, `account_id` TEXT NOT NULL, `aggregate_type` TEXT NOT NULL, `aggregate_id` TEXT NOT NULL, `mutation_type` TEXT NOT NULL, `local_generation` INTEGER NOT NULL, `payload_version` INTEGER NOT NULL DEFAULT 1, `payload_json` TEXT NOT NULL, `state` TEXT NOT NULL DEFAULT 'pending', `attempt_count` INTEGER NOT NULL DEFAULT 0, `retry_after_millis` INTEGER, `error_code` TEXT, `error_message` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "sequence",
+            "columnName": "sequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mutationId",
+            "columnName": "mutation_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "accountId",
+            "columnName": "account_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "aggregateType",
+            "columnName": "aggregate_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "aggregateId",
+            "columnName": "aggregate_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mutationType",
+            "columnName": "mutation_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localGeneration",
+            "columnName": "local_generation",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payloadVersion",
+            "columnName": "payload_version",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          },
+          {
+            "fieldPath": "payloadJson",
+            "columnName": "payload_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'pending'"
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attempt_count",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "retryAfterMillis",
+            "columnName": "retry_after_millis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "errorCode",
+            "columnName": "error_code",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "errorMessage",
+            "columnName": "error_message",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "sequence"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_sync_outbox_mutation_id",
+            "unique": true,
+            "columnNames": [
+              "mutation_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_sync_outbox_mutation_id` ON `${TABLE_NAME}` (`mutation_id`)"
+          },
+          {
+            "name": "index_sync_outbox_account_id_sequence",
+            "unique": false,
+            "columnNames": [
+              "account_id",
+              "sequence"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_sync_outbox_account_id_sequence` ON `${TABLE_NAME}` (`account_id`, `sequence`)"
+          },
+          {
+            "name": "index_sync_outbox_account_id_aggregate_type_aggregate_id",
+            "unique": false,
+            "columnNames": [
+              "account_id",
+              "aggregate_type",
+              "aggregate_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_sync_outbox_account_id_aggregate_type_aggregate_id` ON `${TABLE_NAME}` (`account_id`, `aggregate_type`, `aggregate_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "sync_state",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`account_id` TEXT NOT NULL, `cursor` TEXT, `last_success_millis` INTEGER, PRIMARY KEY(`account_id`))",
+        "fields": [
+          {
+            "fieldPath": "accountId",
+            "columnName": "account_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cursor",
+            "columnName": "cursor",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "lastSuccessMillis",
+            "columnName": "last_success_millis",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "account_id"
+          ]
+        }
+      },
+      {
+        "tableName": "sync_device_state",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `active_account_id` TEXT, `cached_account_id` TEXT, `session_generation` INTEGER NOT NULL DEFAULT 0, `cache_state` TEXT NOT NULL DEFAULT 'local_only', PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "activeAccountId",
+            "columnName": "active_account_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "cachedAccountId",
+            "columnName": "cached_account_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sessionGeneration",
+            "columnName": "session_generation",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "cacheState",
+            "columnName": "cache_state",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'local_only'"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "catalogue_state",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `version` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "version",
+            "columnName": "version",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "sync_canonical_roots",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`account_id` TEXT NOT NULL, `aggregate_type` TEXT NOT NULL, `aggregate_id` TEXT NOT NULL, `server_revision` INTEGER, `canonical_state` TEXT NOT NULL DEFAULT 'unobserved', `canonical_json` TEXT, `local_generation_watermark` INTEGER NOT NULL DEFAULT 0, `cache_epoch` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`account_id`, `aggregate_type`, `aggregate_id`))",
+        "fields": [
+          {
+            "fieldPath": "accountId",
+            "columnName": "account_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "aggregateType",
+            "columnName": "aggregate_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "aggregateId",
+            "columnName": "aggregate_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "serverRevision",
+            "columnName": "server_revision",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "canonicalState",
+            "columnName": "canonical_state",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'unobserved'"
+          },
+          {
+            "fieldPath": "canonicalJson",
+            "columnName": "canonical_json",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "localGenerationWatermark",
+            "columnName": "local_generation_watermark",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "cacheEpoch",
+            "columnName": "cache_epoch",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "account_id",
+            "aggregate_type",
+            "aggregate_id"
+          ]
+        }
+      },
+      {
+        "tableName": "sync_account_cache",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`account_id` TEXT NOT NULL, `baseline_complete` INTEGER NOT NULL DEFAULT 0, `cache_epoch` INTEGER NOT NULL DEFAULT 0, `projection_dirty` INTEGER NOT NULL DEFAULT 0, `materialized_epoch` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`account_id`))",
+        "fields": [
+          {
+            "fieldPath": "accountId",
+            "columnName": "account_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "baselineComplete",
+            "columnName": "baseline_complete",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "cacheEpoch",
+            "columnName": "cache_epoch",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "projectionDirty",
+            "columnName": "projection_dirty",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "materializedEpoch",
+            "columnName": "materialized_epoch",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "account_id"
+          ]
+        }
+      },
+      {
+        "tableName": "sync_snapshot_stages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`stage_id` TEXT NOT NULL, `account_id` TEXT NOT NULL, `session_generation` INTEGER NOT NULL, `cache_epoch` INTEGER NOT NULL, `page_limit` INTEGER NOT NULL, `source_state_present` INTEGER NOT NULL, `source_cursor` TEXT, `source_last_success_millis` INTEGER, `source_baseline_complete` INTEGER NOT NULL, `baseline_cursor` TEXT, `next_page_token` TEXT, `phase` TEXT NOT NULL DEFAULT 'downloading', `page_count` INTEGER NOT NULL DEFAULT 0, `record_count` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`stage_id`))",
+        "fields": [
+          {
+            "fieldPath": "stageId",
+            "columnName": "stage_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "accountId",
+            "columnName": "account_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionGeneration",
+            "columnName": "session_generation",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cacheEpoch",
+            "columnName": "cache_epoch",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pageLimit",
+            "columnName": "page_limit",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceStatePresent",
+            "columnName": "source_state_present",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceCursor",
+            "columnName": "source_cursor",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sourceLastSuccessMillis",
+            "columnName": "source_last_success_millis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "sourceBaselineComplete",
+            "columnName": "source_baseline_complete",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "baselineCursor",
+            "columnName": "baseline_cursor",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "nextPageToken",
+            "columnName": "next_page_token",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "phase",
+            "columnName": "phase",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'downloading'"
+          },
+          {
+            "fieldPath": "pageCount",
+            "columnName": "page_count",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "recordCount",
+            "columnName": "record_count",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "stage_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_sync_snapshot_stages_account_id",
+            "unique": true,
+            "columnNames": [
+              "account_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_sync_snapshot_stages_account_id` ON `${TABLE_NAME}` (`account_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "sync_snapshot_records",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`stage_id` TEXT NOT NULL, `aggregate_type` TEXT NOT NULL, `aggregate_id` TEXT NOT NULL, `server_revision` INTEGER NOT NULL, `canonical_json` TEXT NOT NULL, `page_number` INTEGER NOT NULL, `record_position` INTEGER NOT NULL, PRIMARY KEY(`stage_id`, `aggregate_type`, `aggregate_id`), FOREIGN KEY(`stage_id`) REFERENCES `sync_snapshot_stages`(`stage_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "stageId",
+            "columnName": "stage_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "aggregateType",
+            "columnName": "aggregate_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "aggregateId",
+            "columnName": "aggregate_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "serverRevision",
+            "columnName": "server_revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "canonicalJson",
+            "columnName": "canonical_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pageNumber",
+            "columnName": "page_number",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordPosition",
+            "columnName": "record_position",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "stage_id",
+            "aggregate_type",
+            "aggregate_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_sync_snapshot_records_stage_id_page_number_record_position",
+            "unique": true,
+            "columnNames": [
+              "stage_id",
+              "page_number",
+              "record_position"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_sync_snapshot_records_stage_id_page_number_record_position` ON `${TABLE_NAME}` (`stage_id`, `page_number`, `record_position`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "sync_snapshot_stages",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "stage_id"
+            ],
+            "referencedColumns": [
+              "stage_id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "sync_snapshot_tokens",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`stage_id` TEXT NOT NULL, `page_token` TEXT NOT NULL, `page_number` INTEGER NOT NULL, PRIMARY KEY(`stage_id`, `page_token`), FOREIGN KEY(`stage_id`) REFERENCES `sync_snapshot_stages`(`stage_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "stageId",
+            "columnName": "stage_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pageToken",
+            "columnName": "page_token",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pageNumber",
+            "columnName": "page_number",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "stage_id",
+            "page_token"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_sync_snapshot_tokens_stage_id_page_number",
+            "unique": true,
+            "columnNames": [
+              "stage_id",
+              "page_number"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_sync_snapshot_tokens_stage_id_page_number` ON `${TABLE_NAME}` (`stage_id`, `page_number`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "sync_snapshot_stages",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "stage_id"
+            ],
+            "referencedColumns": [
+              "stage_id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '7632eadf2dcf0de1c1be6e45e5a79b11')"
+    ]
+  }
+}
