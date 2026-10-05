@@ -23,6 +23,58 @@ review; [recorded verification](#recorded-verification) below is a compact evide
 - Every entity change needs KSP/schema export, a data-preserving migration, all supported starting versions, and a copied
   real v1 asset. Preserve schema snapshots; never use destructive fallback.
 
+## Proportional coverage and verification gates
+
+Choose coverage by **risk and distinct plausible defects**, not test-count, coverage-percentage or test-line quotas.
+Keep existing tests; this policy narrows future additions and routine execution, not established safety requirements.
+Exhaustive matrices and full-stack verification are not the default for every bounded slice.
+
+### Test scope
+
+| Change | Proportionate new coverage |
+|---|---|
+| Small formatting or presentation change | Focused JVM/component tests for changed behavior; no automatic full device run. Use a focused Compose test when the changed interaction requires it |
+| Feature behavior | Changed success paths, important failure paths and relevant existing regressions |
+| Persistence, sync or authentication | Explicit affected safety-invariant matrix, real Room where transactions matter, and representative cancellation/restart/race cases |
+| Schema change or cross-feature activation | Full relevant regression, every-supported-start plus bundled-asset migration coverage, and appropriate integration gates |
+
+- Each new test must identify a distinct plausible defect and an independently expected observable result. Prefer the
+  narrowest layer that can prove it. Do not add tests solely to enumerate trivial result shapes, constructors or enums.
+- Reuse existing codec/validator and prerequisite coverage rather than repeat its entire matrix in each consumer.
+  Add a focused integration check that the changed boundary uses it correctly. Repeat a case at another layer only
+  when that layer introduces a distinct failure risk, such as Android parser behavior or transaction rollback.
+- Use representative failure classes when they share a recovery path; do not multiply every account/type/field/timing
+  combination unless it exercises a distinct implementation path or consequence. Table-driven cases can reduce
+  boilerplate but are not a substitute for independent expectations.
+- Retain rigorous tests for affected edit durability, atomic rollback, exact uncertain-write retries, newer-intent
+  preservation, account/privacy fencing, credentials and destructive actions. Scope reduction never waives these
+  invariants, data-preserving migrations or finalized shared-contract/milestone requirements.
+- Reuse vetted deterministic test fixtures, gates and snapshot helpers instead of building another bespoke harness
+  for each slice. Respect contributor access boundaries; the coordinator supplies concrete API/harness facts so QA
+  does not have to guess signatures or inspect production. Keep independent QA and final coordinator review.
+
+### Execution cadence
+
+1. **Iteration:** compile the changed source and run affected tests. After a correction, rerun the failing cases and
+   impacted regressions, not every layer automatically.
+2. **Slice acceptance:** run affected tests plus the inexpensive full offline JVM suite for code changes. Execute focused
+   Room/Compose tests when the changed behavior requires them; compiling instrumentation is not a behavior pass.
+3. **Package/integration milestones:** run full unfiltered instrumentation, assembly/lint and applicable backend gates.
+   Bring these gates forward for cross-cutting or high-risk changes. Packaging, dependency, configuration or security
+   changes require their relevant assembly/lint/APK checks at slice acceptance, not only at a later milestone.
+4. **Activation/release:** retain all required convergence, migration, device/API, security and authorized live gates.
+   Representative unit tests never replace integration or live evidence required for that milestone.
+
+Each bounded specification selects its risk, distinct new-test obligations, reused coverage, iteration checks and
+acceptance gates **before delegation**, including when deferred broad gates will run. There is no fixed test-count
+budget. A focused slice may be accepted without a fresh full device run when its declared scoped gates pass; record
+that boundary and the deferred milestone explicitly, rather than claiming full regression. Unavailable required gates
+remain unverified and cannot be silently deferred to claim completion. Documentation-only work needs documentation
+validation, not build/test execution.
+
+Measure authoring/review effort, fixture corrections, emulator setup and build/test execution separately when adjusting
+future assignments. Total test count alone does not explain delivery time or justify further suite growth.
+
 ## Coverage map
 
 | Area | Existing coverage / expansion boundary |
@@ -35,13 +87,15 @@ review; [recorded verification](#recorded-verification) below is a compact evide
 | Wire/HTTP | Raw duplicates, family identities, durable exact bytes, auth scalar/expiry validation, operation-aware errors, fixed-origin TLS/redirect/retry refusal, framing/UTF-8/cancellation |
 | Vault/refresh/recovery | Real codec/CAS restart, JCA crypto, Android Keystore/file/backup placement, pending-first durable-before-send rotation, unchanged request retry, startup authority/visibility precedence, recovered-handle fencing and cancellation races |
 | Real service | All 17 kinds/imports, complete canonical results, no-effect rejection, replay/account isolation/pull/snapshot, challenge/refresh/logout and invalid Google-proof rejection |
+| Durable head claiming/replay | Real Room explicit-head blocking, frozen exact-byte/child-plan recovery, shared run ownership, exact claim/session/epoch fencing, complete-table no-write oracles, post-write rollback/cancellation, late responses and disk reopen; no delivered outcome/ack engine |
 | Still outstanding | Engine convergence, complete baseline/snapshot establishment, journal/account flows, live publication/edit/timer barriers and UI observation, actual Google, WorkManager and live deployment/lifecycle gates; see roadmap |
 
 ## Standard commands
 
-Run from the Android repository root. Start with the narrowest relevant tests, then the broader gates appropriate to the
-change. A source change requires at least Kotlin compilation and relevant JVM tests; add Android-test compilation,
-Room/Compose execution, assembly/lint, APK/security checks and real-service runs when affected.
+Run from the Android repository root. The commands below are a **menu, not a checklist for every slice**; select them
+using the [execution cadence](#execution-cadence). A source change requires compilation and relevant tests; code-slice
+acceptance also includes the full offline JVM suite. Add Room/Compose execution and broader gates where required
+by the declared risk and milestone, not merely because those layers exist.
 
 ```sh
 ./gradlew :app:compileDebugKotlin --console=plain
@@ -54,15 +108,22 @@ git diff --check
 git -C shared-docs diff --check
 ```
 
-For independently executed acceptance evidence, force the intended suite rather than relying on up-to-date/cache output:
+For new execution evidence, ensure the **intended test task** really executes; an up-to-date/cached test task is not
+another test pass. Reuse valid cached compilation/build dependencies. Gradle's task-scoped `--rerun` avoids rebuilding
+all dependencies merely to execute tests:
 
 ```sh
-./gradlew :app:compileDebugKotlin :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:lintDebug --rerun-tasks --no-configuration-cache --console=plain
+# Typical code-slice JVM acceptance: rerun tests, not every compilation/KSP/build task.
+./gradlew :app:compileDebugKotlin :app:testDebugUnitTest --rerun --console=plain
+# Focused JVM iteration; replace the illustrative class with the affected class or method.
+./gradlew :app:testDebugUnitTest --tests 'com.dragosfotache.gymtracka.data.sync.PushClaimContractTest' --rerun --console=plain
 ```
 
-For a full integration/release gate, also run unfiltered instrumentation and the separately configured real-backend task.
-Missing device/backend inputs leave those gates unverified. Documentation-only changes require link/whitespace/diff and
-scope-preservation checks, not an invented build/test pass.
+Do not use blanket `--rerun-tasks` or disable configuration caching routinely. Reserve from-scratch rebuilds/cache
+troubleshooting for a concrete stale-output concern, build/dependency change or explicitly required audit, and record
+why. For package/integration/release gates, run unfiltered instrumentation and applicable separately configured backend
+checks. Missing device/backend inputs leave required gates unverified. Documentation-only changes require link,
+whitespace, diff and scope-preservation checks, not an invented build/test pass.
 
 Inspect actual nested XML `testcase` names/counts/failures/errors/skips; table-driven subcases are not extra test counts.
 Keep failed shell exits visible. Relevant reports:
@@ -118,6 +179,9 @@ v1 asset to add user data. Seed tests are not Android JVM/device tests.
 
 ## Instrumentation and coroutine lessons
 
+- A successful connected-task shell exit is not test execution proof: native ADB authorization/collector failures can
+  produce zero cases despite `BUILD SUCCESSFUL`. Check the selected device and actual nonempty executed XML before
+  recording a pass; correct only test-owned emulator authorization, preserving unrelated devices/configuration.
 - Filter by one fully qualified class or `Class#method`. Comma-separated filtering selected only the first intended
   class/method in the recorded local environment; inspect executed XML rather than assuming all filters ran.
 - A filtered pass is not a full regression. Use unfiltered execution for a full-layer claim.
@@ -144,10 +208,10 @@ stays in the linked reviews; consult only when assessing coverage freshness or i
 
 | Layer | Latest relevant recorded evidence | Limitation |
 |---|---|---|
-| Offline JVM/build | [R05c review](archive/remaining-work/R05c-review.md): fresh 799 unique JVM cases / 47 suites; Kotlin/KSP and Android-test compilation, assembly/lint, scoped APK preservation/helper exclusion checks | Inert storage/capture/canonical batches/protected publication; no engine/Room-authority adapter or new backend gate |
+| Offline JVM/build | [R06a review](archive/remaining-work/R06a-review.md): fresh 803 unique JVM cases / 48 classes; Kotlin/KSP and Android-test compilation, assembly/lint, scoped APK preservation/helper exclusion checks | Inert storage/capture/canonical batches/publication/head claiming; no outcome/ack engine, Room-authority adapter or new backend gate |
 | Vault device | [R04a review](archive/remaining-work/R04a-review.md): 27 filtered API 37 tests | Not full instrumentation, API 24, or live OEM/cloud transfer |
 | Auth/real service | [R03c review](archive/remaining-work/R03c-review.md): 6 filtered API 37 auth tests; unchanged auth 10/10 and broad HTTP 56/56 after service correction | Backend rerun was not a new offline/device run; legacy replay remains unresolved |
-| Full instrumentation | [R05c review](archive/remaining-work/R05c-review.md): 366 unique unfiltered cases / 25 classes on isolated API 37 emulator; includes 59 protected-publication cases, 71 canonical-batch cases and 3 migration methods | No API 24, live phone/Google, hosted CI, engine convergence or activated-app publication evidence |
+| Full instrumentation | [R06a review](archive/remaining-work/R06a-review.md): 425 unique unfiltered cases / 28 classes on isolated API 37 16 KB-page emulator; includes 59 R06a claiming/replay cases and 3 migration methods | No API 24, live phone/Google, hosted CI, engine convergence or activated-app publication evidence |
 | Launcher | [Retirement review](archive/fake-retirement-review.md): 11 Python launcher tests | Not freshly rerun by later session slices |
 
 API 24 runtime, hosted CI, successful real Google identity, Room/engine convergence and owner phone/laptop journeys remain

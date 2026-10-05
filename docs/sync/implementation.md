@@ -84,7 +84,8 @@ transaction use. Batch writes and dirty marking roll back together on failure/ca
   independently; the protected publisher validates the complete graph and physical identities before materialization.
   Existing snapshot_absent evidence blocks lower/equal restoration; R05b does not create absence or invent delete revisions.
 
-No exact claim/ack/checkpoint engine, staging, vault/Room journal or production publication activation exists yet.
+Inert [head claiming/replay admission](#durable-head-claiming-and-replay-admission) now exists, but no canonical outcome/
+acknowledgment/checkpoint engine, staging, vault/Room journal or production publication activation exists.
 The independent ledger is not itself a visible projection.
 
 ### Protected publication
@@ -120,6 +121,35 @@ The app constructs no publisher.
 Current canonical/physical bindings are not account-lifetime removed-child reservation storage. R08 still owns baseline,
 complete snapshot/absence establishment; R09 owns durable transition authority, and R12a owns the real finite-edit/timer
 barrier before any live publication or account activation. These components do not authorize those integrations.
+
+## Durable head claiming and replay admission
+
+R06a adds inert `PushStore`, required shared `PushRunOwner`, live `PushRun` capabilities and defensively owned `PushClaim`
+snapshots over Room v10. No schema change or app construction is involved.
+
+- One caller-owned Mutex serializes complete runs across stores, including caller HTTP outside Room. Entry session/cache
+  checks are coherent Room transactions. Nested/enclosing-transaction entry rejects; structured children settle before
+  ownership releases; cancellation/exception closes the capability with cross-thread-visible invalidation.
+- Selection reads the account's explicit lowest sequence without filtering around state, errors or due time. Empty,
+  deferred, rejected, corrupt, unsupported-version and exhausted-count results create/change nothing and never admit a
+  successor. Stored error messages are not exposed; original unknown codes remain available separately from diagnostics.
+- Valid pending or already frozen work freezes with exactly one checked `attempt_count` increment before claim return.
+  This is admission count, not proof of transmission. Legacy frozen/count-zero rows replay compatibly; pending/nonzero
+  attempts are corrupt. Exhaustion never wraps. Once frozen, cancellation/transient faults never make it coalescible.
+- Column/wrapper versions dispatch before supported-content validation. Claim admission closes v1 wrapper/effect fields
+  and reuses the strict row/envelope reader; original wrapper/request JSON, effects and child IDs never normalize,
+  regenerate or repair. Older codecs are unchanged. Fresh decoded request getters cannot mutate retained claim authority.
+- `checkClaim` is a read-only fenced Room check of the originating live run, immutable session/cache epoch and every
+  frozen row field, including exact bytes/effects and admission count. Another claim invalidates older callbacks while
+  replaying the same wire identity. Newer local edits retain their own generations/work without rewriting an unchanged head.
+- Post-write fences/cancellation roll back freeze/count together. Owned SQLite faults use fixed safe errors; caller-block
+  transport/SQLite exceptions preserve provenance. Domain/canonical/cache/device/cursor/last-success remain unchanged.
+
+Every future caller for one physical database must explicitly share the same application-owned owner; this is not a
+multiprocess lease, registry or durable vault/Room authorization. Restart creates a new live run and reclaims the same
+frozen identity. Successful checking is only admission evidence at that boundary: later R06 outcome/ack transactions
+must recheck atomically with their writes. R06a sends no HTTP, applies no outcome, removes no outbox work, calculates no
+backoff and activates no engine/publication. Outcomes/retry/acknowledgment remain outstanding.
 
 ## Models, codecs, and durable identity
 

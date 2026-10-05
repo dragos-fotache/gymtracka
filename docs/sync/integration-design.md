@@ -7,8 +7,9 @@ for a bounded slice; [the roadmap](../remaining-work-roadmap.md) owns status and
 The original R01 design was approved on 2026-10-03. Existing model, transport, vault and refresh primitives now implement
 parts of this foundation, including inert startup recovery seams; [sync implementation](implementation.md) describes their
 actual boundaries. R05a supplies independent canonical storage and transactional capture watermarks; R05b now adds inert fenced canonical
-record/batch application. R05c adds an inert protected publisher; production projection
-activation, engine, snapshots, the durable Room-authority adapter/journal, account transitions and cross-feature
+record/batch application. R05c adds an inert protected publisher; R06a adds inert serialized durable head claiming and
+exact replay admission. Production projection activation, outcome/ack delivery engine, snapshots, the durable
+Room-authority adapter/journal, account transitions and cross-feature
 publication barriers remain planned. Stored vault phases and explicit refresh leases alone never
 authorize activation. Preserve the unresolved
 [legacy auth replay limitation](implementation.md#legacy-auth-replay-limitation) in all recovery work.
@@ -84,7 +85,7 @@ journal additions remain future specifications:
 | Storage | Required logical fields and constraints |
 |---|---|
 | `sync_canonical_roots` | PK `(account_id, aggregate_type, aggregate_id)`; nullable highest observed positive revision; state `unobserved`, `upsert`, `delete`, or `snapshot_absent`; validated complete canonical JSON only for upsert; local-generation watermark; cache epoch. No FK cascade from domain tables |
-| Account cache metadata (`sync_account_cache`, delivered R05a) | Account PK; complete-baseline flag; cache epoch; projection-dirty flag; materialized epoch. Existing opaque cursor/last success stay in `sync_state`; run fencing token/epoch remains subject to exact R06 design |
+| Account cache metadata (`sync_account_cache`, delivered R05a) | Account PK; complete-baseline flag; cache epoch; projection-dirty flag; materialized epoch. Existing opaque cursor/last success stay in `sync_state`; R06a admission reuses immutable session/cache epoch, the frozen row's attempt count and a live run capability; atomic outcomes remain later R06 work |
 | Snapshot session + records (R08) | Run/session/account/generation, fixed page limit, baseline, continuation and seen-token/progress state, download phase; record PK `(stage_id,type,id)` to reject duplicates. No visible-domain FKs |
 | Transition journal (R09) | Singleton current operation ID, phase, source/target account and generation, local choice, captured source generations/IDs, import preparation/completion state; original import snapshots/error context if needed. **No credentials/Google proofs** |
 

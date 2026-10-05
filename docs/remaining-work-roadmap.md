@@ -19,7 +19,7 @@ snapshot publication. Accepted personal slices never imply completion of their d
 
 ## Status and dependencies
 
-Statuses below reflect accepted delivery through R05c. “Pending” requires specific authorization and a pickup spec;
+Statuses below reflect accepted delivery through R06a. “Pending” requires specific authorization and a pickup spec;
 “deferred” remains required for its later milestone. Historical M-series assignments are not a second execution plan.
 
 | Package | Status / outstanding scope | Dependencies |
@@ -29,7 +29,7 @@ Statuses below reflect accepted delivery through R05c. “Pending” requires sp
 | R03 HTTP | a primitive, b sync, c auth accepted; **d lifecycle/export streaming deferred** | Relevant R02 slices; d needs e |
 | R04 session recovery | a vault, b refresh, c startup/session recovery seams accepted; durable Room integration remains R09 | R03a/c; c uses a/b |
 | R05 canonical Room / local intent | **a storage/capture watermarks, b canonical batches and c protected publication accepted**; production activation remains later integration | R02b and approved integration design |
-| R06 durable push | Pending | R03b, R04, R05 |
+| R06 durable push | **a claiming/exact replay accepted**; outcomes/retry and acknowledgment remain pending | R03b, R04, R05 |
 | R07 incremental pull | Pending | R06 |
 | R08 bootstrap/full resync | Pending | R05–R07 |
 | R09 account transitions/import | Pending | R04, R08; production activation also needs R12a |
@@ -63,13 +63,18 @@ independent tests, allowed files and stop conditions before implementation. Test
 R05a storage/capture watermarks, R05b fenced canonical batches and R05c protected publication are accepted; see the
 [R05a review](archive/remaining-work/R05a-review.md), [R05b review](archive/remaining-work/R05b-review.md) and
 [R05c review](archive/remaining-work/R05c-review.md). The app constructs no publisher; R12a barriers and later engine/
-baseline/session integration remain prerequisites for production activation. R06 durable push is the next proposed package.
+baseline/session integration remain prerequisites for production activation. R06a claiming/replay is accepted; later durable-push outcomes remain outstanding.
 
 Actual store boundaries and regression invariants are owned by [sync implementation](sync/implementation.md).
 R05 requires no further implementation slice. Complete baseline establishment remains R08; durable session authority
 remains R09; live edit/timer leases and observation remain R12. Accepted store evidence does not authorize activation.
 
 ### R06 — Durable push
+
+[R06a](archive/remaining-work/R06a-review.md) is accepted: inert shared run ownership, transactional explicit-head
+freezing, unchanged replay and exact late-claim admission checks over Room v10. R06b outcome/retry handling is the next
+proposed slice; outcome/error persistence, atomic canonical acknowledgment and the delivery loop remain outstanding
+and require specific authorization. R06a does not activate sync.
 
 Serialize account/session runs; claim/freeze the explicit sequence head transactionally, then perform HTTP outside Room.
 Recover uncertain requests unchanged. Canonical outcome and exact request/generation/affected-root acknowledgment commit

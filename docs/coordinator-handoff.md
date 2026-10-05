@@ -5,24 +5,28 @@
 
 ## Next proposed task and authority
 
-**R06 — durable push** is the next proposed package. R04a/b/c session foundations and R05a/b/c canonical storage,
-capture watermarks, fenced batches and protected publication are accepted; see the
-[R05c review](archive/remaining-work/R05c-review.md). No R06 specification or implementation has started. Obtain specific
-owner authorization before planning or implementing its first bounded slice. R05c authorizes no engine, delivery
-operation or app activation.
+**R06b — push outcome/retry handling** is the next proposed slice and requires specific owner authorization before
+planning or implementation. [R06a claiming/replay](archive/remaining-work/R06a-review.md), R04a/b/c session foundations
+and R05a/b/c canonical storage/publication are accepted. R06a adds inert serialized claiming/replay admission only;
+outcome application/acknowledgment, later R06 slices, production engine construction and app activation remain outstanding.
+No next-slice specification or delivery operation is authorized by R06a acceptance.
 
 Reuse [current capture](sync/implementation.md#room-and-local-capture),
+[durable head claiming/replay admission](sync/implementation.md#durable-head-claiming-and-replay-admission),
 [fenced canonical batches](sync/implementation.md#fenced-canonical-batches),
 [protected publication](sync/implementation.md#protected-publication), and the approved
 [push/outcome design](sync/integration-design.md#4-exclusive-engine-ownership-push-and-pull).
 Publication advances the account epoch; future callers must follow the returned epoch rather than reuse stale fences.
+Share one required run owner per physical database. A prior successful claim check is not result-write authority:
+canonical outcomes and exact acknowledgments must recheck the live admission and durable fences atomically with writes.
 The [roadmap](remaining-work-roadmap.md#status-and-dependencies) owns complete task status and dependencies.
 
 ## Capability boundary
 
 The app remains signed-out/local-only in production. Room v10 persistence, scoped mutation capture with independent
 account generation watermarks/canonical storage, fenced canonical ledger batches, an inert complete-graph protected
-publisher with a required injected lease, strict wire codecs, secure sync/auth HTTP adapters, encrypted vault, refresh
+publisher with a required injected lease, inert durable head claiming/replay admission, strict wire codecs, secure
+sync/auth HTTP adapters, encrypted vault, refresh
 coordination and inert startup recovery seams exist. The required durable Room-authority adapter/journal remains R09,
 and the real finite-edit/timer barrier remains R12a. HTTP/session/publication components are not constructed by the app.
 There is no running sync engine, activated remote publication, working account/Google UI, durable sign-out flow or
@@ -53,5 +57,6 @@ background scheduler. See [architecture](architecture.md) and [sync implementati
    assumption. No automatic continuation, commit/push, private configuration, or deployment is authorized.
 
 Recorded test evidence and its limitations are summarized in [testing strategy](testing-strategy.md#recorded-verification).
-Latest scoped client evidence is the [R05c review](archive/remaining-work/R05c-review.md), including independent
-protected-publication tests and unfiltered isolated API 37 instrumentation. It adds no API 24, backend, Google, engine-convergence or app-activation pass.
+Latest scoped client evidence is the [R06a review](archive/remaining-work/R06a-review.md): fresh full JVM/build/lint and
+unfiltered isolated API 37 instrumentation, including independent claiming/replay tests. It adds no API 24, new backend,
+Google, engine-convergence or app-activation pass.

@@ -22,7 +22,7 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/`.
 | `ui/activeworkout/` | Active screen, compact exercise/set controls, timer UI and feature state |
 | `ui/util/WorkoutFormatters.kt` | Shared derived calculations and locale-aware parsing/formatting |
 | `data/gym/GymRepository.kt` | Application-facing persistence, UUID creation, transactional edits and sync capture |
-| `data/sync/` | Models/codecs, fenced capture/canonical batches and inert protected publication, unused HTTP/session components; [details](sync/implementation.md) |
+| `data/sync/` | Models/codecs, fenced capture/canonical batches, inert protected publication and durable head claiming/replay admission, unused HTTP/session components; [details](sync/implementation.md) |
 
 `FeatureRepositories.kt` exposes narrow interfaces to state holders; reusable/leaf composables receive values and callbacks.
 `ui/GymRepositoryProvider.kt` supplies `rememberGymRepository()` and optional internal `LocalGymRepositoryOverride` for
@@ -98,6 +98,10 @@ canonical publication refuses incompatible physical identities instead of overwr
 - State holders load/mutate through repository interfaces. Domain edits autosave; transient menus, focus, dialogs and
   custom-editor drafts remain presentation state. Ordered writes and refresh-generation guards prevent stale loads
   from replacing newer accepted edits.
+- Inert R06a push claiming reuses the v10 outbox with a required shared single-process run owner, transactional explicit-
+  head freeze/admission counts and exact session/epoch/row callback checks. It performs no HTTP, canonical outcome/ack,
+  cursor publication or app activation; [the implementation reference](sync/implementation.md#durable-head-claiming-and-replay-admission)
+  owns its boundaries.
 - All existing repository mutation families use in-transaction session fencing and local capture. Default signed-out
   edits create no upload work or canonical/cache rows and use hard deletion. Account-bound internal paths advance
   independent generation watermarks and dirty publication bookkeeping together with domain/outbox writes. The ledger

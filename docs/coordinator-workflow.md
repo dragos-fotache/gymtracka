@@ -14,7 +14,11 @@
   Do not reopen finalized shared-contract decisions incidentally.
 - Create one normative specification under `docs/remaining-work/` per approved slice. Include goal/non-goals, current
   inventory, dependencies, concrete API/harness facts, permitted files, transaction/state boundaries, crash/cancellation/
-  race cases, migration/security consequences, acceptance tests, and exact stop condition.
+  race cases, migration/security consequences, acceptance tests, and exact stop condition. Before delegation, apply the
+  [proportional testing policy](testing-strategy.md#proportional-coverage-and-verification-gates): declare risk, distinct
+  new-test obligations, reused existing coverage/harnesses, iteration checks and acceptance gates, with a specific
+  milestone for deferred broad gates. Size QA's assignment accordingly; do not default every slice to exhaustive tests
+  or full-stack verification. Contributor independence and safety/milestone requirements remain unchanged.
 - Split large packages into coherent reviewable slices. Prepare detailed specifications on pickup, not speculative APIs
   for the whole roadmap. No dependent implementation before its necessary design/interface gate.
 
@@ -44,14 +48,18 @@ When explicitly using Herdr, read its skill and verify the required environment 
    and test counts alone are not acceptance.
 2. Require independent expected results and observable oracles. Do not weaken assertions to accommodate implementation
    defects or derive purportedly independent expected wire bytes from the production encoder.
-3. Run focused checks, then the appropriate broader gates in [testing strategy](testing-strategy.md). Inspect executed
-   XML names/counts/failures/errors/skips. Compilation, filtered tests, cached tasks, and reported external results prove
-   different things; record unavailable gates as unverified, never passed.
+3. Run the specification's risk-selected gates using [the execution cadence](testing-strategy.md#execution-cadence):
+   focused checks while iterating, affected tests plus full offline JVM at code-slice acceptance, and broader gates at
+   package/integration milestones or earlier when risk requires them. Ensure the intended test tasks execute without
+   routinely forcing all build dependencies to rerun. Inspect executed XML names/counts/failures/errors/skips.
+   Compilation, filtered tests, cached tasks and reported external results prove different things; record unavailable
+   required gates as unverified, never passed. A scoped pass does not imply a fresh full regression.
 4. Check scope, secrets/backup/test-helper exclusion when relevant, asset/schema preservation, and both repository diffs.
    A schema change needs a data-preserving migration, KSP/export, and every-supported-start plus bundled-asset coverage.
 5. Write a concise acceptance review: delivered boundary, important findings/residual risks, actual commands/environment/
-   results, unverified gates, and stop condition. Preserve failed-gate evidence where needed to explain an unresolved
-   issue; do not copy the debugging transcript into active docs.
+   results, unverified required gates, deliberately deferred broad gates with their milestone, and stop condition.
+   Preserve failed-gate evidence where needed to explain an unresolved issue; do not copy the debugging transcript
+   into active docs.
 6. Extract enduring implementation facts into architecture, approved future decisions into design, and test procedures
    into testing strategy. Update roadmap status and replace the handoff snapshot. Archive the completed spec/review and
    remove obsolete active instructions. Keep outstanding subparts visible even when their parent has accepted slices.

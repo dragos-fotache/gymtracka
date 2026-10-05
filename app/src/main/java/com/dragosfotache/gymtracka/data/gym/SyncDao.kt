@@ -15,6 +15,30 @@ interface SyncDao {
     suspend fun getOutboxForAccount(accountId: String): List<SyncOutboxEntity>
 
     @Query(
+        "SELECT * FROM sync_outbox WHERE account_id = :accountId ORDER BY sequence LIMIT 1",
+    )
+    suspend fun getOutboxHead(accountId: String): SyncOutboxEntity?
+
+    /**
+     * Freezes one claimable head row and records one more admission. Only the
+     * state and attempt count change; every other column stays untouched. The
+     * expected predicates pin the update to the head read in the same transaction.
+     * Callers must verify the affected count is exactly one.
+     */
+    @Query(
+        """UPDATE sync_outbox SET state = 'frozen', attempt_count = :newAttemptCount
+            WHERE mutation_id = :mutationId AND account_id = :accountId
+                AND state = :expectedState AND attempt_count = :expectedAttempts""",
+    )
+    suspend fun freezeClaimedHead(
+        mutationId: String,
+        accountId: String,
+        expectedState: String,
+        expectedAttempts: Int,
+        newAttemptCount: Int,
+    ): Int
+
+    @Query(
         "SELECT * FROM sync_outbox WHERE mutation_id = :mutationId AND account_id = :accountId",
     )
     suspend fun getOutboxMutation(mutationId: String, accountId: String): SyncOutboxEntity?
