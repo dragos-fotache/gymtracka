@@ -75,6 +75,31 @@ interface SyncDao {
     )
     suspend fun freezePendingMutation(mutationId: String, accountId: String): Int
 
+    /**
+     * Records one push outcome/retry decision on the exact claimed head row. Only
+     * the outcome bookkeeping columns change; identity, sequence, payload and
+     * generation stay untouched. The expected predicates pin the update to the
+     * head read in the same transaction. Callers must verify the affected count
+     * is exactly one and recheck the expected post-write head before commit.
+     */
+    @Query(
+        """UPDATE sync_outbox
+            SET state = :newState, error_code = :errorCode,
+                error_message = :errorMessage, retry_after_millis = :retryAfterMillis
+            WHERE mutation_id = :mutationId AND account_id = :accountId
+                AND state = :expectedState AND attempt_count = :expectedAttempts""",
+    )
+    suspend fun updatePushOutcome(
+        mutationId: String,
+        accountId: String,
+        expectedState: String,
+        expectedAttempts: Int,
+        newState: String,
+        errorCode: String?,
+        errorMessage: String?,
+        retryAfterMillis: Long?,
+    ): Int
+
     @Query("DELETE FROM sync_outbox WHERE mutation_id = :mutationId AND account_id = :accountId")
     suspend fun deleteMutation(mutationId: String, accountId: String)
 

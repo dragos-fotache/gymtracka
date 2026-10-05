@@ -3,9 +3,18 @@ package com.dragosfotache.gymtracka.data.sync.store
 import android.database.sqlite.SQLiteException
 import androidx.room.withTransaction
 import com.dragosfotache.gymtracka.data.gym.GymDatabase
+import com.dragosfotache.gymtracka.data.sync.api.SyncApiException
+import com.dragosfotache.gymtracka.data.sync.codec.decodeDurableRequest
+import com.dragosfotache.gymtracka.data.sync.codec.decodePushResult
+import com.dragosfotache.gymtracka.data.sync.codec.encodePushResult
 import com.dragosfotache.gymtracka.data.sync.codec.parseStrictJsonObject
 import com.dragosfotache.gymtracka.data.sync.codec.requiredInt
+import com.dragosfotache.gymtracka.data.sync.model.ChangeOperation
 import com.dragosfotache.gymtracka.data.sync.model.DURABLE_PAYLOAD_VERSION
+import com.dragosfotache.gymtracka.data.sync.model.MutationKind
+import com.dragosfotache.gymtracka.data.sync.model.MutationOutcomeModel
+import com.dragosfotache.gymtracka.data.sync.model.MutationStatus
+import com.dragosfotache.gymtracka.data.sync.model.PushResultModel
 import com.dragosfotache.gymtracka.data.sync.model.SyncModelException
 import com.dragosfotache.gymtracka.data.sync.model.UnsupportedDurableVersionException
 import kotlinx.coroutines.currentCoroutineContext
@@ -13,6 +22,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.json.JSONException
 import org.json.JSONObject
 import kotlin.coroutines.CoroutineContext
 
@@ -22,9 +32,11 @@ import kotlin.coroutines.CoroutineContext
  * exact request, and fences replay/late callback admission. A future caller can
  * perform HTTP outside Room while holding this run's ownership.
  *
- * This slice performs no HTTP, outcome handling, acknowledgment/removal,
- * rejection/error persistence, backoff calculation or retry loops. Returning a
- * claim never means delivered or converged. Production constructs neither this
+ * This slice performs no HTTP, acknowledgment/removal, retry loops or engine
+ * work. R06b adds single-head outcome classification with durable rejection,
+ * invalid-response, size and retry/error persistence plus bounded backoff
+ * scheduling under the same claim/session/cache fencing. Returning a claim
+ * never means delivered or converged. Production constructs neither this
  * store nor an engine.
  */
 class PushRunOwner {
@@ -123,6 +135,26 @@ class PushRun internal constructor(
 ) {
     @Volatile
     private var open = true
+
+    /** Serializes handling admission and consumed-claim checks within one run. */
+    private val handlingMutex = Mutex()
+
+    /**
+     * Conservative process-local retry token for claims entering a bookkeeping
+     * write. Guarded by [handlingMutex]. PushClaim uses referential identity,
+     * so this rejects exactly the consumed callback object. The token is taken
+     * when entering the write (after exact pre-write head/fences), before the
+     * DAO update, and is never released on rollback or uncertain commit: a
+     * backward-clock transient reschedule can leave the row byte-identical,
+     * and Room can lose the result on canceled resumption after commit, so row
+     * comparison alone cannot consume the claim. This is not persistence or
+     * acknowledgment evidence: the handler still throws the original
+     * cancellation/storage/fence failure, storage rolls back if uncommitted,
+     * and the caller must reclaim the same frozen identity for a fresh
+     * admission before another handling attempt. Read-only accepted and
+     * authentication paths never take the token.
+     */
+    private val consumedClaims = mutableSetOf<PushClaim>()
 
     internal fun close() {
         open = false
@@ -299,20 +331,296 @@ class PushRun internal constructor(
         }
         currentCoroutineContext().ensureActive()
         try {
-            database.withTransaction {
-                currentCoroutineContext().ensureActive()
-                checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
-                val head = database.syncDao().getOutboxHead(accountId)
-                currentCoroutineContext().ensureActive()
-                requireAdmitted()
-                if (head != claim.row) {
+            handlingMutex.withLock {
+                if (claim in consumedClaims) {
                     throw StalePushClaimException()
+                }
+                database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    val head = database.syncDao().getOutboxHead(accountId)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    if (head != claim.row) {
+                        throw StalePushClaimException()
+                    }
                 }
             }
             currentCoroutineContext().ensureActive()
         } catch (_: SQLiteException) {
             currentCoroutineContext().ensureActive()
             throw PushStorageException()
+        }
+    }
+
+    /**
+     * Classifies one complete single-head push response and durably records
+     * rejection or invalid-response retention under exact claim/session/cache
+     * fencing. Accepted and duplicate-accepted outcomes are read-only: they
+     * preserve status and the complete batch, change nothing (including retry
+     * fields), and never call CanonicalStore or delete the row. All writes run
+     * in one Room transaction that rechecks live admission, fences and the
+     * exact head before the write and fences/admission plus the expected
+     * post-write head before commit. Performs no HTTP and no delays.
+     */
+    suspend fun handleResult(claim: PushClaim, result: PushResultModel): PushOutcomeResult {
+        val owned = try {
+            decodePushResult(encodePushResult(result))
+        } catch (_: SyncModelException) {
+            null
+        } catch (_: JSONException) {
+            null
+        }
+        if (claim.run !== this) {
+            throw IllegalStateException("Push claim belongs to another run")
+        }
+        if (claim.accountId != accountId ||
+            claim.sessionGeneration != sessionGeneration ||
+            claim.expectedCacheEpoch != expectedCacheEpoch
+        ) {
+            throw StalePushClaimException()
+        }
+        requireAdmitted()
+        if (database.inTransaction()) {
+            throw IllegalStateException("Push claim requires no active transaction")
+        }
+        currentCoroutineContext().ensureActive()
+        val decision = classifyPushResult(claim, owned)
+        return handlingMutex.withLock {
+            if (claim in consumedClaims) {
+                throw StalePushClaimException()
+            }
+            try {
+                val outcome = database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    val head = database.syncDao().getOutboxHead(accountId)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    if (head != claim.row || claim in consumedClaims) {
+                        throw StalePushClaimException()
+                    }
+                    when (decision) {
+                        is PushResultDecision.Accepted -> {
+                            currentCoroutineContext().ensureActive()
+                            PushOutcomeResult.Accepted(decision.outcome)
+                        }
+                        is PushResultDecision.Rejected -> {
+                            persistClaimOutcome(
+                                claim,
+                                newState = "rejected",
+                                errorCode = decision.errorCode,
+                                errorMessage = PUSH_REJECTED_MESSAGE,
+                                retryAfterMillis = null,
+                            )
+                            PushOutcomeResult.Rejected(decision.errorCode)
+                        }
+                        is PushResultDecision.Malformed -> {
+                            persistClaimOutcome(
+                                claim,
+                                newState = "frozen",
+                                errorCode = MALFORMED_RESPONSE_CODE,
+                                errorMessage = PUSH_MALFORMED_MESSAGE,
+                                retryAfterMillis = null,
+                            )
+                            PushOutcomeResult.Malformed
+                        }
+                    }
+                }
+                currentCoroutineContext().ensureActive()
+                outcome
+            } catch (_: SQLiteException) {
+                currentCoroutineContext().ensureActive()
+                throw PushStorageException()
+            }
+        }
+    }
+
+    /**
+     * Records one push transport failure for the exact claimed head: transient
+     * faults schedule a bounded absolute retry, size/rejection faults retain a
+     * safe frozen error, and authentication failures are read-only. All writes
+     * run in one fenced Room transaction with the same admission/head/post-write
+     * rechecks as [handleResult]. Performs no HTTP and no delays.
+     */
+    suspend fun handleFailure(
+        claim: PushClaim,
+        failure: SyncApiException,
+        nowMillis: Long,
+    ): PushFailureResult {
+        if (nowMillis < 0) {
+            throw IllegalArgumentException("Push failure time must be nonnegative")
+        }
+        if (claim.run !== this) {
+            throw IllegalStateException("Push claim belongs to another run")
+        }
+        if (claim.accountId != accountId ||
+            claim.sessionGeneration != sessionGeneration ||
+            claim.expectedCacheEpoch != expectedCacheEpoch
+        ) {
+            throw StalePushClaimException()
+        }
+        requireAdmitted()
+        if (database.inTransaction()) {
+            throw IllegalStateException("Push claim requires no active transaction")
+        }
+        currentCoroutineContext().ensureActive()
+        val transientRetryAt = if (failure is SyncApiException.Transient) {
+            pushRetryAtMillis(nowMillis, claim.row.attemptCount, failure.retryAfterMillis)
+        } else {
+            null
+        }
+        return handlingMutex.withLock {
+            if (claim in consumedClaims) {
+                throw StalePushClaimException()
+            }
+            try {
+                val outcome = database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    val head = database.syncDao().getOutboxHead(accountId)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    if (head != claim.row || claim in consumedClaims) {
+                        throw StalePushClaimException()
+                    }
+                    when (failure) {
+                        is SyncApiException.Transient -> {
+                            val retryAt = transientRetryAt
+                            if (retryAt == null) {
+                                persistClaimOutcome(
+                                    claim,
+                                    newState = "frozen",
+                                    errorCode = RETRY_TIME_EXHAUSTED_CODE,
+                                    errorMessage = PUSH_RETRY_EXHAUSTED_MESSAGE,
+                                    retryAfterMillis = null,
+                                )
+                                PushFailureResult.Retained(RETRY_TIME_EXHAUSTED_CODE)
+                            } else {
+                                persistClaimOutcome(
+                                    claim,
+                                    newState = "frozen",
+                                    errorCode = null,
+                                    errorMessage = null,
+                                    retryAfterMillis = retryAt,
+                                )
+                                PushFailureResult.RetryScheduled(retryAt)
+                            }
+                        }
+                        is SyncApiException.AuthenticationRequired -> {
+                            currentCoroutineContext().ensureActive()
+                            PushFailureResult.AuthenticationRequired
+                        }
+                        is SyncApiException.ReauthenticationRequired -> {
+                            currentCoroutineContext().ensureActive()
+                            PushFailureResult.ReauthenticationRequired
+                        }
+                        is SyncApiException.RequestTooLarge -> {
+                            persistClaimOutcome(
+                                claim,
+                                newState = "frozen",
+                                errorCode = REQUEST_TOO_LARGE_CODE,
+                                errorMessage = PUSH_TOO_LARGE_MESSAGE,
+                                retryAfterMillis = null,
+                            )
+                            PushFailureResult.Retained(REQUEST_TOO_LARGE_CODE)
+                        }
+                        is SyncApiException.RequestRejected -> {
+                            val code = failure.errorCode
+                            if (code.isBlank()) {
+                                persistClaimOutcome(
+                                    claim,
+                                    newState = "frozen",
+                                    errorCode = MALFORMED_RESPONSE_CODE,
+                                    errorMessage = PUSH_MALFORMED_MESSAGE,
+                                    retryAfterMillis = null,
+                                )
+                                PushFailureResult.Retained(MALFORMED_RESPONSE_CODE)
+                            } else {
+                                persistClaimOutcome(
+                                    claim,
+                                    newState = "frozen",
+                                    errorCode = code,
+                                    errorMessage = PUSH_REQUEST_REJECTED_MESSAGE,
+                                    retryAfterMillis = null,
+                                )
+                                PushFailureResult.Retained(code)
+                            }
+                        }
+                        is SyncApiException.MalformedResponse,
+                        is SyncApiException.InvalidCursor,
+                        is SyncApiException.CursorExpired,
+                        is SyncApiException.InvalidSnapshotToken,
+                        is SyncApiException.SnapshotExpired,
+                        -> {
+                            persistClaimOutcome(
+                                claim,
+                                newState = "frozen",
+                                errorCode = MALFORMED_RESPONSE_CODE,
+                                errorMessage = PUSH_MALFORMED_MESSAGE,
+                                retryAfterMillis = null,
+                            )
+                            PushFailureResult.Retained(MALFORMED_RESPONSE_CODE)
+                        }
+                    }
+                }
+                currentCoroutineContext().ensureActive()
+                outcome
+            } catch (_: SQLiteException) {
+                currentCoroutineContext().ensureActive()
+                throw PushStorageException()
+            }
+        }
+    }
+
+    /**
+     * Applies one outcome write inside the caller's active fenced transaction:
+     * takes the conservative consumed-claim token on entry, updates exactly the
+     * claimed row, then rechecks live admission, fences and the expected
+     * post-write head before commit. Assumes the caller already verified
+     * fences and the exact pre-write head. The token is never released, so a
+     * rolled-back or uncertain attempt still requires fresh admission.
+     */
+    private suspend fun persistClaimOutcome(
+        claim: PushClaim,
+        newState: String,
+        errorCode: String?,
+        errorMessage: String?,
+        retryAfterMillis: Long?,
+    ) {
+        if (!database.inTransaction()) {
+            throw IllegalStateException("Push outcome requires an active transaction")
+        }
+        // Fail-closed retry token: entering the bookkeeping write consumes the
+        // callback capability before the DAO update. Never released, so even a
+        // rolled-back or uncertain commit requires fresh admission.
+        consumedClaims.add(claim)
+        val updated = database.syncDao().updatePushOutcome(
+            mutationId = claim.row.mutationId,
+            accountId = accountId,
+            expectedState = claim.row.state,
+            expectedAttempts = claim.row.attemptCount,
+            newState = newState,
+            errorCode = errorCode,
+            errorMessage = errorMessage,
+            retryAfterMillis = retryAfterMillis,
+        )
+        if (updated != 1) {
+            throw IllegalStateException("Push head changed during transaction")
+        }
+        val expected = claim.row.copy(
+            state = newState,
+            errorCode = errorCode,
+            errorMessage = errorMessage,
+            retryAfterMillis = retryAfterMillis,
+        )
+        val headAfter = database.syncDao().getOutboxHead(accountId)
+        currentCoroutineContext().ensureActive()
+        requireAdmitted()
+        checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+        currentCoroutineContext().ensureActive()
+        if (headAfter != expected) {
+            throw IllegalStateException("Push head changed during transaction")
         }
     }
 }
@@ -341,4 +649,83 @@ private fun checkPushWrapperShape(wrapper: JSONObject) {
             }
         }
     }
+}
+
+/** Pure classification of one deep-owned push response against its claim. */
+private sealed class PushResultDecision {
+    class Accepted(val outcome: MutationOutcomeModel) : PushResultDecision()
+    class Rejected(val errorCode: String) : PushResultDecision()
+    data object Malformed : PushResultDecision()
+}
+
+/**
+ * Pure single-head classifier. Accepts exactly one outcome with the exact claimed
+ * mutation ID; accepted/duplicate-accepted batches additionally require the
+ * envelope target with DELETE for aggregate.delete and UPSERT otherwise.
+ * Anything else — including failed ownership/validation, empty/extra/mismatched
+ * outcomes and invalid batch/record/status combinations — is malformed.
+ */
+private fun classifyPushResult(claim: PushClaim, owned: PushResultModel?): PushResultDecision {
+    if (owned == null || owned.results.size != 1) {
+        return PushResultDecision.Malformed
+    }
+    val outcome = owned.results[0]
+    if (outcome.mutationId != claim.row.mutationId) {
+        return PushResultDecision.Malformed
+    }
+    return when (outcome.status) {
+        MutationStatus.ACCEPTED -> {
+            if (!pushAcceptedTargetValid(claim, outcome)) {
+                PushResultDecision.Malformed
+            } else {
+                PushResultDecision.Accepted(outcome)
+            }
+        }
+        MutationStatus.DUPLICATE -> {
+            val batch = outcome.batch
+            val code = outcome.errorCode
+            if (batch != null && code == null) {
+                if (!pushAcceptedTargetValid(claim, outcome)) {
+                    PushResultDecision.Malformed
+                } else {
+                    PushResultDecision.Accepted(outcome)
+                }
+            } else if (batch == null && !code.isNullOrBlank()) {
+                PushResultDecision.Rejected(code)
+            } else {
+                PushResultDecision.Malformed
+            }
+        }
+        MutationStatus.REJECTED -> {
+            val code = outcome.errorCode
+            if (code.isNullOrBlank()) {
+                PushResultDecision.Malformed
+            } else {
+                PushResultDecision.Rejected(code)
+            }
+        }
+    }
+}
+
+/**
+ * Pure envelope-target check for accepted batches. The batch must contain the
+ * claimed envelope target; operation is DELETE for aggregate.delete, otherwise
+ * UPSERT. Never compares device clocks/cursors and never rejects an old
+ * positive-revision duplicate for possibly being obsolete.
+ */
+private fun pushAcceptedTargetValid(claim: PushClaim, outcome: MutationOutcomeModel): Boolean {
+    val batch = outcome.batch ?: return false
+    if (outcome.errorCode != null) {
+        return false
+    }
+    val envelope = decodeDurableRequest(parseStrictJsonObject(claim.row.payloadJson)).envelope
+    val target = batch.changes.firstOrNull {
+        it.aggregateType == envelope.aggregateType && it.aggregateId == envelope.aggregateId
+    } ?: return false
+    val expected = if (envelope.kind == MutationKind.AGGREGATE_DELETE) {
+        ChangeOperation.DELETE
+    } else {
+        ChangeOperation.UPSERT
+    }
+    return target.operation == expected
 }

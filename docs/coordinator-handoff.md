@@ -5,32 +5,35 @@
 
 ## Next proposed task and authority
 
-**R06b — push outcome/retry handling** is the next proposed slice and requires specific owner authorization before
-planning or implementation. [R06a claiming/replay](archive/remaining-work/R06a-review.md), R04a/b/c session foundations
-and R05a/b/c canonical storage/publication are accepted. R06a adds inert serialized claiming/replay admission only;
-outcome application/acknowledgment, later R06 slices, production engine construction and app activation remain outstanding.
-No next-slice specification or delivery operation is authorized by R06a acceptance.
+**R06c — atomic canonical acknowledgment** is the next proposed slice and requires specific owner authorization before
+planning or implementation. [R06b outcome/retry handling](archive/remaining-work/R06b-review.md), R06a claiming/replay,
+R04a/b/c session foundations and R05a/b/c canonical storage/publication are accepted. Accepted push results are owned,
+validated read-only snapshots; canonical application plus exact acknowledgment and the delivery loop remain outstanding.
+No next-slice specification, production construction/app activation or delivery operation is authorized by R06b acceptance.
 
 Reuse [current capture](sync/implementation.md#room-and-local-capture),
 [durable head claiming/replay admission](sync/implementation.md#durable-head-claiming-and-replay-admission),
+[single-head outcomes/retries](sync/implementation.md#single-head-push-outcomes-and-retryerror-handling),
 [fenced canonical batches](sync/implementation.md#fenced-canonical-batches),
 [protected publication](sync/implementation.md#protected-publication), and the approved
 [push/outcome design](sync/integration-design.md#4-exclusive-engine-ownership-push-and-pull).
 Publication advances the account epoch; future callers must follow the returned epoch rather than reuse stale fences.
-Share one required run owner per physical database. A prior successful claim check is not result-write authority:
-canonical outcomes and exact acknowledgments must recheck the live admission and durable fences atomically with writes.
-The [roadmap](remaining-work-roadmap.md#status-and-dependencies) owns complete task status and dependencies.
+Share one required run owner per physical database. A prior claim check or returned accepted snapshot is not result-write
+authority: canonical application and exact acknowledgment must recheck live admission and durable fences atomically with
+writes. Bookkeeping write attempts conservatively consume process-local callback tokens even on rollback/uncertain
+commit; this is not persistence/ack evidence, and recovery reclaims the same frozen identity. Read-only accepted/auth
+branches do not consume. The [roadmap](remaining-work-roadmap.md#status-and-dependencies) owns complete status/dependencies.
 
 ## Capability boundary
 
 The app remains signed-out/local-only in production. Room v10 persistence, scoped mutation capture with independent
 account generation watermarks/canonical storage, fenced canonical ledger batches, an inert complete-graph protected
-publisher with a required injected lease, inert durable head claiming/replay admission, strict wire codecs, secure
-sync/auth HTTP adapters, encrypted vault, refresh
-coordination and inert startup recovery seams exist. The required durable Room-authority adapter/journal remains R09,
-and the real finite-edit/timer barrier remains R12a. HTTP/session/publication components are not constructed by the app.
-There is no running sync engine, activated remote publication, working account/Google UI, durable sign-out flow or
-background scheduler. See [architecture](architecture.md) and [sync implementation](sync/implementation.md).
+publisher with a required injected lease, inert durable head claiming/replay admission and single-head outcome/retry
+bookkeeping, strict wire codecs, secure sync/auth HTTP adapters, encrypted vault, refresh coordination and inert startup
+recovery seams exist. The required durable Room-authority adapter/journal remains R09, and the real finite-edit/timer
+barrier remains R12a. HTTP/session/publication/push components are not constructed by the app. There is no running sync
+engine, activated remote publication, working account/Google UI, durable sign-out flow or background scheduler.
+See [architecture](architecture.md) and [sync implementation](sync/implementation.md).
 
 ## Risks and external blockers
 
@@ -56,7 +59,8 @@ background scheduler. See [architecture](architecture.md) and [sync implementati
 5. Before delegation, apply the current workflow and rediscover live agents. No archived session identity is reusable by
    assumption. No automatic continuation, commit/push, private configuration, or deployment is authorized.
 
-Recorded test evidence and its limitations are summarized in [testing strategy](testing-strategy.md#recorded-verification).
-Latest scoped client evidence is the [R06a review](archive/remaining-work/R06a-review.md): fresh full JVM/build/lint and
-unfiltered isolated API 37 instrumentation, including independent claiming/replay tests. It adds no API 24, new backend,
-Google, engine-convergence or app-activation pass.
+Recorded evidence and its limitations are indexed in [testing strategy](testing-strategy.md#recorded-verification).
+Latest scoped client evidence is the [R06b review](archive/remaining-work/R06b-review.md): fresh full offline JVM and
+focused isolated API 37 outcome/retry plus claiming/replay regressions. Full unfiltered instrumentation/build/lint
+remain the prior R06a evidence, with broader R06b gates explicitly deferred to R06 package completion. No new API 24,
+backend, Google, engine-convergence or app-activation pass is claimed.

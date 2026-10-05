@@ -8,7 +8,8 @@ The original R01 design was approved on 2026-10-03. Existing model, transport, v
 parts of this foundation, including inert startup recovery seams; [sync implementation](implementation.md) describes their
 actual boundaries. R05a supplies independent canonical storage and transactional capture watermarks; R05b now adds inert fenced canonical
 record/batch application. R05c adds an inert protected publisher; R06a adds inert serialized durable head claiming and
-exact replay admission. Production projection activation, outcome/ack delivery engine, snapshots, the durable
+exact replay admission; R06b adds inert single-head outcome classification and retry/error bookkeeping. Production
+projection activation, atomic canonical acknowledgment/delivery engine, snapshots, the durable
 Room-authority adapter/journal, account transitions and cross-feature
 publication barriers remain planned. Stored vault phases and explicit refresh leases alone never
 authorize activation. Preserve the unresolved
@@ -85,7 +86,7 @@ journal additions remain future specifications:
 | Storage | Required logical fields and constraints |
 |---|---|
 | `sync_canonical_roots` | PK `(account_id, aggregate_type, aggregate_id)`; nullable highest observed positive revision; state `unobserved`, `upsert`, `delete`, or `snapshot_absent`; validated complete canonical JSON only for upsert; local-generation watermark; cache epoch. No FK cascade from domain tables |
-| Account cache metadata (`sync_account_cache`, delivered R05a) | Account PK; complete-baseline flag; cache epoch; projection-dirty flag; materialized epoch. Existing opaque cursor/last success stay in `sync_state`; R06a admission reuses immutable session/cache epoch, the frozen row's attempt count and a live run capability; atomic outcomes remain later R06 work |
+| Account cache metadata (`sync_account_cache`, delivered R05a) | Account PK; complete-baseline flag; cache epoch; projection-dirty flag; materialized epoch. Existing opaque cursor/last success stay in `sync_state`; admission reuses immutable session/cache epoch, the frozen row's attempt count and a live run capability. Single-head bookkeeping additionally uses conservative process-local write tokens; atomic canonical acknowledgment remains later R06 work |
 | Snapshot session + records (R08) | Run/session/account/generation, fixed page limit, baseline, continuation and seen-token/progress state, download phase; record PK `(stage_id,type,id)` to reject duplicates. No visible-domain FKs |
 | Transition journal (R09) | Singleton current operation ID, phase, source/target account and generation, local choice, captured source generations/IDs, import preparation/completion state; original import snapshots/error context if needed. **No credentials/Google proofs** |
 
@@ -183,7 +184,11 @@ run(scope fence):
   uncertain work intact. HTTP failure can follow a server commit; it is never proof of no server effects.
 - Access `401` permits one serialized refresh-and-retry with unchanged mutation bytes. Invalid refresh/repeated `401`
   suspends delivery for foreground reauthentication. Generic errors never erase domain data.
-- Bounded backoff retains frozen work; `429`/transient hints are capped safely. `413 request_too_large` retains intent
+- Bounded backoff retains frozen work; `429`/transient hints are capped safely. The inert
+  [single-head implementation](implementation.md#single-head-push-outcomes-and-retryerror-handling) uses deterministic
+  admission-count backoff and conservative write-attempt token consumption, not persistence/ack evidence. Failed or
+  uncertain bookkeeping attempts require fresh admission of unchanged frozen identity; accepted/auth read-only checks
+  leave admission available for atomic acknowledgment. `413 request_too_large` retains intent
   and requires explicit recovery/configuration; do not split a semantic mutation or endlessly retry unchanged bytes.
 - Permanent rejection stores code and fixed safe presentation/recovery context; stop all dependent sending.
   **Personal policy: do not pull around a retained rejection.** The canonical/projection design could support it, but

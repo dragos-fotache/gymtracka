@@ -148,8 +148,45 @@ snapshots over Room v10. No schema change or app construction is involved.
 Every future caller for one physical database must explicitly share the same application-owned owner; this is not a
 multiprocess lease, registry or durable vault/Room authorization. Restart creates a new live run and reclaims the same
 frozen identity. Successful checking is only admission evidence at that boundary: later R06 outcome/ack transactions
-must recheck atomically with their writes. R06a sends no HTTP, applies no outcome, removes no outbox work, calculates no
-backoff and activates no engine/publication. Outcomes/retry/acknowledgment remain outstanding.
+must recheck atomically with their writes. The store sends no HTTP, applies no canonical outcome, removes no outbox work and activates no engine/publication.
+Single-head classification and retry/error bookkeeping are implemented below; atomic acknowledgment and delivery
+orchestration remain outstanding.
+
+## Single-head push outcomes and retry/error handling
+
+R06b extends inert `PushRun` with `handleResult`/`handleFailure`, owned `PushOutcomeResult` snapshots and a pure bounded
+retry policy. It reuses Room v10 without entity/schema changes; production constructs none of it.
+
+- Typed results are deeply owned before the first suspension and fully protocol-validated. Exactly one outcome must
+  match the claimed mutation ID. Accepted/duplicate-accepted batches must contain the envelope target: DELETE for
+  `aggregate.delete`, otherwise UPSERT. Extra cloud changes, including deletion of an unknown prior active, remain
+  in their complete original order; local affected roots are not assumed to describe all server effects.
+- Accepted and duplicate accepted return defensively fresh complete snapshots, preserving status and old positive
+  revisions without touching any storage. They are not acknowledgment authority. Rejected/duplicate rejection stores
+  `rejected`, the exact unknown nonblank service code, fixed safe context and null retry time. Invalid result shapes/
+  counts/IDs/target operations retain `frozen` with `malformed_response`; they never become success or definitive rejection.
+- Transient faults keep frozen identity and null errors, storing an absolute due time. Delay is the larger of
+  `min(1000 * 2^(attempt_count-1), 300000)` ms and the service hint clamped to 0..300000, without jitter. Checked time
+  overflow retains `retry_time_exhausted` instead of wrapping. Failure handling never increments admission count;
+  due replay increments it while retaining exact request/wrapper/effects/child IDs, including after database reopen.
+- Access authentication and foreground reauthentication failures are read-only/resumable exact checks, not credential/
+  cache cleanup or refresh orchestration. Request-too-large and top-level permanent rejection remain uncertain frozen
+  work with exact codes and fixed safe context. Malformed/wrong-operation read-token failures retain malformed response,
+  never bootstrap or delete staging. Retained errors and definitive rejection block the head through existing selection.
+- Handling and `checkClaim` share a short per-run mutex. Every write rechecks live admission, session/cache fences and
+  the entire exact head inside its transaction, updates one row and verifies post-write head/fences/cancellation.
+  Before the update it conservatively consumes the process-local claim token, even if the attempt rolls back or its
+  commit/resumption is uncertain. This covers identical retry bookkeeping after clock rollback and canceled structured
+  children while a parent run survives. Token consumption is **not persistence/ack evidence**: original failures still
+  propagate, uncommitted writes roll back, and retry requires fresh admission of the same frozen identity. Read-only
+  accepted/auth branches do not consume. Another handler/check on a consumed token is stale.
+- Outcomes change only state/error/retry bookkeeping on that head. Domain/canonical/watermark/cache/device/catalogue,
+  cursor/last-success, newer tail intent and other-scope rows remain unchanged. Owned SQLite failures keep fixed safe
+  diagnostics and no raw causes; result displays omit batches, IDs, payloads and service-issued codes.
+
+There is no canonical result application, exact row removal/root acknowledgment, HTTP driver/loop, pull checkpoint,
+recovery/discard/reset API, publication or app activation. R06c must atomically recheck live claim/fences with canonical
+application and exact acknowledgment; a previously returned accepted snapshot or successful check is insufficient.
 
 ## Models, codecs, and durable identity
 
