@@ -85,8 +85,9 @@ transaction use. Batch writes and dirty marking roll back together on failure/ca
   Existing snapshot_absent evidence blocks lower/equal restoration; R05b does not create absence or invent delete revisions.
 
 Inert [head claiming/replay admission](#durable-head-claiming-and-replay-admission) and
-[atomic canonical acknowledgment](#atomic-canonical-acknowledgment) exist, but no delivery/checkpoint engine,
-staging, vault/Room journal or production publication activation exists.
+[atomic canonical acknowledgment](#atomic-canonical-acknowledgment) and an inert
+[bounded push driver](#bounded-push-delivery) exist, but no pull/checkpoint engine, staging, vault/Room journal or
+production publication activation exists.
 The independent ledger is not itself a visible projection.
 
 ### Protected publication
@@ -151,7 +152,8 @@ multiprocess lease, registry or durable vault/Room authorization. Restart create
 frozen identity. Successful checking is only admission evidence at that boundary: later R06 outcome/ack transactions
 must recheck atomically with their writes. Claiming itself sends no HTTP, applies no canonical outcome and removes no outbox work.
 Single-head classification/retry bookkeeping and atomic canonical acknowledgment are implemented below;
-delivery orchestration and engine/publication activation remain outstanding.
+[bounded push delivery](#bounded-push-delivery) composes these seams; pull/engine convergence and publication activation
+remain outstanding.
 
 ## Single-head push outcomes and retry/error handling
 
@@ -185,8 +187,9 @@ retry policy. It reuses Room v10 without entity/schema changes; production const
   cursor/last-success, newer tail intent and other-scope rows remain unchanged. Owned SQLite failures keep fixed safe
   diagnostics and no raw causes; result displays omit batches, IDs, payloads and service-issued codes.
 
-Classification remains separate from acknowledgment: accepted handling itself applies/removes nothing. There is no
-HTTP driver/loop, pull checkpoint, recovery/discard/reset API, publication invocation or app activation. A previously
+Classification remains separate from acknowledgment: accepted handling itself applies/removes nothing. The inert
+[bounded push driver](#bounded-push-delivery) supplies HTTP orchestration; no pull checkpoint, recovery/discard/reset API,
+publication invocation or app activation exists. A previously
 returned accepted snapshot or successful check is insufficient write authority; the acknowledgment operation below
 rechecks live admission and durable context atomically.
 
@@ -222,6 +225,35 @@ Room v10 without schema/entity changes. The app constructs no push store or engi
   cursor/last-success, device identity, catalogue and other scopes stay untouched. No capture, publication, successor claim,
   HTTP, pull checkpoint or convergence signal is produced. Complete baseline and a real publication lease remain required
   before visible materialization; R09 still owns durable session authority and R12a the live edit/timer barrier.
+
+## Bounded push delivery
+
+`sync/engine/PushDeliveryLoop` is an inert, explicitly constructed driver over `PushStore` and `GymSyncApi`.
+The app constructs none of it. The caller must pair the API with the same authorized service/account/session as the
+store and share one required `PushRunOwner` per physical database; the driver creates no owner, credentials or scope.
+
+- One `withRun` lease spans the entire invocation. Each explicit head freezes durably, its defensive request is obtained,
+  and `checkClaim` plus caller cancellation are checked immediately before a single-request HTTP push outside Room.
+  Request JSON, mutation/effect/child identity and sequence are never regenerated or normalized.
+- Only a `SyncApiException` from that HTTP call is classified as transport failure. Typed failure handling honors caller
+  cancellation and persists existing bounded failure-time retry/error rules, then stops. Auth/reauth remain read-only
+  resumable stops; any supplied refreshing API owns its existing one unchanged 401 retry. The driver adds no refresh,
+  in-run retry, delay, successor bypass, pull, snapshot, discard, publication or credential/cache cleanup.
+- Complete accepted/duplicate-accepted responses use existing classification and atomic acknowledgment. Only a returned
+  `Acknowledged` increments the summary count and permits a successor. Rejection, malformed responses, retained errors
+  and invalid acknowledgment context stop immediately. Fence, exact-row, canonical/storage and unexpected transport
+  failures propagate; conservative consumed tokens and uncertain commits are never counted as success.
+- Each call accepts a strict 1..100 acknowledgment budget (default 100). Exhaustion returns `LimitReached` without
+  claiming/probing another head, even when the final acknowledgment emptied the queue. `Empty` requires an actual fenced
+  empty selection and means neither convergence nor publication. Negative epoch/budget/clock inputs fail before their
+  associated work; summaries preserve exact unknown codes through explicit getters but never print those codes or bodies.
+- Cancellation/late results cannot settle through a dead run; new runs/processes reclaim unchanged frozen work. Earlier
+  committed acknowledgments survive a later failure, and newer captured intent stays protected. No push cursor,
+  last-success, baseline or account epoch is advanced. A pre-send check cannot recall bytes already admitted before a
+  subsequent session change.
+
+This is bounded push orchestration, not a complete running sync engine or durable session authority. R07 owns incremental
+pull, R08 complete bootstrap, R09 the Room/session journal, R10 convergence and R12 live publication/UI reconciliation.
 
 ## Models, codecs, and durable identity
 

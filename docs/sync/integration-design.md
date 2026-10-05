@@ -9,7 +9,8 @@ parts of this foundation, including inert startup recovery seams; [sync implemen
 actual boundaries. R05a supplies independent canonical storage and transactional capture watermarks; R05b now adds inert fenced canonical
 record/batch application. R05c adds an inert protected publisher; R06a adds inert serialized durable head claiming and
 exact replay admission; R06b adds inert single-head outcome classification and retry/error bookkeeping; R06c adds inert
-atomic canonical acknowledgment. Production projection activation, delivery engine, snapshots, the durable
+atomic canonical acknowledgment; R06d adds an inert bounded push delivery driver. Production projection activation,
+push/pull convergence, snapshots, the durable
 Room-authority adapter/journal, account transitions and cross-feature
 publication barriers remain planned. Stored vault phases and explicit refresh leases alone never
 authorize activation. Preserve the unresolved
@@ -86,7 +87,7 @@ journal additions remain future specifications:
 | Storage | Required logical fields and constraints |
 |---|---|
 | `sync_canonical_roots` | PK `(account_id, aggregate_type, aggregate_id)`; nullable highest observed positive revision; state `unobserved`, `upsert`, `delete`, or `snapshot_absent`; validated complete canonical JSON only for upsert; local-generation watermark; cache epoch. No FK cascade from domain tables |
-| Account cache metadata (`sync_account_cache`, delivered R05a) | Account PK; complete-baseline flag; cache epoch; projection-dirty flag; materialized epoch. Existing opaque cursor/last success stay in `sync_state`; admission reuses immutable session/cache epoch, the frozen row's attempt count and a live run capability. Outcome bookkeeping and atomic acknowledgment additionally use conservative process-local write tokens; delivery orchestration remains later R06 work |
+| Account cache metadata (`sync_account_cache`, delivered R05a) | Account PK; complete-baseline flag; cache epoch; projection-dirty flag; materialized epoch. Existing opaque cursor/last success stay in `sync_state`; admission reuses immutable session/cache epoch, the frozen row's attempt count and a live run capability. Outcome bookkeeping and atomic acknowledgment additionally use conservative process-local write tokens; bounded push orchestration reuses these seams without advancing pull checkpoints or epochs |
 | Snapshot session + records (R08) | Run/session/account/generation, fixed page limit, baseline, continuation and seen-token/progress state, download phase; record PK `(stage_id,type,id)` to reject duplicates. No visible-domain FKs |
 | Transition journal (R09) | Singleton current operation ID, phase, source/target account and generation, local choice, captured source generations/IDs, import preparation/completion state; original import snapshots/error context if needed. **No credentials/Google proofs** |
 
@@ -179,6 +180,10 @@ run(scope fence):
   request safe projection publication; if new edits arrived, schedule another run
 ```
 
+- The inert [bounded push driver](implementation.md#bounded-push-delivery) now implements the push portion under one
+  shared run owner. Its strict 1..100 acknowledgment budget returns LimitReached without a successor probe; Empty is
+  only fenced outbox emptiness, not a valid pull tail/bootstrap or convergence. Failure stops immediately with durable
+  retry/error context and no in-run delay. Pull/bootstrap/publication and user-facing activation remain later integration.
 - Frozen means possibly transmitted forever, even if socket construction/cancellation occurred early. Transient failure
   never makes it coalescible. Process restart selects the same frozen head and unchanged ID/bytes/child plans.
 - `duplicate` is accepted only if it carries the original accepted batch; duplicate rejection remains rejection.

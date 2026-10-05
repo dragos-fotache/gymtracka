@@ -22,7 +22,7 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/`.
 | `ui/activeworkout/` | Active screen, compact exercise/set controls, timer UI and feature state |
 | `ui/util/WorkoutFormatters.kt` | Shared derived calculations and locale-aware parsing/formatting |
 | `data/gym/GymRepository.kt` | Application-facing persistence, UUID creation, transactional edits and sync capture |
-| `data/sync/` | Models/codecs, fenced capture/canonical batches, inert protected publication, durable head claiming/replay, outcome/retry bookkeeping and atomic acknowledgment, unused HTTP/session components; [details](sync/implementation.md) |
+| `data/sync/` | Models/codecs, fenced capture/canonical batches, inert protected publication, durable head claiming/replay, outcome/retry bookkeeping, atomic acknowledgment and an inert bounded push driver, unused HTTP/session components; [details](sync/implementation.md) |
 
 `FeatureRepositories.kt` exposes narrow interfaces to state holders; reusable/leaf composables receive values and callbacks.
 `ui/GymRepositoryProvider.kt` supplies `rememberGymRepository()` and optional internal `LocalGymRepositoryOverride` for
@@ -104,8 +104,11 @@ canonical publication refuses incompatible physical identities instead of overwr
   write tokens prevent callback reuse even after identical scheduling or failed/uncertain writes. Inert acknowledgment
   commits complete canonical application, exact frozen-row removal and generation-scoped metadata together, preserving
   newer intent and marking projection dirty. Accepted snapshots privately bind account/exact durable identity but remain
-  insufficient authority without fresh transactional checks. There is no HTTP driver, cursor publication or app
-  activation; the [implementation reference](sync/implementation.md#atomic-canonical-acknowledgment) owns details.
+  insufficient authority without fresh transactional checks. An inert `sync/engine/PushDeliveryLoop` now composes these
+  seams under one required shared owner: freeze/check/send one head outside Room, classify, acknowledge atomically,
+  then continue within a strict 1..100 budget. Failure stops without in-run retry or successor bypass; only committed
+  acknowledgments count. The app constructs none of it; pull/checkpoint/convergence and activation remain outstanding.
+  The [implementation reference](sync/implementation.md#bounded-push-delivery) owns details.
 - All existing repository mutation families use in-transaction session fencing and local capture. Default signed-out
   edits create no upload work or canonical/cache rows and use hard deletion. Account-bound internal paths advance
   independent generation watermarks and dirty publication bookkeeping together with domain/outbox writes. The ledger
