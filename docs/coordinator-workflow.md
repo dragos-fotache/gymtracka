@@ -6,6 +6,10 @@
 
 ## Scope and planning
 
+- Follow [progressive reading](README.md#progressive-reading-and-context-discipline). Pickup readiness verifies authority,
+  bounded scope/dependencies/gates and live repository/role/resource state; it is not a completed design audit. After
+  release, read the concrete authoritative sections/code needed to settle the specification, expanding for dependencies
+  and safety questions rather than traversing the whole documentation/contract graph.
 - Confirm that the selected bounded planning/implementation slice is covered by explicit owner direction or the
   [standing next-slice authorization](#coordinator-rotation-and-automatic-continuation). Acceptance evidence alone is not
   authorization. App activation still requires its capability/acceptance gates. The accepted slice's scoped local commit
@@ -39,7 +43,9 @@ asking again. This standing permission covers inspecting live agents and coordin
 scope, unrelated panes, configuration changes or delivery operations. Read the Herdr skill and verify the required
 environment before controlling agents.
 
-- Give both roles the same normative behavior/API specification and disjoint read/write allowlists.
+- Give both roles the same normative behavior/API specification, task-relevant standards/contract references and
+  disjoint read/write allowlists. Do not add blanket whole-system/full-contract reading to every contributor packet.
+  Reuse supplied context; coordinator-provided facts point to authoritative sources without granting cross-role access.
 - Worker must not inspect tests, fixtures, reports, or QA work. QA must not inspect production declarations,
   implementations, diffs, decompiled code, or Worker work. LSP navigation obeys the same boundaries.
 - Coordinator supplies missing API/harness facts as contracts rather than granting cross-role source access. Coordinator
@@ -122,9 +128,12 @@ launching around the problem. Documentation-only maintenance is not itself an im
 5. **Send the next-slice prompt asynchronously.** Include the exact next slice and standing authority, pickup route,
    current accepted review and commit hash(es), relevant capability seams, boundary/dependency/allowlist/testing
    requirements, working-tree preservation, contributor independence, fresh contributor sessions and serialized Gradle ownership.
-   Explicitly require user escalation for blockers/questions. The successor first orients and reports readiness to the
-   outgoing coordinator via fire-and-forget `herdr agent prompt <outgoing-name> ...`; it must not edit, delegate or build
-   until ownership is released. Do not use `--wait`, `agent wait`, or poll for readiness; use the acknowledgment message.
+   Explicitly require user escalation for blockers/questions and the progressive reading route. The successor verifies
+   minimal pickup facts and reports readiness to the outgoing coordinator via fire-and-forget
+   `herdr agent prompt <outgoing-name> ...`; do not require complete design/contract/code ingestion for this acknowledgment.
+   It must not specify, edit, delegate or build until ownership is released. Task-relevant design/source reading follows
+   release, before specification/delegation. Do not use `--wait`, `agent wait`, or poll for readiness; use the acknowledgment
+   message.
 6. **Transfer the live role only after acknowledgment.** Verify that the acknowledgment identifies the successor and
    next slice. Rename the outgoing agent to a unique retiring name, rename the successor to `gym-coordinator`, and send
    the asynchronous release/start prompt. This keeps Worker/QA reports routed to the new owner without duplicate names
@@ -145,8 +154,13 @@ Fill in the current facts; do not paste old pane IDs, inventories or verificatio
 You are the next GymTracka coordinator, taking over <next bounded slice> after accepted <previous slice>.
 The owner authorizes scoped acceptance commits, automatic next-slice planning/implementation and coordinator rotation
 under docs/coordinator-workflow.md#coordinator-rotation-and-automatic-continuation.
-Read AGENTS.md, docs/README.md, docs/coordinator-handoff.md, docs/remaining-work-roadmap.md and the workflow;
-then inspect both live working trees/HEADs and task-relevant contracts/code. Preserve existing changes.
+Use supplied AGENTS.md and docs/README.md progressive reading policy; read the current handoff,
+roadmap status/dependencies and workflow authority/transfer rules, then inspect both live trees/indexes/untracked/HEADs
+and roles/models/resource ownership. Preserve existing changes. Do not reread supplied unchanged instructions or ingest
+the full architecture/contract/OpenAPI/code suite just to report pickup readiness.
+After release, read task-relevant authoritative sections, referenced wire types and concrete code/harness seams before
+settling the bounded specification; expand when dependencies or safety questions require it. Read the full workflow
+before delegation. Contract authority and required safeguards/gates are unchanged.
 Accepted evidence: <review path>. Accepted commit(s): <hash(es)>; verify live HEADs/trees rather than assuming clean.
 Reuse <capability seams>; do not recreate them.
 Next scope: <goal, dependencies and non-goals>. Prepare a bounded spec with concrete interfaces,
@@ -155,8 +169,9 @@ Use fresh native Contributor/high Worker and QA sessions; keep reports asynchron
 Bring every unresolved blocker/question back to the user; no silent substitutions, gate weakening or scope drift.
 Commit only your accepted slice's changes before handoff. No push, deployment, private configuration or live
 account/device actions without separate permission.
-First report readiness for <slice> asynchronously to <outgoing live agent name>; do not edit/delegate/build
-until its release prompt. After release, own the slice as gym-coordinator, implement/review/verify it,
+First report bounded pickup readiness for <slice> asynchronously to <outgoing live agent name>;
+do not specify/edit/delegate/build until its release prompt. Readiness is not a completed implementation design.
+After release, own the slice as gym-coordinator, design/specify/implement/review/verify it,
 update the durable handoff, commit the accepted slice, and rotate to a fresh coordinator using the same protocol.
 ```
 

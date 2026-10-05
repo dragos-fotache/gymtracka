@@ -8,7 +8,7 @@ This file contains only rules that apply to most Android implementation tasks. D
 
 Start with [`docs/README.md`](docs/README.md) for reading routes and documentation ownership. **Replace current state; append only to historical evidence.** Keep active docs free of session history; do not recursively ingest `docs/` or read `docs/archive/` for routine orientation.
 
-Android-only documentation belongs in this repository's `docs/`. The nested `shared-docs/` repository contains only material shared with the backend project. Before changing an area, read its source document:
+Android-only documentation belongs in this repository's `docs/`. The nested `shared-docs/` repository contains only material shared with the backend project. Before changing an area, read the relevant sections of its authoritative source document:
 
 - Product behavior, screen flows, UI conventions, and known limitations: [`shared-docs/docs/product-behavior.md`](shared-docs/docs/product-behavior.md).
 - Android structure, Room schema/migrations, repositories, state holders, and persistence invariants: [`docs/architecture.md`](docs/architecture.md).
@@ -17,7 +17,7 @@ Android-only documentation belongs in this repository's `docs/`. The nested `sha
 - Sync implementation boundaries and approved future integration: [`docs/sync/implementation.md`](docs/sync/implementation.md) and task-relevant sections of [`docs/sync/integration-design.md`](docs/sync/integration-design.md).
 - Backend domain contract, proposed server schema, offline sync, and HTTP API: [`shared-docs/docs/backend-contract/README.md`](shared-docs/docs/backend-contract/README.md).
 
-Read only the documents relevant to the task. For backend or sync work, follow the backend contract and its linked files in full. The checked-in Android code is the authority for what the current app implements; the shared contract is the authority for finalized future backend/sync decisions. If implementation and documentation diverge, identify whether the change is intentional and update the affected local or shared document in the same task.
+Use the [progressive reading policy](docs/README.md#progressive-reading-and-context-discipline): keep pickup minimal, then read the sections/code needed for each concrete design or implementation decision. For backend or sync work, read the applicable contract sections, referenced wire schemas/types and directly needed dependencies before changing behavior; do not traverse the entire linked contract map during routine startup. Expand reading whenever an invariant or dependency requires it. The checked-in Android code is the authority for what the current app implements; the shared contract is the authority for finalized future backend/sync decisions. If implementation and documentation diverge, identify whether the change is intentional and update the affected local or shared document in the same task.
 
 ## Code navigation and search
 

@@ -27,8 +27,9 @@ Reuse [canonical storage/batches](sync/implementation.md#fenced-canonical-batche
 [shared push-first ownership/valid tail](sync/implementation.md#shared-push-before-pull-and-valid-tail),
 [checkpoint transactions](sync/implementation.md#incremental-checkpoint-transactions),
 [bounded pull](sync/implementation.md#bounded-incremental-pull), existing snapshot models/codecs/API/refresh, and
-[approved snapshot design](sync/integration-design.md#5-frozen-snapshots-and-full-resync). Follow the full linked
-[shared contract](../shared-docs/docs/backend-contract/README.md), especially frozen snapshot/token/retention semantics.
+[approved snapshot design](sync/integration-design.md#5-frozen-snapshots-and-full-resync). Consult the task-relevant
+[shared contract](../shared-docs/docs/backend-contract/README.md) sections and referenced wire types, especially frozen
+snapshot/token/retention semantics; do not ingest the entire contract map at pickup.
 Do not recreate accepted seams or treat an existing baseline flag as authority to fabricate a complete snapshot.
 
 One explicit application-owned `PushRunOwner` per physical DB remains required across every future caller, including
@@ -71,7 +72,9 @@ See [architecture](architecture.md) and [sync implementation](sync/implementatio
 
 1. Inspect both live working trees/indexes/untracked files and HEADs; preserve unrelated changes. Discover actual agents,
    models/processes. Completed Worker/QA conversations require fresh native Contributor/high sessions for R08a.
-2. Read task-relevant architecture/design/testing/product/full shared contracts and verify dependencies/standing scope.
+2. Follow [progressive reading](README.md#progressive-reading-and-context-discipline): report readiness from scope,
+   dependencies/gates and live-state checks, not a full design audit. After release read the concrete authoritative
+   architecture/design/testing/product/contract sections and source/harness seams needed for each R08a decision.
 3. Prepare one bounded R08a specification with concrete schema/storage/harness facts, independent allowlists,
    safety/race/cancellation/restart obligations, proportional gates and exact stop before delegation.
 4. Every entity change requires a data-preserving migration/KSP/schema export and all supported starting versions plus
