@@ -1,10 +1,10 @@
 # Active task specifications
 
 **No implementation specification is currently open.**
-[R09e settled occupied-credential reauthentication](../archive/remaining-work/R09e-review.md) is accepted and archived,
-stopping at inert PREPARING/PREPARED eligibility with exact pending-predecessor refusal, not application activation or
-all reauthentication. Next R09f settles one bounded inert exact-pending-refresh reconciliation slice after ownership release;
-unsuccessful/legacy-malformed predecessor disposition is not permission to discard uncertain evidence.
+[R09f exact-pending-refresh reconciliation](../archive/remaining-work/R09f-review.md) is accepted and archived, stopping at
+advisory settled old ACTIVE evidence before separately admitted R09e replacement. Unsuccessful/legacy-malformed or
+already-transitional uncertain predecessor disposition remains unresolved. No automatic R09g: settle a finite remaining
+R09 plan under the [major-task slicing rule](../coordinator-workflow.md#major-task-slicing--owner-rule) before continuing.
 See [current pickup](../coordinator-handoff.md) and [roadmap](../remaining-work-roadmap.md).
 
 The personal milestone requires initial sign-in and established-account offline use. Legacy local-only data disposition

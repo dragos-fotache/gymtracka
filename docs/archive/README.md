@@ -49,6 +49,7 @@ Enduring Android design is maintained in [the active integration design](../sync
 | R09c private prepared engine admission/canonical bootstrap | [Spec](remaining-work/R09c-task.md) | [Review](remaining-work/R09c-review.md) |
 | R09d private completed-preparation/vault promotion | [Spec](remaining-work/R09d-task.md) | [Review](remaining-work/R09d-review.md) |
 | R09e inert settled occupied-credential reauthentication | [Spec](remaining-work/R09e-task.md) | [Review](remaining-work/R09e-review.md) |
+| R09f inert exact-pending-refresh reconciliation | [Spec](remaining-work/R09f-task.md) | [Review](remaining-work/R09f-review.md) |
 
 [R03 split](remaining-work/R03-task.md) and [R04 split](remaining-work/R04-task.md) are historical planning records;
 outstanding lifecycle and durable account-integration requirements remain in the active roadmap. The

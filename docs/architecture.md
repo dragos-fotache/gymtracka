@@ -159,8 +159,10 @@ ownership, pending-predecessor refusal and advisory crash recovery remain inert;
   [complete baseline/recovery](sync/implementation.md#complete-snapshot-baseline-and-publication-recovery).
   The app constructs none of it. R09a/b private authority/preparation and R09c private engine admission/canonical bootstrap
   are delivered separately, with exact durable and process fences. R09d completes inert protected projection/Room-ready
-  and exact vault promotion/gap recovery under those fences. App-facing publication, live barriers, convergence,
-  occupied-credential reauthentication and activation remain outstanding; repositories never follow private preparation.
+  and exact vault promotion/gap recovery under those fences. R09e/f add inert settled occupied replacement and its exact
+  established ACTIVE pending-refresh replay prerequisite; see [session boundaries](sync/implementation.md#inert-exact-pending-refresh-reconciliation).
+  App-facing publication, live barriers, convergence, unsuccessful-pending/signed-out/missing-vault recovery and activation
+  remain outstanding; repositories never follow private preparation.
   The [shared driver](sync/implementation.md#shared-push-before-pull-and-valid-tail),
   [push](sync/implementation.md#bounded-push-delivery), [checkpoint](sync/implementation.md#incremental-checkpoint-transactions)
   and [pull](sync/implementation.md#bounded-incremental-pull) references own details.

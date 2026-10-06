@@ -42,8 +42,25 @@ authority check, contributor independence or transfer safeguard, and never overr
   new-test obligations, reused existing coverage/harnesses, iteration checks and acceptance gates, with a specific
   milestone for deferred broad gates. Size QA's assignment accordingly; do not default every slice to exhaustive tests
   or full-stack verification. Contributor independence and safety/milestone requirements remain unchanged.
-- Split large packages into coherent reviewable slices. Prepare detailed specifications on pickup, not speculative APIs
-  for the whole roadmap. No dependent implementation before its necessary design/interface gate.
+- Follow the [major-task slicing rule](#major-task-slicing--owner-rule). Prepare detailed specifications on pickup, not
+  speculative APIs for the whole roadmap. No dependent implementation before its necessary design/interface gate.
+
+## Major-task slicing — owner rule
+
+The **first coordinator taking a new major task** (R08, R09, and so on)—**not a coordinator receiving an existing
+sub-slice such as R09f**—is responsible for splitting the whole task into a **finite, manageable slice plan before
+implementation begins**. Record that plan in the roadmap's owning task section:
+planned slice count, each slice's outcome/non-goals, dependencies, and the major task's completion boundary. Plan at the
+outcome level; concrete APIs and independent contributor specifications still belong to each slice's pickup.
+
+Successor coordinators execute that plan rather than inventing another letter at every handoff. Consolidate related
+work where it can be implemented and independently reviewed safely. A small prerequisite, correction or test obligation
+is not automatically a separate slice. A real safety/dependency discovery may justify revising the plan, but report the
+reason and proposed bounded change to the user before adding or re-splitting slices; do not allow silent slice proliferation.
+The standing continuation rule authorizes execution of the agreed plan, not an endlessly expanding sequence.
+
+For an already-started major task without such a plan, consolidate and settle its remaining slice plan before continuing
+beyond the currently authorized slice. This does not widen scope, waive gates or authorize blocked/deferred behavior.
 
 ## Independent contributor roles
 

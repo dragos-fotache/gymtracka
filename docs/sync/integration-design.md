@@ -20,8 +20,10 @@ atomic preparation/fencing; see [implementation](implementation.md#durable-priva
 R09b adds inert [prepared vault/Room persistence and reread recovery](implementation.md#prepared-vaultroom-coordination-and-recovery).
 R09c adds inert [private prepared engine admission/canonical bootstrap](implementation.md#private-prepared-session-engine-and-bootstrap).
 R09d adds inert [completed preparation/exact vault promotion](implementation.md#private-completed-preparation-and-vault-promotion).
-Production bootstrap/projection activation, convergence, occupied-credential reauthentication and cross-feature
-publication barriers remain planned. Broader account transitions are deferred public scope. Stored vault phases and
+R09e/f add inert [settled occupied replacement](implementation.md#inert-settled-occupied-credential-reauthentication) and
+its [exact established ACTIVE pending-replay prerequisite](implementation.md#inert-exact-pending-refresh-reconciliation).
+Production bootstrap/projection activation, convergence, remaining account recovery and cross-feature publication barriers
+remain planned. Broader account transitions are deferred public scope. Stored vault phases and
 explicit refresh leases alone never authorize activation. Preserve the unresolved
 [legacy auth replay limitation](implementation.md#legacy-auth-replay-limitation) in all recovery work.
 
@@ -304,8 +306,12 @@ recovery promotes only that exact completed gap, without HTTP, publication or Ro
 paths replace no occupied credentials and activate no app. R09e separately adds inert settled occupied ACTIVE same-account replacement:
 checked private TRANSITIONING reservation/new generation, exact full supplied-grant PREPARED vault CAS, then PREPARING
 finalization at the same reserved generation. It requires shared physical-DB/credential ownership, coherent pair rereads
-and no pending predecessor; retained intent/cache/domain are untouched. Pending predecessor reconciliation/disposition,
-signed-out/missing-vault reauthentication and live app integration remain outstanding. See
+and no pending predecessor; retained intent/cache/domain are untouched. R09f separately supplies exact established ACTIVE
+pending replay through the shared refresh coordinator before R09e replacement: ONE retained attempt, complete returned
+grant/no-pending CAS, required old Room authorization, stable pair rereads and advisory settled evidence, with no fresh
+rotation or Room mutation. See [implemented replay boundary](implementation.md#inert-exact-pending-refresh-reconciliation).
+Unsuccessful/legacy-malformed or already-transitional pending disposition, signed-out/missing-vault reauthentication and
+live app integration remain outstanding. See
 [implemented settled boundary](implementation.md#inert-settled-occupied-credential-reauthentication).
 Existing canonical-only engine recovery is reused, not recreated for completed preparation.
 Ordinary local backup need not be disabled to exclude credentials.

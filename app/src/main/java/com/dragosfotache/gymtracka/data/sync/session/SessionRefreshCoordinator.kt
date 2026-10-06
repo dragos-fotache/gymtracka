@@ -124,6 +124,88 @@ internal class SessionRefreshCoordinator(
         }
     }
 
+    /**
+     * Pure compatibility check for R09f exact-pending-refresh reconciliation:
+     * the supplied reauthentication owner must share this coordinator's
+     * configured origin value plus its referentially identical vault and
+     * credential mutex. Performs no I/O, clock, or UUID work.
+     */
+    internal fun isCompatibleRefreshOwner(
+        origin: ServiceOrigin,
+        vault: SessionVault,
+        credentialMutex: Mutex,
+    ): Boolean = this.origin == origin && this.vault === vault && this.mutex === credentialMutex
+
+    /**
+     * Bounded exact-pending replay under the credential mutex: checks lease
+     * origin, caller activity, and atomic lease authorization/admission, takes
+     * the preflight exact vault snapshot, replays its retained typed attempt
+     * at most ONCE via the private send/commit helpers, proves the stored
+     * revision advanced by exactly one with no retry, then invokes settled
+     * while still holding the mutex. A null pending performs no HTTP, CAS,
+     * clock, or UUID work. Vault revision space is checked before any
+     * transmission. No fresh rotation, expiry inference, or token escape:
+     * credentials never leave the private send/commit seam. A post-settled
+     * lease/caller authorization check runs before release on both the
+     * null-pending and replayed paths. Any non-cancellation failure is routed
+     * to the failed callback while still holding the mutex, so the caller's
+     * error rereads stay under both shared owners; cancellation propagates
+     * unchanged without invoking it. The only consumer is inert
+     * pending-refresh reconciliation; ordinary selection/rotation entry points
+     * are never used here.
+     */
+    internal suspend fun <T> withExactPendingRefresh(
+        lease: SessionRefreshLease,
+        preflight: suspend () -> VaultSnapshot,
+        settled: suspend (VaultSnapshot) -> T,
+        failed: suspend (Throwable) -> Nothing,
+    ): T {
+        currentCoroutineContext().ensureActive()
+        if (lease.binding.origin != origin) {
+            currentCoroutineContext().ensureActive()
+            throw SessionRefreshException(SessionRefreshFailure.STALE_SESSION)
+        }
+        return mutex.withLock {
+            try {
+                currentCoroutineContext().ensureActive()
+                checkAdmission(lease)
+                val snapshot = preflight()
+                val record = fenceRecord(lease, snapshot)
+                currentCoroutineContext().ensureActive()
+                checkAdmission(lease)
+                val pending = record.pendingRefresh
+                if (pending == null) {
+                    val result = settled(snapshot)
+                    currentCoroutineContext().ensureActive()
+                    checkAdmission(lease)
+                    return@withLock result
+                }
+                if (snapshot.revision == Long.MAX_VALUE) {
+                    currentCoroutineContext().ensureActive()
+                    throw SessionVaultException(VaultFailure.REVISION_EXHAUSTED)
+                }
+                val grant = sendRefresh(lease, pending.attempt)
+                val stored = commitGrant(lease, snapshot.revision, record, pending, grant)
+                currentCoroutineContext().ensureActive()
+                if (stored.revision != snapshot.revision + 1L) {
+                    currentCoroutineContext().ensureActive()
+                    throw SessionRefreshException(SessionRefreshFailure.STALE_SESSION)
+                }
+                checkAdmission(lease)
+                val result = settled(VaultSnapshot(stored.revision, stored.record))
+                currentCoroutineContext().ensureActive()
+                checkAdmission(lease)
+                return@withLock result
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (e: Exception) {
+                currentCoroutineContext().ensureActive()
+                failed(e)
+            }
+        }
+    }
+
     override fun toString(): String = "SessionRefreshCoordinator(redacted)"
 
     /** One serialized selection: pending-first settle, live-access return, or one fresh rotation. */

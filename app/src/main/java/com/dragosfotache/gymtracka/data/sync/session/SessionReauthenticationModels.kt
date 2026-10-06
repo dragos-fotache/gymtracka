@@ -73,3 +73,29 @@ internal sealed interface SessionReauthenticationRecovery {
         override fun toString(): String = "Blocked(failure=$failure)"
     }
 }
+
+/**
+ * Advisory settled old-ACTIVE eligibility after inert exact-pending-refresh
+ * reconciliation: the unchanged old ACTIVE Room observation plus the positive
+ * vault revision holding its exact settled ACTIVE grant with no pending
+ * predecessor. Carries no grant, token, or lease; R09e must freshly
+ * read/admit it again before any replacement. Displays are fixed and redacted.
+ */
+internal data class SettledSessionObservation(
+    val room: RecoveryRoomSnapshot,
+    val vaultRevision: Long,
+) {
+    init {
+        if (room.phase != RecoveryRoomPhase.ACTIVE ||
+            room.identity == null ||
+            !room.baselineComplete ||
+            vaultRevision < 1L
+        ) {
+            throw SessionReauthenticationException(
+                SessionReauthenticationFailure.INVALID_INPUT,
+            )
+        }
+    }
+
+    override fun toString(): String = "SettledSessionObservation(redacted)"
+}

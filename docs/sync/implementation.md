@@ -825,10 +825,43 @@ retained queue/frozen bytes, checkpoints, stages, children, foreign scopes and c
   work cannot report success. Preserve exact durable bytes/operation, reread and resume the gap without generation restart,
   automatic fencePrivate, clearing/tombstoning or cleanup. Older Room-checked leases/ordinary generation-bound stores are stale.
 
-[R09e review](../archive/remaining-work/R09e-review.md) owns fresh scoped evidence. This covers settled occupied ACTIVE
-replacement and safe pending refusal, not all reauthentication. Pending predecessor reconciliation/unsuccessful or malformed
-predecessor disposition and signed-out/missing-vault reauthentication remain open; no uncertain pair retirement is inferred.
-No app activation, projection/promotion, ordinary repository rebinding, legacy disposition or convergence is delivered.
+[R09e review](../archive/remaining-work/R09e-review.md) owns scoped settled occupied ACTIVE replacement/pending-refusal
+evidence. Exact established pending replay is delivered separately below; unsuccessful/malformed predecessor disposition
+and signed-out/missing-vault reauthentication remain open. No uncertain pair retirement is inferred. No app activation,
+projection/promotion, ordinary repository rebinding, legacy disposition or convergence is delivered.
+
+## Inert exact-pending-refresh reconciliation
+
+R09f adds unused `SessionReauthenticationCoordinator.reconcilePendingRefresh(expected, refreshCoordinator)`. It stops at
+nonsecret advisory `SettledSessionObservation(room, vaultRevision)` for the unchanged old ACTIVE authority and settled
+ACTIVE vault; R09e replacement must separately freshly admit that pair. No Room writer, schema/format or app wiring changed.
+
+- Validate active caller, ACTIVE complete-baseline input and configured origin before the newest invocation fence. The
+  supplied ONE shared refresh coordinator must match origin and referential vault/credential mutex; incompatible ownership
+  refuses without superseding valid work. Shared physical-DB owner THEN credential mutex span all preflight/HTTP/CAS/final
+  and error rereads continuously; no nested mutex/default owner or application-safe unbound lease is inferred.
+- Exact positive-revision ACTIVE vault binding/operation and full alternating Room/vault/Room/vault/Room preflight precede
+  admission. Full grant/expiry and semantic pending operation/key/body/token must remain exact across decoded instances.
+  Missing/foreign/orphan/PREPARED evidence and TRANSITIONING predecessor reconciliation refuse without adoption.
+- No pending means read-only settled idempotence, even expired. Pending means ONE exact retained typed refresh transmission,
+  with checked vault increment space before HTTP, independent of old live access/consumed refresh expiry. Reuse existing
+  refresh send/full-grant CAS/reload machinery, not access selection: no clock/UUID, recapture, fresh rotation or retry.
+- Required scoped ACTIVE lease authorization rechecks full old Room and invocation around vault/network seams and immediately
+  before CAS. Commit complete same-account returned grant plus cleared pending together at the sent revision, preserving
+  old binding/operation/ACTIVE phase and original deadlines, even expired. Verify exact revision+1 and full committed
+  record, then alternating final pair rereads/post-callback authorization before advisory return. No conflict retry.
+- Safe refresh failures/hints keep their accepted category (access AuthenticationRequired maps to ReauthenticationRequired);
+  wrong-account/strict legacy malformed responses retain the original uncertain pair. Local failures are closed. Error
+  rereads remain inside both owners; strict observed Room faults retain their closed category even after a good reread.
+  Caller cancellation, newest fence/invalidation and current Room drift fence late errors/results in that order.
+- Scoped lease retires on settlement; already-started synchronous CAS may commit despite lost/canceled/invalidated return.
+  Restart sees exact retained pending or settled old ACTIVE evidence, never a reason to compensate/rekey/clear. Room,
+  domain/children/relationships, queue/frozen bytes, canonical/cache/watermarks, checkpoints/stages and foreign scopes remain
+  unchanged. Local roots are not adopted; subsequent R09e reservation still independently refuses them unchanged.
+
+[R09f review](../archive/remaining-work/R09f-review.md) owns fresh scoped replay/composition evidence, not complete R09 or
+live activation. Unsuccessful/legacy-malformed pending disposition, already-transitional pending gaps, signed-out/missing
+vault recovery, finite remaining R09 planning, core R10 and R12a remain outstanding. No automatic uncertain retirement.
 
 ## Legacy auth replay limitation
 

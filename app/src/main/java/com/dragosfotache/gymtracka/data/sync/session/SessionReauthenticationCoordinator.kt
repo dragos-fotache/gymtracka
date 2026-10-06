@@ -1,6 +1,7 @@
 package com.dragosfotache.gymtracka.data.sync.session
 
 import com.dragosfotache.gymtracka.data.sync.api.ServiceSession
+import com.dragosfotache.gymtracka.data.sync.api.SyncApiException
 import com.dragosfotache.gymtracka.data.sync.http.ServiceOrigin
 import com.dragosfotache.gymtracka.data.sync.http.ServiceSessionBinding
 import com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid
@@ -22,11 +23,13 @@ import kotlinx.coroutines.sync.withLock
  *
  * Returns only advisory nonsecret preparation observations, never application
  * authorization. Performs no app construction/visibility, ordinary repository
- * rebinding, Google/challenge/exchange/refresh/logout HTTP, credential
- * freshness scheduling, account switching, sign-out, legacy import/delete/
- * reassignment, projection/publication, completion, schema/migration, backend/
- * configuration or live account/device actions. An uncertain pending refresh
- * is never cleared, rekeyed, rebound or sent here. Never reads a clock and
+ * rebinding, Google/challenge/exchange/logout HTTP, credential freshness
+ * scheduling, account switching, sign-out, legacy import/delete/reassignment,
+ * projection/publication, completion, schema/migration, backend/configuration
+ * or live account/device actions. R09f reconciliation replays an exact pending
+ * attempt only through the supplied shared refresh coordinator and clears it
+ * only with its complete returned grant. Never rekeys or rebinds an uncertain
+ * predecessor; never reads a clock and
  * never adopts another service UUID's retained data.
  *
  * One application owner constructs one coordinator per physical Room/vault
@@ -102,6 +105,149 @@ internal class SessionReauthenticationCoordinator(
             credentialMutex.withLock {
                 resumeLocked(fence, expected, session)
             }
+        }
+    }
+
+    /**
+     * Inert exact-pending-refresh reconciliation over an exact established ACTIVE Room/ACTIVE vault pair,
+     * before a separate R09e supplied-grant replacement. Reconciles a retained exact pending predecessor by
+     * replaying its typed attempt ONCE through the supplied shared refresh coordinator, or proves a settled
+     * pair stable with read-only rereads when no pending exists. Performs no Room writes, fresh selection or
+     * rotation, clock/UUID calls, retries, adoption, reservation, replacement, or cleanup; expired grants are
+     * preserved as returned. Returns only an advisory settled old-ACTIVE eligibility observation that R09e
+     * must freshly read/admit again; never access credentials or reusable authority.
+     *
+     * The supplied refresh coordinator must share this coordinator's configured origin, referentially
+     * identical vault, and referentially identical credential mutex; mismatch refuses INVALID_INPUT before
+     * opening a new invocation fence, locks, or I/O, without superseding valid in-flight work. Lock order is
+     * the shared DB run owner then the refresh coordinator's matching credential mutex (owned inside its
+     * bounded replay helper), held continuously through preflight, exact refresh HTTP/CAS, and all final
+     * rereads. A fresh scoped ACTIVE refresh lease carries a REQUIRED predicate rechecking the exact old
+     * Room and current invocation around every seam; it retires at invocation settlement. Safe network
+     * failures keep their accepted SyncApiException category/hints with pending retained; local faults map to
+     * the closed reauthentication surface via in-lock Room/fence rereads under both owners, with caller
+     * cancellation propagating before any reread. Must not be called from a held
+     * owner/credential slot.
+     */
+    suspend fun reconcilePendingRefresh(
+        expected: RecoveryRoomSnapshot,
+        refreshCoordinator: SessionRefreshCoordinator,
+    ): SettledSessionObservation {
+        currentCoroutineContext().ensureActive()
+        val identity = expected.identity
+        if (expected.phase != RecoveryRoomPhase.ACTIVE ||
+            identity == null ||
+            !expected.baselineComplete
+        ) {
+            throw SessionReauthenticationException(
+                SessionReauthenticationFailure.INVALID_INPUT,
+            )
+        }
+        if (identity.binding.origin != origin) {
+            throw SessionReauthenticationException(
+                SessionReauthenticationFailure.IDENTITY_MISMATCH,
+            )
+        }
+        if (!refreshCoordinator.isCompatibleRefreshOwner(origin, vault, credentialMutex)) {
+            throw SessionReauthenticationException(
+                SessionReauthenticationFailure.INVALID_INPUT,
+            )
+        }
+        val fence = openFence()
+        var latchedRoomFailure: RoomSessionAuthorityFailure? = null
+        val lease = SessionRefreshLease(
+            binding = identity.binding,
+            operationId = identity.operationId,
+            phase = VaultSessionPhase.ACTIVE,
+            authorizationCheck = {
+                val caller = currentCoroutineContext()
+                caller.ensureActive()
+                synchronized(stateLock) {
+                    caller.ensureActive()
+                    if (fence !== currentFence) {
+                        throw SessionRefreshException(SessionRefreshFailure.STALE_SESSION)
+                    }
+                }
+                val authorized = try {
+                    authority.read()
+                } catch (e: CancellationException) {
+                    caller.ensureActive()
+                    throw e
+                } catch (e: RoomSessionAuthorityException) {
+                    caller.ensureActive()
+                    synchronized(stateLock) {
+                        if (fence !== currentFence) {
+                            throw SessionRefreshException(SessionRefreshFailure.STALE_SESSION)
+                        }
+                    }
+                    latchedRoomFailure = e.failure
+                    throw SessionRefreshException(SessionRefreshFailure.UNAVAILABLE)
+                } catch (_: Exception) {
+                    caller.ensureActive()
+                    synchronized(stateLock) {
+                        if (fence !== currentFence) {
+                            throw SessionRefreshException(SessionRefreshFailure.STALE_SESSION)
+                        }
+                    }
+                    throw SessionRefreshException(SessionRefreshFailure.UNAVAILABLE)
+                }
+                caller.ensureActive()
+                synchronized(stateLock) {
+                    caller.ensureActive()
+                    if (fence !== currentFence) {
+                        throw SessionRefreshException(SessionRefreshFailure.STALE_SESSION)
+                    }
+                }
+                if (authorized != expected) {
+                    throw SessionRefreshException(SessionRefreshFailure.STALE_SESSION)
+                }
+            },
+        )
+        try {
+            val settled = runOwner.mutex.withLock {
+                refreshCoordinator.withExactPendingRefresh(
+                    lease,
+                    preflight = {
+                        reconcilePreflightLocked(fence, expected, identity)
+                    },
+                    settled = { final ->
+                        reconcileSettledLocked(fence, expected, identity, final)
+                    },
+                    failed = { error ->
+                        // A strict Room fault observed at an authorization seam is preserved as the
+                        // closed mapped error: the predicate latches only its category with no raw
+                        // cause, and it is supplied here before the Room/fence mapping below. A
+                        // predicate-observed old-Room mismatch stays STALE_SESSION and still refuses
+                        // even if a later reread restores the expected snapshot. Cancellation, the
+                        // newest fence, and current-Room drift keep precedence inside the mapper.
+                        val effective = latchedRoomFailure?.let { failure ->
+                            SessionReauthenticationException(mapAuthorityFailure(failure))
+                        } ?: error
+                        mapReconciliationErrorLocked(fence, expected, effective)
+                    },
+                )
+            }
+            ensureFenceCurrent(fence)
+            return settled
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (e: SessionReauthenticationException) {
+            currentCoroutineContext().ensureActive()
+            throw reraiseAfterOwners(fence, e)
+        } catch (e: SyncApiException) {
+            currentCoroutineContext().ensureActive()
+            throw reraiseAfterOwners(fence, e)
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            throw reraiseAfterOwners(
+                fence,
+                SessionReauthenticationException(
+                    SessionReauthenticationFailure.AUTHORITY_UNAVAILABLE,
+                ),
+            )
+        } finally {
+            lease.invalidate()
         }
     }
 
@@ -801,6 +947,149 @@ internal class SessionReauthenticationCoordinator(
         expectedVaultRevision: Long,
         expectedRecord: VaultSessionRecord,
     ) = verifyStablePair(fence, expectedRoom, expectedVaultRevision, expectedRecord)
+
+    // Exact R09f preflight under both shared owners: actual Room must equal the full supplied expected
+    // snapshot and the vault must hold a positive-revision occupied ACTIVE record with the exact old
+    // binding and operation. Missing, empty, PREPARED, foreign, adjacent-generation, or orphan evidence
+    // refuses IDENTITY_MISMATCH with no HTTP/CAS. Pending is preserved exactly for replay, never refused
+    // here. Alternating rereads prove the exact revision, full grant/expiry/phase/binding/operation, and
+    // semantic pending tuple stable before HTTP admission.
+    private suspend fun reconcilePreflightLocked(
+        fence: Any,
+        expected: RecoveryRoomSnapshot,
+        identity: RecoveryIdentity,
+    ): VaultSnapshot {
+        ensureFenceCurrent(fence)
+        val room = readAuthority(fence)
+        if (room != expected) {
+            ensureFenceCurrent(fence)
+            throw SessionReauthenticationException(
+                SessionReauthenticationFailure.STALE_AUTHORITY,
+            )
+        }
+        val source = loadVault(fence)
+        val sourceRecord = source.record
+        if (source.revision < 1L ||
+            sourceRecord == null ||
+            sourceRecord.phase != VaultSessionPhase.ACTIVE ||
+            sourceRecord.binding != identity.binding ||
+            sourceRecord.operationId != identity.operationId
+        ) {
+            ensureFenceCurrent(fence)
+            throw SessionReauthenticationException(
+                SessionReauthenticationFailure.IDENTITY_MISMATCH,
+            )
+        }
+        verifyStablePair(fence, expected, source.revision, sourceRecord)
+        ensureFenceCurrent(fence)
+        return source
+    }
+
+    // Final R09f proof under both shared owners: the supplied final vault snapshot must be a
+    // positive-revision settled ACTIVE record with the exact old binding/operation and no pending
+    // predecessor. Alternating rereads prove the unchanged old Room and the exact installed vault before
+    // the advisory return. Never compensates, reinstalls, rekeys, or clears.
+    private suspend fun reconcileSettledLocked(
+        fence: Any,
+        expected: RecoveryRoomSnapshot,
+        identity: RecoveryIdentity,
+        final: VaultSnapshot,
+    ): SettledSessionObservation {
+        ensureFenceCurrent(fence)
+        val finalRecord = final.record
+        if (final.revision < 1L ||
+            finalRecord == null ||
+            finalRecord.phase != VaultSessionPhase.ACTIVE ||
+            finalRecord.binding != identity.binding ||
+            finalRecord.operationId != identity.operationId ||
+            finalRecord.pendingRefresh != null
+        ) {
+            ensureFenceCurrent(fence)
+            throw SessionReauthenticationException(
+                SessionReauthenticationFailure.IDENTITY_MISMATCH,
+            )
+        }
+        verifyStablePair(fence, expected, final.revision, finalRecord)
+        ensureFenceCurrent(fence)
+        return SettledSessionObservation(expected, final.revision)
+    }
+
+    // Synchronous fence precedence for errors already mapped inside both owners: a retired newest fence
+    // surfaces STALE_OPERATION without any I/O; anything else propagates unchanged. Performs no Room
+    // rereads; the in-lock mapper below already owns those.
+    private fun reraiseAfterOwners(fence: Any, error: Throwable): Nothing {
+        synchronized(stateLock) {
+            if (fence !== currentFence) {
+                throw SessionReauthenticationException(
+                    SessionReauthenticationFailure.STALE_OPERATION,
+                )
+            }
+        }
+        throw error
+    }
+
+    // Closed R09f error mapping running inside both shared owners with caller/fence/Room precedence:
+    // caller cancellation propagates unchanged before any Room reread, then a retired newest fence maps
+    // to STALE_OPERATION, then the fenced readAuthority reread must equal the full expected snapshot or
+    // map to STALE_AUTHORITY. A failed reread keeps its strict mapped fault instead of the triggering
+    // error. With a current fence and unchanged Room, safe SyncApiException failures keep their accepted
+    // category/hints with pending retained; refresh STALE_SESSION maps to IDENTITY_MISMATCH, refresh
+    // UNAVAILABLE to AUTHORITY_UNAVAILABLE, INVALID_INPUT stays INVALID_INPUT; strict Room and vault
+    // faults reuse the R09e mappings; raw faults map closed with no secret material. A strict Room fault
+    // latched at an authorization seam arrives through the failed callback already mapped, so it survives
+    // a good reread with strictness intact.
+    private suspend fun mapReconciliationErrorLocked(
+        fence: Any,
+        expected: RecoveryRoomSnapshot,
+        error: Throwable,
+    ): Nothing {
+        if (error is CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw error
+        }
+        val caller = currentCoroutineContext()
+        caller.ensureActive()
+        synchronized(stateLock) {
+            caller.ensureActive()
+            if (fence !== currentFence) {
+                throw SessionReauthenticationException(
+                    SessionReauthenticationFailure.STALE_OPERATION,
+                )
+            }
+        }
+        val currentRoom = readAuthority(fence)
+        if (currentRoom != expected) {
+            ensureFenceCurrent(fence)
+            throw SessionReauthenticationException(
+                SessionReauthenticationFailure.STALE_AUTHORITY,
+            )
+        }
+        when (error) {
+            is SessionReauthenticationException -> throw error
+            is SyncApiException -> throw error
+            is SessionRefreshException -> throw SessionReauthenticationException(
+                when (error.failure) {
+                    SessionRefreshFailure.STALE_SESSION ->
+                        SessionReauthenticationFailure.IDENTITY_MISMATCH
+                    SessionRefreshFailure.UNAVAILABLE ->
+                        SessionReauthenticationFailure.AUTHORITY_UNAVAILABLE
+                    SessionRefreshFailure.INVALID_INPUT ->
+                        SessionReauthenticationFailure.INVALID_INPUT
+                    SessionRefreshFailure.ACCESS_UNAVAILABLE ->
+                        SessionReauthenticationFailure.AUTHORITY_UNAVAILABLE
+                },
+            )
+            is SessionVaultException -> throw SessionReauthenticationException(
+                mapVaultFailure(error.failure),
+            )
+            is RoomSessionAuthorityException -> throw SessionReauthenticationException(
+                mapAuthorityFailure(error.failure),
+            )
+            else -> throw SessionReauthenticationException(
+                SessionReauthenticationFailure.AUTHORITY_UNAVAILABLE,
+            )
+        }
+    }
 
     private suspend fun readAuthority(fence: Any): RecoveryRoomSnapshot {
         ensureFenceCurrent(fence)
