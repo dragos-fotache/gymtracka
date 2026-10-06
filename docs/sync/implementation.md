@@ -787,9 +787,48 @@ budgets...)` and `recoverCompletion()`. Construction stays inert; Room12 and app
   completion. Lease-close failure after Room commit leaves a retained unpromoted gap, not rollback; reread durable stores,
   never compensate or infer completion from a result/phase/stage disappearance. Keep operation and origin provenance.
 
-[R09d review](../archive/remaining-work/R09d-review.md) owns scoped execution. No app construction, recovered handle,
-repository/UI rebinding, occupied-credential reauthentication, legacy import/deletion/reassignment, convergence or live
-activation is delivered. Core R10 and R12a remain prerequisites before activating the app.
+[R09d review](../archive/remaining-work/R09d-review.md) owns scoped completion execution. Completion itself supplies no app
+construction, recovered handle, repository/UI rebinding, occupied replacement, legacy import/deletion/reassignment,
+convergence or live activation. The separate settled reauthentication path below remains inert. Core R10 and R12a precede activation.
+
+## Inert settled occupied-credential reauthentication
+
+`SessionReauthenticationCoordinator(origin, authority, vault, runOwner, credentialMutex)` is unused application machinery.
+Room12's `RoomSessionAuthority` additionally implements `SessionReauthenticationAuthority` over existing journal/device
+storage; no schema, vault format or app construction changed. Only an exact established ACTIVE Room/ACTIVE vault pair
+at the configured origin and service account, complete baseline and no pending predecessor can start. Dirty cache,
+retained queue/frozen bytes, checkpoints, stages, children, foreign scopes and catalogue stay unchanged.
+
+- One required shared physical-DB owner then the supplied shared refresh/credential mutex span all effects. No independent
+  owner/default lock, HTTP, Google proof, clock or UUID generation exists here. Future live integration still requires real
+  accepted-edit/timer drains and app/session coordination; primitive default/unbound leases are not application-safe.
+- Full alternating Room/vault rereads precede one private Room reservation: TRANSITIONING at checked revision+1/generation+1,
+  same origin/account, fresh supplied operation, device active=null/cached=target/cache_state=preparing. Room preflights space
+  for both journal increments, strict tuples/local roots, exact old-row predicates/counts and full post-write observations.
+- After known reservation and durable reread, reload the exact old occupied grant and recheck Room AFTER that vault load
+  immediately before one exact-revision full supplied-grant PREPARED CAS. Eligible late predecessor pending stops
+  PENDING_REFRESH before other source drift; no retry over conflict. Preserve original grant/expiry, even expired.
+- Stable target evidence permits exact Room TRANSITIONING→PREPARING at one more checked revision, reserved generation and
+  identity retained, device unchanged. Full post-write tuple/local-root/active-caller checks protect rollback, including
+  count-zero and well-formed wrong operation rewrites. Final alternating pair rereads return advisory PreparedSessionObservation,
+  never ACTIVE, visibility or reusable authorization. Existing registered preparation engine/completion must freshly admit it.
+- Resume never reserves again: only a settled same-origin/account ACTIVE predecessor at exactly target generation-1 and
+  different operation can be replaced, or an installed exact PREPARED target can be finalized without a vault write.
+  Wrong supplied grant against an installed target refuses. Target pending operation/key/body/token is preserved and
+  compared semantically across separately decoded records. PREPARING target resume is read-only idempotence.
+- Reads-only recovery classifies settled predecessor as NeedsGrant, installed target as NeedsFinalization, or finalized
+  matching pair as Prepared. Missing/empty/foreign/orphan/corrupt/changed evidence blocks; NeedsGrant never reconstructs
+  credentials or authorizes another exchange/key. Non-transitional/non-preparing Room and foreign-origin identities do not
+  probe/adopt vault credentials. Impossible transitional complete-baseline evidence fails closed.
+- Valid invocations open newest opaque process fences only after caller activity/input validation. Synchronous invalidation
+  never waits for I/O or compensates. Already-started writes may commit after cancellation/invalidation/lost return; dead
+  work cannot report success. Preserve exact durable bytes/operation, reread and resume the gap without generation restart,
+  automatic fencePrivate, clearing/tombstoning or cleanup. Older Room-checked leases/ordinary generation-bound stores are stale.
+
+[R09e review](../archive/remaining-work/R09e-review.md) owns fresh scoped evidence. This covers settled occupied ACTIVE
+replacement and safe pending refusal, not all reauthentication. Pending predecessor reconciliation/unsuccessful or malformed
+predecessor disposition and signed-out/missing-vault reauthentication remain open; no uncertain pair retirement is inferred.
+No app activation, projection/promotion, ordinary repository rebinding, legacy disposition or convergence is delivered.
 
 ## Legacy auth replay limitation
 

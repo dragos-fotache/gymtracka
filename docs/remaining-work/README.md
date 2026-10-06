@@ -1,9 +1,10 @@
 # Active task specifications
 
 **No implementation specification is currently open.**
-[R09d private completed-preparation/vault promotion](../archive/remaining-work/R09d-review.md) is accepted and archived,
-stopping at inert complete projection/Room-ready and exact vault promotion/recovery, not application activation.
-Next R09e settles one bounded inert same-account occupied-credential reauthentication slice after ownership release.
+[R09e settled occupied-credential reauthentication](../archive/remaining-work/R09e-review.md) is accepted and archived,
+stopping at inert PREPARING/PREPARED eligibility with exact pending-predecessor refusal, not application activation or
+all reauthentication. Next R09f settles one bounded inert exact-pending-refresh reconciliation slice after ownership release;
+unsuccessful/legacy-malformed predecessor disposition is not permission to discard uncertain evidence.
 See [current pickup](../coordinator-handoff.md) and [roadmap](../remaining-work-roadmap.md).
 
 The personal milestone requires initial sign-in and established-account offline use. Legacy local-only data disposition

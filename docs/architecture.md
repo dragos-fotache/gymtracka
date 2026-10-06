@@ -114,6 +114,11 @@ ACTIVE/ready in the SAME Room transaction, then phase-promotes the exact vault r
 rereads. Operation/origin/generation remain retained. Ordinary repositories/public publication stay ACTIVE-only and
 bootstrap stays canonical-only. No app activation/rebinding is constructed; see
 [completion boundaries](sync/implementation.md#private-completed-preparation-and-vault-promotion).
+R09e adds separate settled occupied ACTIVE reauthentication: exact private TRANSITIONING reservation at a new generation,
+full same-account PREPARED vault replacement, then PREPARING finalization at the same reserved generation. Existing Room12
+storage is reused; Room changes only journal/device, while retained intent/cache/domain remain untouched. Required shared run/credential
+ownership, pending-predecessor refusal and advisory crash recovery remain inert; see
+[settled reauthentication](sync/implementation.md#inert-settled-occupied-credential-reauthentication).
 
 ## Persistence and state flow
 

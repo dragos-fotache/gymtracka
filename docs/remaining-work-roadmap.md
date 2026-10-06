@@ -23,9 +23,10 @@ snapshot publication. Accepted personal slices never imply completion of their d
 
 ## Status and dependencies
 
-Accepted delivery is through [R09d](archive/remaining-work/R09d-review.md), inert completed preparation with atomic
-projection/Room-ready, exact vault promotion and completion-gap recovery. Next R09e settles one bounded inert same-account
-occupied-credential reauthentication slice after verified ownership transfer; it does not activate the app.
+Accepted delivery is through [R09e](archive/remaining-work/R09e-review.md), inert settled occupied ACTIVE same-account
+reauthentication to PREPARING/PREPARED with retained intent and exact pending refusal. Next R09f settles one bounded inert
+exact-pending-refresh reconciliation slice before same-account reauthentication after verified transfer; it does not
+activate the app or infer permission to retire an unsuccessful/legacy-malformed uncertain predecessor.
 “Pending” requires eligibility under explicit/standing authority and a bounded pickup spec, not another approval for each
 eligible next slice. “Deferred” remains required for its later
 milestone and is not automatically brought forward. Historical M-series assignments are not a second execution plan.
@@ -40,7 +41,7 @@ milestone and is not automatically brought forward. Historical M-series assignme
 | R06 durable push | **a claiming/exact replay, b outcomes/retry, c atomic canonical acknowledgment and d bounded delivery loop accepted**; production activation remains later integration | R03b, R04, R05 |
 | R07 incremental pull | **a checkpoint transactions, b bounded HTTP pull, c shared push-first/valid-tail orchestration and package gates accepted** | R06; b after a, c after b |
 | R08 bootstrap/full resync | **a staging, b bounded HTTP download and c complete canonical baseline/absence/protected publication recovery accepted; no further R08 slice** | R05–R07; app-facing authority/convergence/barriers remain R09/R10/R12 |
-| R09 single-account activation/recovery | a private authority/journal, b prepared vault/Room coordination/recovery, c private engine/bootstrap and d inert completion/promotion accepted; e same-account occupied-credential reauthentication next; app activation pending; legacy local-data decision unresolved; general transitions/import-replace UI deferred public | R04, R08; production activation also needs R12a |
+| R09 single-account activation/recovery | a private authority/journal, b prepared coordination/recovery, c private engine/bootstrap, d completion/promotion and e settled occupied ACTIVE reauthentication accepted; f exact-pending-refresh reconciliation next; unsuccessful pending/signed-out/missing-vault recovery and app activation pending; legacy disposition unresolved; general transitions/import-replace UI deferred public | R04, R08; production activation also needs R12a |
 | R10 engine convergence/recovery | Core a pending; expanded b before public release | R03b/c, R06–R09 |
 | R11 Google identity/proofs | Personal sign-in/reauthentication pending; sign-out UI and lifecycle proofs deferred public | Relevant R02, R04 |
 | R12 feature/app reconciliation | a edit/publication barriers, b observation, c app/timer rebinding pending | R05/R07/R09 integration; barriers can be developed earlier |
@@ -170,8 +171,13 @@ is accepted, stopping at stable private observations without occupied credential
 baseline and actual valid-tail drivers without projection, promotion or ACTIVE writing.
 [R09d completed preparation/promotion](archive/remaining-work/R09d-review.md) is accepted, separately composing complete
 projection/Room ACTIVE-ready in one transaction and exact vault phase promotion/recovery without app activation.
-R09e next settles one bounded inert same-account occupied-credential reauthentication slice; application activation/
-recovery follows its remaining gates. No legacy-data disposition is inferred.
+[R09e settled occupied ACTIVE reauthentication](archive/remaining-work/R09e-review.md) is accepted: private TRANSITIONING
+reservation/new generation, exact full supplied-grant PREPARED vault CAS and PREPARING finalization, retaining all intent
+and refusing uncertain pending predecessors. It is not all same-account recovery. Next R09f settles one bounded inert
+exact-pending-refresh reconciliation path before reauthentication, reusing delivered refresh machinery. Unsuccessful or
+legacy-malformed pending disposition is unresolved: preserve exact bytes and escalate before retirement/cleanup.
+Signed-out/missing-vault same-account recovery and application activation/offline established-account integration remain
+outstanding; R12a/core R10 still gate activation. No legacy-data disposition is inferred.
 
 **Deferred public:** signed-out local editing, sign-out and switching UI, and general import/replace choices. Retain their
 existing isolation, drain, crash and collision obligations: sign-out keeps private account cache/outbox; switching never

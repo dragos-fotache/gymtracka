@@ -300,8 +300,13 @@ resume and read-only restart classification. R09c now separately supplies fresh 
 bootstrap and actual valid-tail coordination under registered Room permits/shared ownership. R09d adds the bounded
 completion portion: actual terminal tail, required paired publication lease, projection plus ACTIVE/ready journal/device
 in one Room transaction, then exact phase-only vault CAS and coherent alternating readiness/record rereads. Its inert
-recovery promotes only that exact completed gap, without HTTP, publication or Room writes. These paths replace no
-occupied credentials and activate no app; reauthentication and app integration remain beyond this boundary.
+recovery promotes only that exact completed gap, without HTTP, publication or Room writes. Those preparation/completion
+paths replace no occupied credentials and activate no app. R09e separately adds inert settled occupied ACTIVE same-account replacement:
+checked private TRANSITIONING reservation/new generation, exact full supplied-grant PREPARED vault CAS, then PREPARING
+finalization at the same reserved generation. It requires shared physical-DB/credential ownership, coherent pair rereads
+and no pending predecessor; retained intent/cache/domain are untouched. Pending predecessor reconciliation/disposition,
+signed-out/missing-vault reauthentication and live app integration remain outstanding. See
+[implemented settled boundary](implementation.md#inert-settled-occupied-credential-reauthentication).
 Existing canonical-only engine recovery is reused, not recreated for completed preparation.
 Ordinary local backup need not be disabled to exclude credentials.
 

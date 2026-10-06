@@ -213,6 +213,11 @@ v1 asset to add user data. Seed tests are not Android JVM/device tests.
   named-index whitelists. Retain complete old-table/sequence comparisons and demonstrate the next allocation.
 - Coroutine exception identity assertions belong inside the actual caller, not across `async.await` stack recovery.
   Gate actual I/O/cancellation entry and check the intended child context; a test receiver's context can select its parent.
+  Capture a canceled child's outcome separately and join it; awaiting a canceled Deferred still throws despite a caught
+  cancellation. A queued Mutex cancellation probe may itself be stack-recovery copied: use a test-only non-copying
+  `CopyableThrowable` probe for an exact-reference oracle, never disable global debug/stack recovery. Already-canceled
+  entry tests must actually enter the child before self-canceling/calling the API; a default-start child canceled before
+  scheduling never executes its body.
 - Prove pre-suspension input ownership with a transaction-executor admission barrier and a separate query executor.
   Start the handler `UNDISPATCHED` inside an inherited `coroutineScope`, await its captured transaction runnable, then
   mutate inputs before admission. A generic first-query callback can race earlier/background work during capture.
@@ -241,9 +246,10 @@ stays in the linked reviews; consult only when assessing coverage freshness or i
 
 | Layer | Latest relevant recorded evidence | Limitation |
 |---|---|---|
-| Offline JVM/compilation | [R09d review](archive/remaining-work/R09d-review.md): fresh full offline JVM plus executed production/Android-test compilation/KSP | Inert completion and existing offline coverage, not convergence or activation |
-| Debug assembly/lint/APK | [R09d review](archive/remaining-work/R09d-review.md): debug assembly/lint, schema/source/packaged-asset preservation and test-marker/config-asset exclusion; manifests/backup unchanged | One existing newer-version warning; scoped packaging checks, not release/security audit |
-| Private completion and affected Room/session | [R09d review](archive/remaining-work/R09d-review.md): individual API37 completion/recovery/fence and affected private-engine/Room-vault/projection/baseline/shared-driver classes | No fresh unfiltered instrumentation, API24, two-store HTTP convergence, activation or live OEM/cloud transfer |
+| Offline JVM/compilation | [R09e review](archive/remaining-work/R09e-review.md): fresh full offline JVM plus executed production/Android-test compilation/KSP | Inert settled reauthentication and existing offline coverage, not convergence or activation |
+| Debug assembly/lint/APK | [R09e review](archive/remaining-work/R09e-review.md): assembly/frozen-source lint, schema/source/packaged-asset preservation, QA-marker exclusion and packaged backup policy | Initial detector crash retained in evidence; final unsuppressed lint passed with one existing newer-version warning; scoped checks, not release/security audit |
+| Settled reauthentication and affected Room/session | [R09e review](archive/remaining-work/R09e-review.md): individual API37 real authority/Keystore/reopen/retained-intent and affected Room/preparation classes | No fresh unfiltered instrumentation, API24, two-store HTTP convergence, activation or live OEM/cloud transfer |
+| Private completion and affected engine/publication | [R09d review](archive/remaining-work/R09d-review.md): individual API37 completion/recovery/fence and affected private-engine/projection/baseline/shared-driver classes | Historical scoped evidence, not freshly rerun by R09e or permission to activate |
 | Real service | [R08c review](archive/remaining-work/R08c-review.md): fresh full isolated real-backend HTTP/auth package | Local interoperability, not deployed TLS/Google or real Room-backed engine convergence; legacy replay unresolved |
 | Full instrumentation | [R08c review](archive/remaining-work/R08c-review.md): fresh full unfiltered API37/Android17 16KB-page emulator regression, including complete baseline/recovery, R08a/b, supported-start/copied-v1 migrations and existing persistence/sync/HTTP/vault/Compose/app flows | No API24, live phone/Google, hosted CI, two-store convergence or activated-app publication evidence |
 | Focused private authority/migrations | [R09a review](archive/remaining-work/R09a-review.md): authority/session package plus separate populated11→12, all-supported/copied-asset, staging migration and foundation classes | Strict fixture correction retained; current-slice scoped evidence, not full unfiltered instrumentation or app activation |
