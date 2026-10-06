@@ -284,7 +284,8 @@ internal class SessionRefreshCoordinator(
             sentRecord.binding != pendingRecord.binding ||
             sentRecord.operationId != pendingRecord.operationId ||
             sentRecord.phase != pendingRecord.phase ||
-            sentRecord.session != pendingRecord.session
+            sentRecord.session != pendingRecord.session ||
+            sentRecord.supersededSessions != pendingRecord.supersededSessions
         ) {
             currentCoroutineContext().ensureActive()
             throw SessionRefreshException(SessionRefreshFailure.STALE_SESSION)
@@ -334,7 +335,8 @@ internal class SessionRefreshCoordinator(
             currentRecord.binding != sentRecord.binding ||
             currentRecord.operationId != sentRecord.operationId ||
             currentRecord.phase != sentRecord.phase ||
-            currentRecord.session != sentRecord.session
+            currentRecord.session != sentRecord.session ||
+            currentRecord.supersededSessions != sentRecord.supersededSessions
         ) {
             currentCoroutineContext().ensureActive()
             throw SessionRefreshException(SessionRefreshFailure.STALE_SESSION)
@@ -350,7 +352,8 @@ internal class SessionRefreshCoordinator(
             provenRecord.operationId != finalRecord.operationId ||
             provenRecord.phase != finalRecord.phase ||
             provenRecord.session != finalRecord.session ||
-            provenRecord.pendingRefresh != null
+            provenRecord.pendingRefresh != null ||
+            provenRecord.supersededSessions != finalRecord.supersededSessions
         ) {
             currentCoroutineContext().ensureActive()
             throw SessionRefreshException(SessionRefreshFailure.STALE_SESSION)

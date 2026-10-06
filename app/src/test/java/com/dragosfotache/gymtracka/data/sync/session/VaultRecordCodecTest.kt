@@ -797,10 +797,12 @@ class VaultRecordCodecTest {
     @Test
     fun unsupportedVersionIsDistinctAndNondestructive() {
         val snapshot = VaultTestFixtures.snapshot()
-        val v2 = VaultTestFixtures.encodeWithVersion(snapshot, 2)
+        // R09g reserves version 2 for archive-bearing records; true unknown
+        // versions stay distinct (3, 0, MAX) with no assertion weakening.
+        val v3 = VaultTestFixtures.encodeWithVersion(snapshot, 3)
         val v0 = VaultTestFixtures.encodeWithVersion(snapshot, 0)
         val intMax = VaultTestFixtures.encodeWithVersion(snapshot, Int.MAX_VALUE)
-        assertDecodeFailure(VaultFailure.UNSUPPORTED_VERSION, v2)
+        assertDecodeFailure(VaultFailure.UNSUPPORTED_VERSION, v3)
         assertDecodeFailure(VaultFailure.UNSUPPORTED_VERSION, v0)
         assertDecodeFailure(VaultFailure.UNSUPPORTED_VERSION, intMax)
         // Original valid bytes still decode afterwards: never a destructive upgrade.

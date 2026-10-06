@@ -579,10 +579,12 @@ not APK components. No URL, OAuth configuration, account construction, or adapte
   and exact pending-refresh operation/body/key. Pending token matches the stored refresh token. Prepared/active are
   stored labels, not account-visibility permission.
 - `SessionVault` load/CAS operates on a checked monotonically increasing revision. Whole grant and pending attempt
-  replace together. Clearing writes a positive-revision encrypted tombstone, not unlink/reset-to-zero; stale CAS cannot
-  reinstall over that tombstone. Corrupt/unsupported/missing-key state fails closed and remains preserved.
-- Strict version-1 binary UTF-8 retains exact sensitive text/expiry values, rejects malformed/trailing data, and avoids
-  arbitrary content caps. `EncryptedSessionVault` rereads committed storage under a mutex; there is no success cache or
+  replace together. Clearing an archive-empty record writes a positive-revision encrypted tombstone, not unlink/reset-to-zero;
+  stale CAS cannot reinstall over that tombstone. Retained superseded evidence cannot be silently cleared; see
+  [same-account recovery](#inert-retained-account-recovery-and-superseded-evidence). Corrupt/unsupported/missing-key state
+  fails closed and remains preserved.
+- Archive-free snapshots retain exact version-1 bytes; strict version-2 adds flat encrypted superseded evidence.
+  Binary UTF-8 preserves sensitive text/expiry values, rejects malformed/trailing data and avoids arbitrary content caps. `EncryptedSessionVault` rereads committed storage under a mutex; there is no success cache or
   implicit repair. Owned byte buffers are cleaned best effort on IO, without a secure GC/flash-erasure claim.
 - The inert Android factory defers I/O/key creation and shares a process mutex. Android Keystore uses nonexportable
   AES-256/GCM, provider-generated 12-byte IV and 128-bit tag. Missing/wrong-kind keys are not regenerated during reads.
@@ -826,8 +828,8 @@ retained queue/frozen bytes, checkpoints, stages, children, foreign scopes and c
   automatic fencePrivate, clearing/tombstoning or cleanup. Older Room-checked leases/ordinary generation-bound stores are stale.
 
 [R09e review](../archive/remaining-work/R09e-review.md) owns scoped settled occupied ACTIVE replacement/pending-refusal
-evidence. Exact established pending replay is delivered separately below; unsuccessful/malformed predecessor disposition
-and signed-out/missing-vault reauthentication remain open. No uncertain pair retirement is inferred. No app activation,
+evidence. Exact established pending replay and the separate broader retained-account recovery boundary are delivered
+below. R09e itself remains settled/adjacent-only; no uncertain pair retirement is inferred. No app activation,
 projection/promotion, ordinary repository rebinding, legacy disposition or convergence is delivered.
 
 ## Inert exact-pending-refresh reconciliation
@@ -860,9 +862,48 @@ ACTIVE vault; R09e replacement must separately freshly admit that pair. No Room 
   unchanged. Local roots are not adopted; subsequent R09e reservation still independently refuses them unchanged.
 
 [R09f review](../archive/remaining-work/R09f-review.md) owns fresh scoped replay/composition evidence, not complete R09 or
-live activation. Unsuccessful/legacy-malformed pending disposition, already-transitional pending gaps, signed-out/missing
-vault recovery, core R10 and R12a remain outstanding. The [roadmap](../remaining-work-roadmap.md#remaining-r09-plan) owns
-the remaining delivery plan; it authorizes no automatic uncertain retirement.
+live activation. R09g supplies the separate retained-account recovery boundary below; core R10 and R12a remain activation
+gates. The [roadmap](../remaining-work-roadmap.md#remaining-r09-plan) owns the finite remaining plan.
+
+## Inert retained-account recovery and superseded evidence
+
+R09g adds unused `SameAccountRecoveryCoordinator(origin, authority, vault, runOwner, credentialMutex)` and narrow
+`SameAccountRecoveryAuthority` checks/reservation on Room12. It handles retained signed-out/missing-vault recovery,
+explicit fresh-grant supersession of unsuccessful/legacy-malformed uncertainty and interrupted transitions. No schema,
+asset, HTTP/Google, clock/UUID, app construction, ordinary repository/UI rebinding or activation changed.
+
+- Exact retained service UUID and known configured-origin provenance are required; coherent device cache-state is
+  SIGNED_OUT/private, ACTIVE/ready or private/preparing. Unknown/foreign/corrupt provenance and local-only roots refuse
+  unchanged, including roots introduced after reservation. Complete or incomplete existing baseline stays private.
+- Shared physical-DB owner THEN shared credential mutex span all effects. Newest opaque invocation/cancellation checks,
+  full alternating Room/vault/Room/vault/Room rereads, terminal exact provenance/root checks and durable error rereads
+  fence source/target success and failures. Synthesized drift errors have the same precedence as seam faults; no CAS retry.
+- `prepare` reserves TRANSITIONING at checked revision+1/generation+1, preserves the account and every domain/cache/intent
+  row, verifies exact old vault and Room-after-vault before one full supplied-grant PREPARED CAS, then reuses R09e's exact
+  PREPARING finalization at revision+1 with the reserved generation/operation unchanged. No generation restart/compensation.
+- `resume` needs a fresh supplied same-account grant for missing credentials or readable strictly older same-origin/UUID
+  evidence with different operation. Older records are NOT credential/data authority. This includes signed-out7/vault6 →
+  reserved8/vault6 pre-CAS restart gaps. It installs under the exact existing reservation; an installed exact PREPARED
+  target instead requires full supplied-grant equality and only finalizes/idempotently rereads, preserving target pending.
+  Same/newer incompatible bindings, foreign/unreadable evidence and old-token reuse refuse; Room reconstructs no grant.
+- Read-only `recover` returns nonsecret replacement/NeedsGrant/NeedsFinalization/Prepared/Blocked observations, never
+  credentials, reusable authorization or visibility. Healthy established offline startup still uses its separate admission.
+- Owner-approved [P17](../../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions) supersession
+  atomically appends the exact uncertain source revision/full grant/deadlines/pending operation/key/body/token as flat
+  `VaultSupersededSessions` while installing the new grant. Collections are defensively owned and unmodifiable; entries
+  have increasing revisions/generations, consistent origin/UUID, no nesting and no archived-token reactivation.
+- Archive-free records preserve EXACT v1 encoding. Archive-bearing v2 extends the grammar with a checked positive count
+  and full source records, validates remaining bytes before allocation and rejects malformed/inconsistent/trailing data.
+  Ordinary refresh, completion/promotion, startup and R09e use full semantic archive/pending equality and carry archives.
+  CAS refuses archive removal/modification/reordering, archive-bearing null clearing and uncertain identity replacement
+  without its exact append. Successful ordinary same-binding rotation still settles grant/pending atomically.
+- Already-started writes may commit after an uncertain return; recover durable state, never infer rollback or cleanup.
+  Archives are permanently excluded from selection/replay/rebinding and have no automatic pruning. Later separately
+  authorized sign-out/deletion must account for ALL credential material. No rounding/rekey/server-revocation claim.
+
+[R09g review](../archive/remaining-work/R09g-review.md) owns fresh JVM/full instrumentation/lint/APK evidence. Stopped at
+inert safely recoverable same-account preparation eligibility. R12a real edit/timer drains and core R10 two-store actual
+engine/HTTP convergence precede R09h production activation. Legacy-data disposition and live milestone gates remain open.
 
 ## Legacy auth replay limitation
 
@@ -873,7 +914,8 @@ an uncertain pending predecessor can rotate freshly. An uncertain consumed-token
 
 Never round timestamps, rewrite accepted replay, invent a new uncertain key, blanket-revoke sessions, or infer account/
 cache deletion. Strict malformed replay preserves the original pending pair; passing new-grant interoperability does
-not prove legacy recovery. Carry this limitation into startup/recovery design and release review.
+not prove legacy replay repair. Explicit fresh-session [supersession](#inert-retained-account-recovery-and-superseded-evidence)
+retains/fences the original encrypted evidence instead; carry the unrepaired replay limitation into release review.
 
 ## Test infrastructure boundary
 

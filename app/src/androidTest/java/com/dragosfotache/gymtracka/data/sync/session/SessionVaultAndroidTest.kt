@@ -320,12 +320,18 @@ class SessionVaultAndroidTest {
         assertEquals(KEY_A, reloaded.record?.pendingRefresh?.attempt?.idempotencyKey)
 
         // Rotation completing in ONE commit then tombstone; reopen observes each step.
+        // Ordinary rotation preserves activation identity (binding + operation)
+        // while completing the grant and clearing pending; it fabricates no archive.
         val rotated = recordA(
-            operationId = OP_ACTIVE,
+            binding = prepared.binding,
+            operationId = prepared.operationId,
             phase = VaultSessionPhase.ACTIVE,
             session = sessionA(access = "opaque-access-002", refresh = "opaque-refresh-002"),
             pendingRefresh = null,
         )
+        assertEquals(prepared.binding, rotated.binding)
+        assertEquals(prepared.operationId, rotated.operationId)
+        assertTrue(rotated.supersededSessions.entries.isEmpty())
         val s2 = reopened.compareAndSet(1L, rotated)
         assertEquals(2L, s2.revision)
         val tombstone = reopened.compareAndSet(2L, null)

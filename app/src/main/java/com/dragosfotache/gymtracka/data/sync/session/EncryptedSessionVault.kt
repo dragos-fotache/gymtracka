@@ -72,9 +72,77 @@ internal class EncryptedSessionVault(
             if (expectedRevision == Long.MAX_VALUE) {
                 throw SessionVaultException(VaultFailure.REVISION_EXHAUSTED)
             }
+            validateArchiveTransition(current, record)
             val next = VaultSnapshot(expectedRevision + 1L, record)
             ioRun { commitSnapshot(next) }.orThrowClosed(VaultFailure.UNAVAILABLE)
             next
+        }
+    }
+
+    /**
+     * Archive preservation fence for every CAS write. Rejects removal,
+     * reordering or modification of already archived entries, clearing a
+     * nonempty archive via a null record, and reinstalling archived-session
+     * credentials (enforced by record/snapshot validation). A single archive
+     * growth step is allowed only when archiving the exact uncertain source
+     * being replaced: the current record must carry pending, the new binding
+     * or operation must differ, and the appended entry must equal the
+     * current revision plus the current record stripped of its archive.
+     * Legacy primitive null CAS over an archive-empty record remains allowed
+     * as established clearing behavior. All refusals perform no write and no
+     * crypto-key creation; stale/overflow callers already returned above.
+     */
+    private fun validateArchiveTransition(current: VaultSnapshot, next: VaultSessionRecord?) {
+        val currentRecord = current.record ?: return
+        if (next == null) {
+            if (currentRecord.supersededSessions.entries.isNotEmpty()) {
+                throw SessionVaultException(VaultFailure.INVALID_RECORD)
+            }
+            return
+        }
+        val oldArchive = currentRecord.supersededSessions.entries
+        val newArchive = next.supersededSessions.entries
+        if (newArchive.size < oldArchive.size) {
+            throw SessionVaultException(VaultFailure.INVALID_RECORD)
+        }
+        for (index in oldArchive.indices) {
+            if (newArchive[index] != oldArchive[index]) {
+                throw SessionVaultException(VaultFailure.INVALID_RECORD)
+            }
+        }
+        // A binding/operation-changing replacement of an uncertain source
+        // must append its exact evidence: same-size archives would silently
+        // discard it. An ordinary same-binding refresh legitimately carries
+        // the archive unchanged while clearing pending.
+        val replacesBinding = next.binding != currentRecord.binding ||
+            next.operationId != currentRecord.operationId
+        if (currentRecord.pendingRefresh != null && replacesBinding) {
+            if (newArchive.size != oldArchive.size + 1) {
+                throw SessionVaultException(VaultFailure.INVALID_RECORD)
+            }
+        } else if (newArchive.size == oldArchive.size) {
+            return
+        }
+        if (newArchive.size != oldArchive.size + 1) {
+            throw SessionVaultException(VaultFailure.INVALID_RECORD)
+        }
+        if (currentRecord.pendingRefresh == null) {
+            throw SessionVaultException(VaultFailure.INVALID_RECORD)
+        }
+        if (next.binding == currentRecord.binding && next.operationId == currentRecord.operationId) {
+            throw SessionVaultException(VaultFailure.INVALID_RECORD)
+        }
+        val appended = newArchive[oldArchive.size]
+        if (appended.sourceRevision != current.revision) {
+            throw SessionVaultException(VaultFailure.INVALID_RECORD)
+        }
+        val stripped = try {
+            currentRecord.copy(supersededSessions = VaultSupersededSessions(emptyList()))
+        } catch (e: Exception) {
+            throw SessionVaultException(VaultFailure.INVALID_RECORD)
+        }
+        if (!vaultRecordsSemanticEqual(appended.record, stripped)) {
+            throw SessionVaultException(VaultFailure.INVALID_RECORD)
         }
     }
 

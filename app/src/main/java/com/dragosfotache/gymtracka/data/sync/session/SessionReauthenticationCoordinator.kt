@@ -392,6 +392,17 @@ internal class SessionReauthenticationCoordinator(
                 SessionReauthenticationFailure.PENDING_REFRESH,
             )
         }
+        // An archived session is permanently fenced: a supplied grant
+        // reactivating an archived refresh token refuses before any Room
+        // reservation creates a private generation unnecessarily.
+        for (entry in sourceRecord.supersededSessions.entries) {
+            if (session.refreshToken == entry.record.session.refreshToken) {
+                ensureFenceCurrent(fence)
+                throw SessionReauthenticationException(
+                    SessionReauthenticationFailure.IDENTITY_MISMATCH,
+                )
+            }
+        }
         if (expected.revision > Long.MAX_VALUE - 2L ||
             expected.sessionGeneration == Long.MAX_VALUE ||
             source.revision == Long.MAX_VALUE
@@ -468,6 +479,7 @@ internal class SessionReauthenticationCoordinator(
             phase = VaultSessionPhase.PREPARED,
             session = session,
             pendingRefresh = null,
+            supersededSessions = sourceRecord.supersededSessions,
         )
         val committed = casVault(fence, source.revision, intended)
         val committedRecord = committed.record
@@ -649,12 +661,24 @@ internal class SessionReauthenticationCoordinator(
             }
             verifyPreflightStable(fence, expected, snapshot.revision, record)
             ensureFenceCurrent(fence)
+            // Permanently fenced archive: refuse a supplied grant that
+            // reactivates an archived refresh token before the predecessor
+            // CAS, rather than relying on record construction to fail.
+            for (entry in record.supersededSessions.entries) {
+                if (session.refreshToken == entry.record.session.refreshToken) {
+                    ensureFenceCurrent(fence)
+                    throw SessionReauthenticationException(
+                        SessionReauthenticationFailure.IDENTITY_MISMATCH,
+                    )
+                }
+            }
             val intended = VaultSessionRecord(
                 binding = identity.binding,
                 operationId = identity.operationId,
                 phase = VaultSessionPhase.PREPARED,
                 session = session,
                 pendingRefresh = null,
+                supersededSessions = record.supersededSessions,
             )
             val committed = casVault(fence, snapshot.revision, intended)
             val committedRecord = committed.record
@@ -1289,22 +1313,5 @@ internal class SessionReauthenticationCoordinator(
     private fun vaultRecordsEqual(
         actual: VaultSessionRecord,
         expected: VaultSessionRecord,
-    ): Boolean {
-        if (actual.binding != expected.binding ||
-            actual.operationId != expected.operationId ||
-            actual.phase != expected.phase ||
-            actual.session != expected.session
-        ) {
-            return false
-        }
-        val actualPending = actual.pendingRefresh
-        val expectedPending = expected.pendingRefresh
-        if (actualPending == null || expectedPending == null) {
-            return actualPending == null && expectedPending == null
-        }
-        return actualPending.operationId == expectedPending.operationId &&
-            actualPending.attempt.idempotencyKey == expectedPending.attempt.idempotencyKey &&
-            actualPending.attempt.requestJson == expectedPending.attempt.requestJson &&
-            actualPending.attempt.refreshToken == expectedPending.attempt.refreshToken
-    }
+    ): Boolean = vaultRecordsSemanticEqual(actual, expected)
 }

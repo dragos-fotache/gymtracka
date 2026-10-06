@@ -1,95 +1,74 @@
 # Coordinator pickup
 
 > **Current snapshot only. Replace state; do not append session history.**
-> **Short prompt, durable docs:** use the [minimal successor-prompt rule](coordinator-workflow.md#minimal-successor-prompts--owner-rule).
-> Follow [progressive reading](README.md#progressive-reading-and-context-discipline).
+> Follow [minimal successor prompts](coordinator-workflow.md#minimal-successor-prompts--owner-rule) and
+> [progressive reading](README.md#progressive-reading-and-context-discipline).
 
 ## Current boundary and next authority
 
-**R09f — inert exact-pending-refresh reconciliation is accepted.**
-[Review](archive/remaining-work/R09f-review.md) owns scoped evidence; [spec](archive/remaining-work/R09f-task.md) records its
-contract. No implementation specification remains open. Production is still signed-out/local-only. One exact established
-ACTIVE pending replay through shared refresh machinery → original full-grant/no-pending CAS → advisory settled old ACTIVE
-observation is NOT reauthentication, activation, projection/promotion or all same-account recovery. R09e replacement must
-separately freshly admit that settled pair. Unsuccessful/legacy-malformed uncertain attempts remain retained unchanged.
+**R09g — complete inert same-account recovery is accepted.**
+[Review](archive/remaining-work/R09g-review.md) owns executed evidence;
+[specification](archive/remaining-work/R09g-task.md) records its contract. No implementation specification is open.
+Production remains signed-out/local-only; no new coordinator/engine/recovered app handle is constructed at startup.
 
-**Next: R09g — complete same-account recovery**, after verified fresh-coordinator transfer. The owner approved the
-[two-slice remaining R09 plan](remaining-work-roadmap.md#remaining-r09-plan): R09g recovery, then R09h app-facing activation/
-offline recovery after its gates, then reduced personal R09 closure. R09g consolidates signed-out/missing-vault recovery,
-unsuccessful/legacy-malformed pending handling and interrupted transitions; no automatic sub-slices or R09i. The
-[major-task slicing rule](coordinator-workflow.md#major-task-slicing--owner-rule) assigns the first coordinator taking a NEW
-major task its finite whole-task breakdown, not each sub-slice successor. Additional splits need a concrete reason brought
-to the user before changing the plan.
+[Implemented recovery](sync/implementation.md#inert-retained-account-recovery-and-superseded-evidence) covers retained
+signed-out/missing-vault recovery, explicit fresh-grant supersession of unsuccessful/legacy-malformed uncertainty and
+interrupted transitions. Room12 journal/device storage is reused. Archive-free vault records retain v1 bytes; archive-bearing
+v2 atomically retains/fences exact uncertain evidence with the new grant. Readable strictly older same-origin/service-UUID
+records are evidence only, never credentials/data authority; resume needs a fresh grant at the exact existing reservation.
+No retirement, cleanup, old-token rekey, expiry rounding, orphan credential adoption or server-revocation claim.
+Cached domain/children/relationships, canonical/cache/intent/frozen bytes, checkpoints/stages and foreign scopes remain intact.
 
-R09g pickup/design is authorized, but **failed/legacy-malformed uncertain predecessor disposition remains unresolved**.
-Escalate that decision before implementing affected recovery; this plan authorizes no retirement, grant cleanup, new
-uncertain key, expiry rounding, rekey or orphan adoption. Already-TRANSITIONING pending gaps also remain retained until
-safe disposition is settled. No other service UUID may adopt retained data. Reuse delivered Room12, vault CAS, shared
-owner/refresh/lease machinery and R09e/f boundaries rather than recreating them. Stop R09g at inert same-account preparation
-eligibility, not application activation. R09h cannot bypass R12a/core R10 or duplicate R11 Google/R13 account UI work.
+**Next outcome: R09h — app-facing activation/offline recovery, BLOCKED on prerequisites.**
+The owner-approved [finite R09 plan](remaining-work-roadmap.md#remaining-r09-plan) remains R09g (accepted), R09h, then reduced
+personal R09 closure. **R12a real finite-edit/timer barriers and core R10 actual two-Room-store engine/HTTP convergence must
+precede production activation.** Ask the user which prerequisite package to execute next; do not bypass them, select another
+branch automatically or invent R09i/sub-slices. A dependency-ready authorized slice needs a fresh coordinator transfer.
+R11 Google sign-in and R13 account UI/foreground triggers remain separate, not duplicate R09h scope.
 
-[P16](../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions) owns mandatory initial sign-in and
-established-account offline use/editing/restart without online login every launch. General signed-out editing, switching/
-sign-out and import-replace UI remain deferred public scope. **Legacy local-only disposition is unresolved:** no import,
-delete or reassignment is authorized; preparation and reauthentication refuse those roots unchanged, including roots
-appearing after reservation. Obtain owner direction before work requiring their activation. R12a real finite-edit/timer
-barriers and core R10 convergence still precede production activation. Controlled test barriers never substitute for a
-no-op in a live editing app. No push/deployment/private configuration/live Google/account/device action.
+[P16/P17](../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions) own mandatory initial sign-in,
+established-account offline use and evidence-only same-account supersession. General switching/sign-out/import-replace UI
+remains deferred public scope. **Legacy local-only data disposition is unresolved:** no import, deletion or reassignment;
+preparation refuses those roots unchanged, including roots introduced after reservation. Obtain owner direction before
+activation work requiring that choice. Unreadable/foreign/unknown-provenance and incompatible same/newer vault bindings
+remain preserved/private. Historical malformed accepted replay is not repaired by supersession.
 
 ## Pickup and execution
 
-Supplied unchanged AGENTS → README policy → this handoff → roadmap status/dependencies → workflow authority/transfer rules;
-inspect BOTH live trees/indexes/all untracked/HEADs, actual roles/models and resource ownership. Readiness is bounded scope/
-authority/dependencies/gates, not a full design audit. Do not specify, edit, delegate or build until verified release.
-Read the full workflow before delegation. After release, settle R09g's concrete specification under the approved finite
-plan and escalate unresolved disposition/blockers to the user before affected implementation. Do not split again, waive
-gates or skip to another roadmap branch around a blocker.
+Supplied unchanged AGENTS → README policy → this handoff → roadmap status/dependencies → workflow authority/transfer rules.
+Verify BOTH live trees/indexes/all untracked/HEADs, actual roles/models and resource ownership. Readiness is bounded scope/
+authority/dependencies/gates, not a full audit. Do not specify, edit, delegate or build before verified ownership release.
+Read the full [workflow](coordinator-workflow.md) before delegation and relevant contracts/code before each concrete decision.
+Escalate blockers/questions; never waive a gate, silently substitute a model, choose another task or change the finite plan.
 
-Coordinator must be EXACT fresh native Pi `openai-codex/gpt-6.1-sol`/high. Worker/QA must be FRESH native
-`meta/muse-spark-1.3-contributor`/high sessions in rediscovered task-owned panes. Reuse suitable contributor panels by
-starting fresh sessions; completed conversations do not transfer. Preserve production/test source independence;
-coordinator owns integration/final review. Reports are asynchronous (`herdr agent prompt gym-coordinator ...`), never
---wait, agent wait or acknowledgment polling. EVERY Gradle requires an explicit serialized owner slot. Lint analyzes test
-sources too: freeze both roles' sources during its execution. Preserve accepted history/subsequent work; never amend/
-rewrite, silently substitute a model, waive a gate, select legacy disposition, choose another task or widen scope.
+Coordinator must be fresh native Pi `openai-codex/gpt-6.1-sol`/high. Worker/QA must be fresh native
+`meta/muse-spark-1.3-contributor`/high, with disjoint production/test access. Rediscover task-owned panes; completed
+conversations do not transfer. Reports are fully asynchronous to the live `gym-coordinator`, without `--wait`, agent wait
+or acknowledgment polling. EVERY Gradle needs an explicit serialized slot; lint freezes both roles' sources.
+Preserve accepted history/unrelated changes. No pushes, deployment, private configuration, real Google/account/device
+or personal-data actions without separate permission.
 
-## Foundations and unresolved obligations
+## Foundations and verification limits
 
-- [Room authority](sync/implementation.md#durable-private-room-account-authority): strict coherent observations, exact
-  reservation/private fencing and registered completion writer, checked revision/generation, retained provenance. Room12;
-  entity changes require preserving migration/KSP/export/all-supported/copied-v1 gates, never destructive fallback/asset edits.
-- [Prepared coordination](sync/implementation.md#prepared-vaultroom-coordination-and-recovery): exact empty/tombstone CAS,
-  reservation-only resume; initial methods never replace occupied/pending grants. NeedsGrant reconstructs nothing.
-- [Private engine](sync/implementation.md#private-prepared-session-engine-and-bootstrap): referential registered permits,
-  durable epoch read INSIDE shared owner, exact Room/refresh/HTTP fences, canonical-only bootstrap. Public prepared-run
-  publication refuses; retained/corrupt stages never authorize automatic cleanup.
-- [Completion](sync/implementation.md#private-completed-preparation-and-vault-promotion): actual terminal tail, coherent
-  complete projection/journal/device in ONE Room transaction, exact phase-only vault promotion with alternating rereads.
-  Post-tail rotation/pending bytes preserved; lease-close/uncertain return is not rollback. Gap recovery is narrower than
-  established-account recovery after editing; stored phases/results are not visibility.
-- [Settled reauthentication](sync/implementation.md#inert-settled-occupied-credential-reauthentication): shared DB owner
-  then required shared credential mutex; exact ACTIVE source/no pending, two checked Room revisions/one new generation,
-  exact supplied-grant CAS and fresh Room-after-vault-before-CAS check. No domain/cache/intent writes. Only adjacent settled
-  predecessor or exact installed target resumes; missing/foreign/orphan evidence stays private.
-- [Exact pending replay](sync/implementation.md#inert-exact-pending-refresh-reconciliation): same shared refresh resources,
-  required old ACTIVE Room authorization, ONE retained operation/key/body/token transmission, original full-grant CAS and
-  exact revision+1/full pair rereads. No clock/UUID/fresh rotation or Room writer. Scoped lease/error rereads are fenced;
-  already-started writes may commit, never compensate. Advisory settled evidence is not app authorization.
-- [Refresh/recovery](sync/implementation.md#encrypted-vault-and-refresh): expired access is not a deletion clock; primitive
-  default/unbound lease is not app authorization. Live integration must coordinate existing handles/edit drains/ownership.
-- Latest [R09f evidence](archive/remaining-work/R09f-review.md): fresh full offline JVM, scoped session-package actual
-  Room/Keystore/reopen/retained-intent/prepared-engine regressions, unsuppressed frozen-source lint/assembly/APK/preservation.
-  NOT fresh full instrumentation or two-store real-service engine convergence. Those remain R09/R10 gates BEFORE
-  activation; API24/hosted CI/Google/OEM/phone journeys remain unverified milestone gates.
-- [Legacy accepted-auth replay](sync/implementation.md#legacy-auth-replay-limitation) remains unresolved. Never round/
-  rewrite/rekey uncertain grants or infer broad revocation/credential/cache cleanup from a malformed response.
-- Approved secure laptop endpoint/connectivity, OAuth audience/signing and authorized phone/account/test data remain external
-  inputs. Any declared backend gate is isolated operational build/start plus black-box HTTP only, not backend source,
-  private configuration/personal fixtures/suite or live Google/account work.
+- [Room authority](sync/implementation.md#durable-private-room-account-authority),
+  [prepared coordination](sync/implementation.md#prepared-vaultroom-coordination-and-recovery),
+  [registered private engine](sync/implementation.md#private-prepared-session-engine-and-bootstrap) and
+  [completion/promotion](sync/implementation.md#private-completed-preparation-and-vault-promotion) remain inert foundations.
+  Stored phases/results never authorize app visibility; real barriers must replace controlled test leases before live use.
+- R09e settled ACTIVE replacement and R09f exact replay retain their narrower contracts. R09g adds fresh-grant retained-account
+  recovery, not broad revocation, cleanup or another service UUID's adoption. All current refresh/promotion consumers
+  preserve archives; future separately authorized lifecycle cleanup must handle ALL retained credential material.
+- Latest [R09g evidence](archive/remaining-work/R09g-review.md): fresh full offline JVM, full unfiltered API37/Android17 16KB
+  instrumentation, scoped real Room/Keystore/reopen/engine regression, unsuppressed lint/assembly/APK/preservation.
+  NOT two-store real-service convergence, live edit/timer admission, API24, hosted CI, Google/OEM/cloud transfer or phone
+  deployment proof. Those remain their capability/milestone gates.
+- [Legacy replay limitation](sync/implementation.md#legacy-auth-replay-limitation) remains unrepaired. Expiry/auth/offline
+  failure never proves account deletion. Unknown/corrupt authority/vault state cannot authorize automatic repair or cleanup.
+- Secure laptop endpoint/connectivity, OAuth audience/signing and authorized phone/account/test data remain external inputs.
+  Backend work is isolated operational build/start plus black-box HTTP only, never backend source/private configuration/suite.
 
 ## Resources
 
 The test-owned emulator is stopped and isolated Android/AVD homes removed. No Gradle/device/backend ownership transfers;
-default ADB/Gradle resources and unrelated work remain untouched. Rediscover contributor panels/processes and settle old
-conversations before fresh native sessions; no historical pane/model ownership is assumed. Accepted local commit references
-belong in the short successor prompt, not this current-state document.
+default ADB/Gradle resources remain untouched. Rediscover live roles/processes before starting fresh sessions or granting
+slots. Accepted commit receipts belong in the short successor prompt, not this current-state document.

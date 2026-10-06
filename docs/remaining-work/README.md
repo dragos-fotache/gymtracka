@@ -1,26 +1,23 @@
 # Active task specifications
 
-**No implementation specification is currently open.**
-[R09f exact-pending-refresh reconciliation](../archive/remaining-work/R09f-review.md) is accepted and archived, stopping at
-advisory settled old ACTIVE evidence before separately admitted R09e replacement. Unsuccessful/legacy-malformed or
-already-transitional uncertain predecessor disposition remains unresolved. Next is R09g complete same-account recovery
-under the owner-approved [two-slice remaining R09 plan](../remaining-work-roadmap.md#remaining-r09-plan), followed by R09h
-app-facing activation/offline recovery after its gates. Create R09g's concrete specification only after verified release;
-its approved plan does not decide pending-credential retirement or cleanup.
+**No implementation specification is open.**
+[R09g complete inert same-account recovery](../archive/remaining-work/R09g-review.md) is accepted and archived. It preserves
+cached data/intent and exact encrypted uncertain evidence, stopping at safely recoverable preparation eligibility, not
+app activation. [P17](../../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions) owns explicit
+fresh-grant evidence-only supersession; no cleanup, rekey, old-credential authority or legacy-data choice is inferred.
+
+The finite [R09 plan](../remaining-work-roadmap.md#remaining-r09-plan) remains R09g (accepted), then R09h after its gates,
+then reduced personal closure. **R09h is blocked on R12a real edit/timer barriers and core R10 convergence before production
+activation.** Escalate prerequisite sequencing to the user instead of inventing another R09 slice or choosing a branch.
 See [current pickup](../coordinator-handoff.md) and [roadmap](../remaining-work-roadmap.md).
 
-The personal milestone requires initial sign-in and established-account offline use. Legacy local-only data disposition
-remains unresolved; no import/delete/reassignment is authorized. Production remains signed-out/local-only until later
-activation gates. Stored authority/credential labels alone are not app activation permission.
+Initial sign-in and established-account offline use remain the personal milestone. Legacy local-only disposition is
+unresolved; no import/delete/reassignment is authorized. Production still uses signed-out/local-only repositories.
 
-Create `RNN-task.md` (or subtask equivalent) only for the authorized planning slice. Include concrete behavior/APIs,
-disjoint allowlists, proportional independent tests/gates and exact stop from
-[coordinator workflow](../coordinator-workflow.md). An in-progress review may live beside its task; do not label partial or
-failing work complete. Do not duplicate a successor's full assignment into its initial orientation prompt.
+Create one normative `RNN-task.md` only for an authorized, dependency-ready slice after verified release. Include concrete
+behavior/APIs, disjoint allowlists, proportional independent tests/gates and exact stop under
+[coordinator workflow](../coordinator-workflow.md). A partial/failing review may live beside its task but is not accepted.
+At closure, extract facts into [owning docs](../README.md#single-sources-of-truth), archive the completed specification/review,
+and replace current roadmap/handoff state. Keep incomplete/deferred outcomes visible.
 
-At closure, extract durable facts/decisions/obligations into their [owning docs](../README.md#single-sources-of-truth),
-archive the completed spec/review under `docs/archive/remaining-work/`, and replace current roadmap/handoff state.
-Keep incomplete/deferred scopes visible; no completed plan remains active merely because its parent is incomplete.
-
-**Replace current state; append only to historical evidence.** [Archive records](../archive/README.md) are not startup
-reading or current authorization.
+**Replace current state; append only to historical evidence.** Archive records never grant current authority.

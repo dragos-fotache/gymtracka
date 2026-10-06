@@ -564,24 +564,9 @@ internal class SessionPreparationCoordinator(
     /**
      * Semantic vault record equality. Restored pending attempts compare
      * exact operation, key, body text and token, never reference identity,
-     * while grant, binding, operation and phase use value equality.
+     * while grant, binding, operation, phase and retained archive use value
+     * equality with semantic pending/archive bytes.
      */
-    private fun vaultRecordsEqual(actual: VaultSessionRecord, expected: VaultSessionRecord): Boolean {
-        if (actual.binding != expected.binding ||
-            actual.operationId != expected.operationId ||
-            actual.phase != expected.phase ||
-            actual.session != expected.session
-        ) {
-            return false
-        }
-        val actualPending = actual.pendingRefresh
-        val expectedPending = expected.pendingRefresh
-        if (actualPending == null || expectedPending == null) {
-            return actualPending == null && expectedPending == null
-        }
-        return actualPending.operationId == expectedPending.operationId &&
-            actualPending.attempt.idempotencyKey == expectedPending.attempt.idempotencyKey &&
-            actualPending.attempt.requestJson == expectedPending.attempt.requestJson &&
-            actualPending.attempt.refreshToken == expectedPending.attempt.refreshToken
-    }
+    private fun vaultRecordsEqual(actual: VaultSessionRecord, expected: VaultSessionRecord): Boolean =
+        vaultRecordsSemanticEqual(actual, expected)
 }

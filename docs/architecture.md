@@ -119,6 +119,11 @@ full same-account PREPARED vault replacement, then PREPARING finalization at the
 storage is reused; Room changes only journal/device, while retained intent/cache/domain remain untouched. Required shared run/credential
 ownership, pending-predecessor refusal and advisory crash recovery remain inert; see
 [settled reauthentication](sync/implementation.md#inert-settled-occupied-credential-reauthentication).
+R09g adds broader inert retained-account recovery over the same Room12 journal/device tables and exact vault CAS.
+Archive-free vault records keep v1 bytes; archive-bearing v2 atomically retains and permanently fences exact uncertain
+predecessor evidence while installing a fresh same-account grant. Known origin/UUID, strict phase/device tuples, shared
+owners and unchanged domain/cache/intent remain mandatory. See
+[retained-account recovery](sync/implementation.md#inert-retained-account-recovery-and-superseded-evidence).
 
 ## Persistence and state flow
 
@@ -160,9 +165,10 @@ ownership, pending-predecessor refusal and advisory crash recovery remain inert;
   The app constructs none of it. R09a/b private authority/preparation and R09c private engine admission/canonical bootstrap
   are delivered separately, with exact durable and process fences. R09d completes inert protected projection/Room-ready
   and exact vault promotion/gap recovery under those fences. R09e/f add inert settled occupied replacement and its exact
-  established ACTIVE pending-refresh replay prerequisite; see [session boundaries](sync/implementation.md#inert-exact-pending-refresh-reconciliation).
-  App-facing publication, live barriers, convergence, unsuccessful-pending/signed-out/missing-vault recovery and activation
-  remain outstanding; repositories never follow private preparation.
+  established ACTIVE pending-refresh replay prerequisite. R09g adds retained-account signed-out/missing-vault and
+  uncertain/interrupted-transition recovery; see [session boundaries](sync/implementation.md#inert-retained-account-recovery-and-superseded-evidence).
+  App-facing publication, real edit/timer barriers, convergence and activation remain outstanding; repositories never
+  follow private preparation.
   The [shared driver](sync/implementation.md#shared-push-before-pull-and-valid-tail),
   [push](sync/implementation.md#bounded-push-delivery), [checkpoint](sync/implementation.md#incremental-checkpoint-transactions)
   and [pull](sync/implementation.md#bounded-incremental-pull) references own details.

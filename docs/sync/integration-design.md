@@ -22,7 +22,8 @@ R09c adds inert [private prepared engine admission/canonical bootstrap](implemen
 R09d adds inert [completed preparation/exact vault promotion](implementation.md#private-completed-preparation-and-vault-promotion).
 R09e/f add inert [settled occupied replacement](implementation.md#inert-settled-occupied-credential-reauthentication) and
 its [exact established ACTIVE pending-replay prerequisite](implementation.md#inert-exact-pending-refresh-reconciliation).
-Production bootstrap/projection activation, convergence, remaining account recovery and cross-feature publication barriers
+R09g adds inert [retained-account recovery and superseded evidence](implementation.md#inert-retained-account-recovery-and-superseded-evidence).
+Production bootstrap/projection activation, convergence and cross-feature publication barriers
 remain planned. Broader account transitions are deferred public scope. Stored vault phases and
 explicit refresh leases alone never authorize activation. Preserve the unresolved
 [legacy auth replay limitation](implementation.md#legacy-auth-replay-limitation) in all recovery work.
@@ -310,8 +311,12 @@ and no pending predecessor; retained intent/cache/domain are untouched. R09f sep
 pending replay through the shared refresh coordinator before R09e replacement: ONE retained attempt, complete returned
 grant/no-pending CAS, required old Room authorization, stable pair rereads and advisory settled evidence, with no fresh
 rotation or Room mutation. See [implemented replay boundary](implementation.md#inert-exact-pending-refresh-reconciliation).
-Unsuccessful/legacy-malformed or already-transitional pending disposition, signed-out/missing-vault reauthentication and
-live app integration remain outstanding. See
+[P17 preserve-and-supersede](../../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions)
+selects the remaining unsuccessful/legacy-malformed/interrupted uncertain-session recovery policy: atomically retain and
+permanently fence exact encrypted predecessor evidence while installing distinct fresh same-account sign-in credentials.
+[R09g](implementation.md#inert-retained-account-recovery-and-superseded-evidence) delivers this and signed-out/missing-vault
+recovery privately, including nonadjacent older-evidence reservation gaps with a fresh grant. Live app integration remains
+outstanding; no old evidence supplies credentials/visibility, and R12a/core R10 still gate production activation. See
 [implemented settled boundary](implementation.md#inert-settled-occupied-credential-reauthentication).
 Existing canonical-only engine recovery is reused, not recreated for completed preparation.
 Ordinary local backup need not be disabled to exclude credentials.

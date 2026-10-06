@@ -35,7 +35,7 @@ import kotlinx.coroutines.ensureActive
  * state. No process success cache exists.
  */
 internal class RoomSessionAuthority(private val database: GymDatabase) : SessionPreparationAuthority,
-    SessionReauthenticationAuthority {
+    SessionReauthenticationAuthority, SameAccountRecoveryAuthority {
     override suspend fun read(): RecoveryRoomSnapshot =
         transact {
             val observed = observeLocked(database.syncSessionAuthorityDao())
@@ -356,6 +356,237 @@ internal class RoomSessionAuthority(private val database: GymDatabase) : Session
                 baselineComplete = false,
             )
             if (reread.snapshot != preparing) {
+                throw corrupt()
+            }
+            currentCoroutineContext().ensureActive()
+            reread.snapshot
+        }
+    }
+
+    /**
+     * Read-only retained same-account provenance check. Requires the exact
+     * [expected] snapshot, a nonnull cached target account, a known exact
+     * durable journal origin/account matching the supplied target, a
+     * matching identity when present, coherent phase/device cache-state
+     * tuples, and no local-only root graph.
+     * Never infers provenance from vault/cache labels. New-install empty
+     * signed-out (no cached account/journal) refuses as account mismatch;
+     * foreign or unknown provenance refuses the same way. Incoherent device
+     * tuples fail as corruption, consistently with reservation.
+     */
+    override suspend fun checkSameAccountRecovery(
+        expected: RecoveryRoomSnapshot,
+        origin: ServiceOrigin,
+        accountId: String,
+    ) {
+        currentCoroutineContext().ensureActive()
+        val targetAccount = requireUuid(accountId)
+        val originText = canonicalOriginText(origin)
+        return transact {
+            val dao = database.syncSessionAuthorityDao()
+            val observed = observeLocked(dao)
+            if (observed.snapshot != expected) {
+                throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.STALE_AUTHORITY)
+            }
+            val cached = observed.snapshot.cachedAccountId
+                ?: throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.ACCOUNT_MISMATCH)
+            if (cached != targetAccount) {
+                throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.ACCOUNT_MISMATCH)
+            }
+            val journal = observed.journal
+                ?: throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.ACCOUNT_MISMATCH)
+            if (journal.serviceOrigin != originText || journal.accountId != targetAccount) {
+                throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.ACCOUNT_MISMATCH)
+            }
+            val identity = observed.snapshot.identity
+            if (identity != null) {
+                if (identity.binding.origin != origin ||
+                    identity.binding.accountId != targetAccount
+                ) {
+                    throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.ACCOUNT_MISMATCH)
+                }
+            }
+            val device = observed.device ?: throw corrupt()
+            when (observed.snapshot.phase) {
+                RecoveryRoomPhase.SIGNED_OUT -> {
+                    if (device.activeAccountId != null ||
+                        device.cachedAccountId != targetAccount ||
+                        device.sessionGeneration != observed.snapshot.sessionGeneration ||
+                        device.cacheState != PRIVATE_CACHE_STATE
+                    ) {
+                        throw corrupt()
+                    }
+                }
+                RecoveryRoomPhase.ACTIVE -> {
+                    if (device.activeAccountId != targetAccount ||
+                        device.cachedAccountId != targetAccount ||
+                        device.sessionGeneration != observed.snapshot.sessionGeneration ||
+                        device.cacheState != READY_CACHE_STATE
+                    ) {
+                        throw corrupt()
+                    }
+                }
+                RecoveryRoomPhase.PREPARING, RecoveryRoomPhase.TRANSITIONING -> {
+                    if (device.activeAccountId != null ||
+                        device.cachedAccountId != targetAccount ||
+                        device.sessionGeneration != observed.snapshot.sessionGeneration ||
+                        device.cacheState != PREPARING_CACHE_STATE
+                    ) {
+                        throw corrupt()
+                    }
+                }
+            }
+            if (hasLocalOnlyRoots(dao)) {
+                throw RoomSessionAuthorityException(
+                    RoomSessionAuthorityFailure.LOCAL_DATA_REQUIRES_DECISION,
+                )
+            }
+            currentCoroutineContext().ensureActive()
+        }
+    }
+
+    /**
+     * Reserves one private same-account recovery TRANSITIONING fence from
+     * the exact [expected] retained SIGNED_OUT/ACTIVE/PREPARING/TRANSITIONING
+     * observation for the same origin/account with a fresh operation.
+     * Repeats all read-only checks inside the transaction, preflights
+     * revision+2 and generation+1 for the later finalization, and atomically
+     * writes journal TRANSITIONING at revision+1/generation+1 plus device
+     * active=null/cached=same/generation=new/cache_state=preparing, with
+     * affected-count fencing and exact post-write rechecks. An incomplete
+     * ACTIVE baseline is allowed because the result stays private and the
+     * existing engine must bootstrap later. Changes only journal/device.
+     */
+    override suspend fun beginSameAccountRecovery(
+        expected: RecoveryRoomSnapshot,
+        origin: ServiceOrigin,
+        accountId: String,
+        operationId: String,
+    ): RecoveryRoomSnapshot {
+        currentCoroutineContext().ensureActive()
+        val targetAccount = requireUuid(accountId)
+        val targetOperation = requireUuid(operationId)
+        val originText = canonicalOriginText(origin)
+        return transact {
+            val dao = database.syncSessionAuthorityDao()
+            val observed = observeLocked(dao)
+            if (observed.snapshot != expected) {
+                throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.STALE_AUTHORITY)
+            }
+            val cached = observed.snapshot.cachedAccountId
+                ?: throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.ACCOUNT_MISMATCH)
+            if (cached != targetAccount) {
+                throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.ACCOUNT_MISMATCH)
+            }
+            val journal = observed.journal
+                ?: throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.ACCOUNT_MISMATCH)
+            if (journal.serviceOrigin != originText || journal.accountId != targetAccount) {
+                throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.ACCOUNT_MISMATCH)
+            }
+            val identity = observed.snapshot.identity
+            if (identity != null) {
+                if (identity.binding.origin != origin ||
+                    identity.binding.accountId != targetAccount
+                ) {
+                    throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.ACCOUNT_MISMATCH)
+                }
+                if (identity.operationId == targetOperation) {
+                    throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.STALE_AUTHORITY)
+                }
+            }
+            if (observed.snapshot.revision > Long.MAX_VALUE - 2L ||
+                observed.snapshot.sessionGeneration == Long.MAX_VALUE
+            ) {
+                throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.COUNTER_OVERFLOW)
+            }
+            val device = observed.device ?: throw corrupt()
+            when (observed.snapshot.phase) {
+                RecoveryRoomPhase.SIGNED_OUT -> {
+                    if (device.activeAccountId != null ||
+                        device.cachedAccountId != targetAccount ||
+                        device.sessionGeneration != observed.snapshot.sessionGeneration ||
+                        device.cacheState != PRIVATE_CACHE_STATE
+                    ) {
+                        throw corrupt()
+                    }
+                }
+                RecoveryRoomPhase.ACTIVE -> {
+                    if (device.activeAccountId != targetAccount ||
+                        device.cachedAccountId != targetAccount ||
+                        device.sessionGeneration != observed.snapshot.sessionGeneration ||
+                        device.cacheState != READY_CACHE_STATE
+                    ) {
+                        throw corrupt()
+                    }
+                }
+                RecoveryRoomPhase.PREPARING, RecoveryRoomPhase.TRANSITIONING -> {
+                    if (device.activeAccountId != null ||
+                        device.cachedAccountId != targetAccount ||
+                        device.sessionGeneration != observed.snapshot.sessionGeneration ||
+                        device.cacheState != PREPARING_CACHE_STATE
+                    ) {
+                        throw corrupt()
+                    }
+                }
+            }
+            if (hasLocalOnlyRoots(dao)) {
+                throw RoomSessionAuthorityException(
+                    RoomSessionAuthorityFailure.LOCAL_DATA_REQUIRES_DECISION,
+                )
+            }
+            val newRevision = checkedNext(observed.snapshot.revision)
+            val newGeneration = checkedNext(observed.snapshot.sessionGeneration)
+            val expectedJournal = RawJournalRow(
+                revision = newRevision,
+                sessionGeneration = newGeneration,
+                phase = TRANSITIONING_PHASE,
+                serviceOrigin = originText,
+                accountId = targetAccount,
+                operationId = targetOperation,
+            )
+            val expectedDevice = RawDeviceRow(
+                activeAccountId = null,
+                cachedAccountId = targetAccount,
+                sessionGeneration = newGeneration,
+                cacheState = PREPARING_CACHE_STATE,
+            )
+            writeJournalTransitioning(
+                dao,
+                observed.journal,
+                newRevision,
+                newGeneration,
+                originText,
+                targetAccount,
+                targetOperation,
+            )
+            writeDevice(
+                dao,
+                observed.device,
+                newActiveAccountId = null,
+                newCachedAccountId = targetAccount,
+                newGeneration = newGeneration,
+                newCacheState = PREPARING_CACHE_STATE,
+            )
+            val reread = observeLocked(dao)
+            if (reread.journal != expectedJournal || reread.device != expectedDevice) {
+                throw corrupt()
+            }
+            val transitioning = RecoveryRoomSnapshot(
+                revision = newRevision,
+                sessionGeneration = newGeneration,
+                cachedAccountId = targetAccount,
+                phase = RecoveryRoomPhase.TRANSITIONING,
+                identity = RecoveryIdentity(
+                    binding = ServiceSessionBinding(
+                        origin = origin,
+                        accountId = targetAccount,
+                        sessionGeneration = newGeneration,
+                    ),
+                    operationId = targetOperation,
+                ),
+                baselineComplete = false,
+            )
+            if (reread.snapshot != transitioning) {
                 throw corrupt()
             }
             currentCoroutineContext().ensureActive()

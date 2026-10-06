@@ -501,21 +501,6 @@ internal class SessionRecoveryCoordinator(
         if (firstRecord == null || secondRecord == null) {
             return firstRecord == null && secondRecord == null
         }
-        if (firstRecord.binding != secondRecord.binding ||
-            firstRecord.operationId != secondRecord.operationId ||
-            firstRecord.phase != secondRecord.phase ||
-            firstRecord.session != secondRecord.session
-        ) {
-            return false
-        }
-        val firstPending = firstRecord.pendingRefresh
-        val secondPending = secondRecord.pendingRefresh
-        if (firstPending == null || secondPending == null) {
-            return firstPending == null && secondPending == null
-        }
-        return firstPending.operationId == secondPending.operationId &&
-            firstPending.attempt.idempotencyKey == secondPending.attempt.idempotencyKey &&
-            firstPending.attempt.requestJson == secondPending.attempt.requestJson &&
-            firstPending.attempt.refreshToken == secondPending.attempt.refreshToken
+        return vaultRecordsSemanticEqual(firstRecord, secondRecord)
     }
 }
