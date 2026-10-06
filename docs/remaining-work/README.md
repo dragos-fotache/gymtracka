@@ -1,9 +1,9 @@
 # Active task specifications
 
 **No implementation specification is currently open.**
-[R09c private prepared engine/canonical bootstrap](../archive/remaining-work/R09c-review.md) is accepted and archived,
-stopping at private canonical baseline and bounded actual tail, not projection, promotion or activation.
-Next R09d settles one bounded private completed-preparation and vault promotion coordination slice after ownership release.
+[R09d private completed-preparation/vault promotion](../archive/remaining-work/R09d-review.md) is accepted and archived,
+stopping at inert complete projection/Room-ready and exact vault promotion/recovery, not application activation.
+Next R09e settles one bounded inert same-account occupied-credential reauthentication slice after ownership release.
 See [current pickup](../coordinator-handoff.md) and [roadmap](../remaining-work-roadmap.md).
 
 The personal milestone requires initial sign-in and established-account offline use. Legacy local-only data disposition

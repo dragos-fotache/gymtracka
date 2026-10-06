@@ -19,8 +19,9 @@ All reuse the same admitted run/physical-DB owner. R09a now supplies inert Room1
 atomic preparation/fencing; see [implementation](implementation.md#durable-private-room-account-authority).
 R09b adds inert [prepared vault/Room persistence and reread recovery](implementation.md#prepared-vaultroom-coordination-and-recovery).
 R09c adds inert [private prepared engine admission/canonical bootstrap](implementation.md#private-prepared-session-engine-and-bootstrap).
-Production bootstrap/projection activation, convergence, completed preparation/promotion and cross-feature publication
-barriers remain planned. Broader account transitions are deferred public scope. Stored vault phases and
+R09d adds inert [completed preparation/exact vault promotion](implementation.md#private-completed-preparation-and-vault-promotion).
+Production bootstrap/projection activation, convergence, occupied-credential reauthentication and cross-feature
+publication barriers remain planned. Broader account transitions are deferred public scope. Stored vault phases and
 explicit refresh leases alone never authorize activation. Preserve the unresolved
 [legacy auth replay limitation](implementation.md#legacy-auth-replay-limitation) in all recovery work.
 
@@ -99,7 +100,7 @@ coordination and production activation remain future work:
 | `sync_canonical_roots` | PK `(account_id, aggregate_type, aggregate_id)`; nullable highest observed positive revision; state `unobserved`, `upsert`, `delete`, or `snapshot_absent`; validated complete canonical JSON only for upsert; local-generation watermark; cache epoch. No FK cascade from domain tables |
 | Account cache metadata (`sync_account_cache`, delivered R05a) | Account PK; complete-baseline flag; cache epoch; projection-dirty flag; materialized epoch. Existing opaque cursor/last success stay in `sync_state`; admission binds immutable session and per-callback cache-epoch fences, the frozen row's attempt count and a live run capability; successful snapshot completion/publication adopts returned run epochs. Outcome bookkeeping and atomic acknowledgment additionally use conservative process-local write tokens; bounded push orchestration reuses these seams without advancing pull checkpoints or epochs |
 | Snapshot staging (R08a delivered Room11) | Unique account/stage; origin session/epoch, fixed limit, original full checkpoint/baseline observation, frozen baseline/continuation and phase/counters; whole records PK `(stage_id,type,id)` plus page/position; durable exact continuation/page evidence. Stage-only child cascades, no visible-domain/canonical FKs. Read/restart observes for explicit abandon/new-stage restart, never resumes append authority |
-| `sync_session_authority` (R09a delivered Room12) | Independent singleton id1, checked revision/session generation, strict phase and nullable canonical service_origin/account_id/operation_id. Private signed-out cache retains known origin provenance. Only private preparation/fencing writers exist; no ACTIVE/vault activation. Legacy-data fields require owner-selected migration; broader local-choice/import provenance is deferred public. **No credentials/Google proofs** |
+| `sync_session_authority` (R09a delivered Room12) | Independent singleton id1, checked revision/session generation, strict phase and nullable canonical service_origin/account_id/operation_id. Private signed-out cache retains known origin provenance. Private preparation/fencing and R09d's explicit registered completion ACTIVE/ready writer exist; exact vault phase promotion is separate, and no app activation is wired. Legacy-data fields require owner-selected migration; broader local-choice/import provenance is deferred public. **No credentials/Google proofs** |
 
 A generation watermark survives domain rematerialization/removal; canonical writes must not lower a local generation.
 Capture advances any relevant ledger watermark in the same transaction as its existing domain/outbox update. Local-only
@@ -296,9 +297,12 @@ service credentials, pending attempt, account/generation/operation and revision.
 foreground memory; no persistence across restart. R09a's Room journal holds only nonsecret private identity/transition
 state. R09b now implements the bounded reserve/PREPARED-write/stable-reread portion privately, with reservation-only
 resume and read-only restart classification. R09c now separately supplies fresh private engine admission, canonical
-bootstrap and actual valid-tail coordination under registered Room permits/shared ownership. Neither slice replaces
-occupied credentials, publishes a prepared projection, promotes or activates the app; the fuller protocol below remains
-planned beyond that boundary. Existing canonical-only engine recovery is reused, not recreated for completed preparation.
+bootstrap and actual valid-tail coordination under registered Room permits/shared ownership. R09d adds the bounded
+completion portion: actual terminal tail, required paired publication lease, projection plus ACTIVE/ready journal/device
+in one Room transaction, then exact phase-only vault CAS and coherent alternating readiness/record rereads. Its inert
+recovery promotes only that exact completed gap, without HTTP, publication or Room writes. These paths replace no
+occupied credentials and activate no app; reauthentication and app integration remain beyond this boundary.
+Existing canonical-only engine recovery is reused, not recreated for completed preparation.
 Ordinary local backup need not be disabled to exclude credentials.
 
 ### Personal scope boundary
@@ -342,7 +346,8 @@ branch is authorized until its disposition is selected):
 5. Room transaction publishes complete target projection/baseline and completes local-data choice/active phase;
    it verifies the prepared vault binding has been durably written, not merely kept in memory.
 6. Atomically promote the matching prepared vault record. A crash between 5 and 6 recovers/promotes the same record
-   through the journal before UI/sync activation. Then clear journal/provenance only after completion is established.
+   through the journal before UI/sync activation. R09d retains operation/origin provenance; no journal cleanup is delivered.
+   Any later cleanup must preserve the exact identity required by startup/recovery rather than erase binding evidence.
 
 No step assumes Room and encrypted file share a transaction. Every crash boundary either resumes the exact operation
 or fails closed/private. Orphan prepared vault grants do not authorize an unmatched Room generation. Use checked

@@ -3,6 +3,7 @@ package com.dragosfotache.gymtracka.data.sync.session
 import android.database.Cursor
 import androidx.room.withTransaction
 import com.dragosfotache.gymtracka.data.gym.GymDatabase
+import com.dragosfotache.gymtracka.data.gym.SyncAccountCacheEntity
 import com.dragosfotache.gymtracka.data.gym.SyncDeviceStateEntity
 import com.dragosfotache.gymtracka.data.gym.SyncSessionAuthorityDao
 import com.dragosfotache.gymtracka.data.gym.SyncSessionAuthorityEntity
@@ -26,8 +27,10 @@ import kotlinx.coroutines.ensureActive
  * Reservation ([beginPreparation]) and durable private invalidation
  * ([fencePrivate]) write the journal plus the device singleton atomically with
  * affected-count fenced updates and exact post-write rechecks before commit.
- * No method writes ACTIVE. No secrets, clocks, UUID generation, network, vault
- * I/O or app-wide scope live here. Transaction cancellation/failure is not a
+ * The explicit internal completion writer additionally requires a registered
+ * prepared permit and the caller's publication transaction before writing
+ * ACTIVE/ready. No secrets, clocks, UUID generation, network, vault I/O or
+ * app-wide scope live here. Transaction cancellation/failure is not a
  * rollback/success claim after an uncertain return: callers must reread durable
  * state. No process success cache exists.
  */
@@ -260,6 +263,218 @@ internal class RoomSessionAuthority(private val database: GymDatabase) : Session
         }
         currentCoroutineContext().ensureActive()
     }
+
+    /**
+     * Atomically completes one exact private PREPARING permit to ACTIVE inside
+     * the caller's active Room transaction (the same transaction that carries
+     * the paired publication graph work, so domain, cache, journal and device
+     * roll back together). Must run inside the caller's transaction; never
+     * opens its own transaction and performs no vault/HTTP/clock work.
+     *
+     * Rechecks the exact permit (identity, revision, device preparing tuple
+     * and currentness), refuses local-only roots without touching anything,
+     * checks revision overflow before any write (avoidable overflow must not
+     * create the Room-committed/vault-unpromoted gap), then increments the
+     * checked journal revision ONCE while retaining generation, origin,
+     * account and operation, writes phase active and device
+     * active=cached=target/cache_state=ready with exact whole-old-row
+     * predicates and affected-count fencing, and verifies the exact
+     * post-write journal/device/snapshot tuple before commit. Returns the new
+     * journal revision. Failures keep their closed authority categories.
+     */
+    internal suspend fun completeToActiveInTransaction(
+        permit: PreparedSessionEnginePermit,
+    ): Long {
+        currentCoroutineContext().ensureActive()
+        if (permit.database !== database) {
+            throw IllegalStateException("Prepared permit belongs to another database")
+        }
+        if (!database.inTransaction()) {
+            throw IllegalStateException("Private completion requires an active transaction")
+        }
+        checkPreparedInTransaction(permit)
+        val dao = database.syncSessionAuthorityDao()
+        if (hasLocalOnlyRoots(dao)) {
+            throw RoomSessionAuthorityException(
+                RoomSessionAuthorityFailure.LOCAL_DATA_REQUIRES_DECISION,
+            )
+        }
+        val previousJournal = readJournal(dao)
+            ?: throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.STALE_AUTHORITY)
+        val previousDevice = readDevice(dao)
+            ?: throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.STALE_AUTHORITY)
+        val newRevision = checkedNext(previousJournal.revision)
+        val affectedJournal = dao.updateAuthority(
+            newRevision = newRevision,
+            newGeneration = previousJournal.sessionGeneration,
+            newPhase = ACTIVE_PHASE,
+            newOrigin = previousJournal.serviceOrigin,
+            newAccountId = previousJournal.accountId,
+            newOperationId = previousJournal.operationId,
+            expectedRevision = previousJournal.revision,
+            expectedGeneration = previousJournal.sessionGeneration,
+            expectedPhase = previousJournal.phase,
+            expectedOrigin = previousJournal.serviceOrigin,
+            expectedAccountId = previousJournal.accountId,
+            expectedOperationId = previousJournal.operationId,
+        )
+        if (affectedJournal != 1) {
+            throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.STALE_AUTHORITY)
+        }
+        val affectedDevice = dao.updateDeviceState(
+            newActiveAccountId = previousDevice.cachedAccountId,
+            newCachedAccountId = previousDevice.cachedAccountId,
+            newGeneration = previousDevice.sessionGeneration,
+            newCacheState = READY_CACHE_STATE,
+            expectedActiveAccountId = previousDevice.activeAccountId,
+            expectedCachedAccountId = previousDevice.cachedAccountId,
+            expectedGeneration = previousDevice.sessionGeneration,
+            expectedCacheState = previousDevice.cacheState,
+        )
+        if (affectedDevice != 1) {
+            throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.STALE_AUTHORITY)
+        }
+        val reread = observeLocked(dao)
+        val expectedJournal = previousJournal.copy(
+            revision = newRevision,
+            phase = ACTIVE_PHASE,
+        )
+        val expectedDevice = previousDevice.copy(
+            activeAccountId = previousDevice.cachedAccountId,
+            cacheState = READY_CACHE_STATE,
+        )
+        if (reread.journal != expectedJournal || reread.device != expectedDevice) {
+            throw corrupt()
+        }
+        val snapshot = reread.snapshot
+        if (snapshot.phase != RecoveryRoomPhase.ACTIVE ||
+            snapshot.revision != newRevision ||
+            snapshot.sessionGeneration != previousJournal.sessionGeneration ||
+            snapshot.cachedAccountId != previousJournal.accountId
+        ) {
+            throw corrupt()
+        }
+        val identity = snapshot.identity ?: throw corrupt()
+        if (identity.binding.accountId != permit.accountId ||
+            identity.binding.sessionGeneration != permit.sessionGeneration ||
+            identity.operationId != permit.operationId
+        ) {
+            throw corrupt()
+        }
+        if (!permit.isCurrent()) {
+            throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.STALE_AUTHORITY)
+        }
+        currentCoroutineContext().ensureActive()
+        return newRevision
+    }
+
+    /**
+     * Re-verifies the exact post-ACTIVE durable tuple inside the caller's
+     * active Room transaction after an untrusted callback (the publication
+     * lease check) ran between the activation write and commit. Requires
+     * the ACTIVE journal at [expectedRevision] with the permit identity,
+     * the ready device tuple, no local-only roots and a current permit.
+     * Never opens its own transaction and performs no vault/HTTP/clock
+     * work. Failures keep their closed authority categories.
+     */
+    internal suspend fun verifyActiveInTransaction(
+        permit: PreparedSessionEnginePermit,
+        expectedRevision: Long,
+    ) {
+        currentCoroutineContext().ensureActive()
+        if (permit.database !== database) {
+            throw IllegalStateException("Prepared permit belongs to another database")
+        }
+        if (!database.inTransaction()) {
+            throw IllegalStateException("Active verification requires an active transaction")
+        }
+        val dao = database.syncSessionAuthorityDao()
+        val observed = observeLocked(dao)
+        val snapshot = observed.snapshot
+        if (snapshot.phase != RecoveryRoomPhase.ACTIVE) {
+            throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.STALE_AUTHORITY)
+        }
+        if (snapshot.revision != expectedRevision) {
+            throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.STALE_AUTHORITY)
+        }
+        val identity = snapshot.identity ?: throw corrupt()
+        if (identity.binding.origin != permit.origin ||
+            identity.binding.accountId != permit.accountId ||
+            identity.binding.sessionGeneration != permit.sessionGeneration ||
+            identity.operationId != permit.operationId
+        ) {
+            throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.ACCOUNT_MISMATCH)
+        }
+        val device = observed.device ?: throw corrupt()
+        if (device.activeAccountId != permit.accountId ||
+            device.cachedAccountId != permit.accountId ||
+            device.sessionGeneration != permit.sessionGeneration ||
+            device.cacheState != READY_CACHE_STATE
+        ) {
+            throw corrupt()
+        }
+        if (hasLocalOnlyRoots(dao)) {
+            throw RoomSessionAuthorityException(
+                RoomSessionAuthorityFailure.LOCAL_DATA_REQUIRES_DECISION,
+            )
+        }
+        if (!permit.isCurrent()) {
+            throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.STALE_AUTHORITY)
+        }
+        currentCoroutineContext().ensureActive()
+    }
+
+    /**
+     * Coherent ACTIVE-ready observation inside the caller's active Room
+     * transaction: strict ACTIVE journal with the ready device tuple plus
+     * the selected-account cache row, all under the caller's transaction so
+     * no authority/cache leg can change between reads. Never opens its own
+     * transaction and performs no vault/HTTP/clock work. The caller owns
+     * any further same-transaction state checks. Failures keep their closed
+     * authority categories.
+     */
+    internal suspend fun readActiveReadyInTransaction(): ActiveReadyObservation {
+        currentCoroutineContext().ensureActive()
+        if (!database.inTransaction()) {
+            throw IllegalStateException("Active ready read requires an active transaction")
+        }
+        val dao = database.syncSessionAuthorityDao()
+        val observed = observeLocked(dao)
+        val snapshot = observed.snapshot
+        if (snapshot.phase != RecoveryRoomPhase.ACTIVE) {
+            throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.STALE_AUTHORITY)
+        }
+        val identity = snapshot.identity ?: throw corrupt()
+        val device = observed.device ?: throw corrupt()
+        if (device.activeAccountId != identity.binding.accountId ||
+            device.cachedAccountId != identity.binding.accountId ||
+            device.sessionGeneration != snapshot.sessionGeneration ||
+            device.cacheState != READY_CACHE_STATE
+        ) {
+            throw corrupt()
+        }
+        currentCoroutineContext().ensureActive()
+        val cache = database.syncCanonicalDao().getAccountCache(identity.binding.accountId)
+        currentCoroutineContext().ensureActive()
+        return ActiveReadyObservation(snapshot = snapshot, cache = cache)
+    }
+
+    /**
+     * Strict read-only ACTIVE readiness observation with the full ready
+     * device tuple for inert completion recovery. Runs in its own Room
+     * transaction; performs no writes, vault, HTTP or clock work.
+     *
+     * Returns the ACTIVE snapshot with its selected-account cache row (null
+     * when absent). The journal must carry phase active with a retained
+     * identity; the device singleton must carry active=cached=account, the
+     * exact snapshot generation and cache_state ready. Any journal/device
+     * inconsistency fails closed as corruption; incomplete cache state is
+     * returned (not thrown) for the caller to refuse as NOT_READY.
+     */
+    internal suspend fun readActiveReady(): ActiveReadyObservation =
+        transact {
+            readActiveReadyInTransaction()
+        }
 
     override fun toString(): String = "RoomSessionAuthority(redacted)"
 
@@ -746,6 +961,18 @@ internal class RoomSessionAuthority(private val database: GymDatabase) : Session
 
     private data class RawCacheRow(val baselineComplete: Boolean)
 
+    /**
+     * Strict ACTIVE readiness observation for completion recovery: the exact
+     * ACTIVE Room snapshot plus its selected-account cache row (null when
+     * absent). Displays are fixed and redacted.
+     */
+    internal data class ActiveReadyObservation(
+        val snapshot: RecoveryRoomSnapshot,
+        val cache: SyncAccountCacheEntity?,
+    ) {
+        override fun toString(): String = "ActiveReadyObservation(redacted)"
+    }
+
     private companion object {
         const val SIGNED_OUT_PHASE = "signed_out"
         const val PREPARING_PHASE = "preparing"
@@ -753,6 +980,7 @@ internal class RoomSessionAuthority(private val database: GymDatabase) : Session
         const val TRANSITIONING_PHASE = "transitioning"
         const val PREPARING_CACHE_STATE = "preparing"
         const val PRIVATE_CACHE_STATE = "private"
+        const val READY_CACHE_STATE = "ready"
         const val SINGLETON_ROW_ID = 1L
     }
 }

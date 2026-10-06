@@ -643,8 +643,9 @@ none of this machinery.
 These observations and handles are not Room transaction authorization or durable sign-out. An already-started synchronous
 vault CAS may commit after invalidation; dead handles cannot use its result. R09a supplies private durable Room
 observations/reservation/fencing; R09b adds [inert prepared coordination/recovery](#prepared-vaultroom-coordination-and-recovery).
-Promotion and completed activation remain later R09 integration. The separate
-[private prepared engine](#private-prepared-session-engine-and-bootstrap) supplies inert engine admission, not visibility.
+[Inert completed preparation/promotion](#private-completed-preparation-and-vault-promotion) is delivered separately;
+app activation remains later integration. The separate [private prepared engine](#private-prepared-session-engine-and-bootstrap)
+supplies inert engine admission, not visibility.
 Result application still rechecks inside Room transactions. R12 barriers, complete bootstrap and engine convergence precede app activation. No engine,
 sign-in/out orchestration, account UI, Google adapter, or scheduler is constructed by these classes.
 
@@ -673,11 +674,13 @@ exported1–11 and bundled v1 asset bytes remain unchanged. No legacy device/cac
 - Inserts/update counts and complete expected post-write journal/device tuples are verified before commit, including
   hidden signed-out provenance/cache_state. Valid-but-wrong trigger rewrites fail closed and roll back. Caller cancellation
   takes precedence; uncertain returns require durable reread, not an in-memory success cache. Errors/displays are closed.
-- No application-facing adapter operation writes ACTIVE, reads/writes credentials, generates IDs, calls HTTP or
-  constructs app/session machinery. Raw Room storage primitives are not app-facing authorization.
-  [Prepared grant coordination](#prepared-vaultroom-coordination-and-recovery) and
-  [private prepared engine admission](#private-prepared-session-engine-and-bootstrap) are delivered separately;
-  promotion, legacy choice, real edit/timer barriers, convergence and activation remain later gated work. Full suite boundaries and
+- These application-facing private reservation/fencing methods do not write ACTIVE, access credentials, generate IDs,
+  call HTTP or construct app/session machinery. R09d's separate internal registered completion writer below adds exact
+  ACTIVE/ready transition inside its caller's protected publication transaction; raw storage is not app authorization.
+  [Prepared grant coordination](#prepared-vaultroom-coordination-and-recovery),
+  [private engine admission](#private-prepared-session-engine-and-bootstrap) and
+  [inert completion/promotion](#private-completed-preparation-and-vault-promotion) are delivered separately;
+  legacy choice, real edit/timer barriers, convergence and activation remain later gated work. Full suite boundaries and
   actual scoped gates belong to the [R09a review](../archive/remaining-work/R09a-review.md).
 
 ## Prepared vault/Room coordination and recovery
@@ -744,12 +747,49 @@ ordinary repositories, credential storage and the app construction path remain u
   The admitted R07 overload again checks actual push Empty and uses its actual validated terminal callback for
   last-success. Snapshot itself preserves last-success; outstanding=false/tail never establishes convergence or visibility.
 - `PreparedBootstrapResult` is nonsecret private progress, not promotion authority. Typed driver stops remain stops;
-  coordinator failures have closed categories and caller cancellation precedence. No ACTIVE writer, vault promotion,
-  occupied-credential reauthentication, ordinary preparation repository, UI/scheduler/startup construction or live action.
+  coordinator failures have closed categories and caller cancellation precedence. Bootstrap performs no ACTIVE writing
+  or vault promotion. The separate completion path below reuses this coordinator; occupied-credential reauthentication,
+  ordinary preparation repositories, UI/scheduler/startup construction and live actions remain absent.
 
-[R09c review](../archive/remaining-work/R09c-review.md) owns scoped independent Room/Keystore/actual-adapter and regression
-execution. Completed preparation/publication/promotion, core R10 convergence and R12a live barriers precede activation;
-legacy local-data disposition remains unresolved and is not inferred here.
+[R09c review](../archive/remaining-work/R09c-review.md) owns scoped private-bootstrap evidence. R09d completion below is inert;
+core R10 convergence and R12a live barriers still precede activation. Legacy local-data disposition is not inferred.
+
+## Private completed-preparation and vault promotion
+
+R09d extends the internal, explicitly constructed `PreparedSessionEngineCoordinator` with `completePreparation(barrier,
+budgets...)` and `recoverCompletion()`. Construction stays inert; Room12 and application wiring are unchanged.
+`PreparedCompletionResult` is a fixed/redacted nonsecret status/epoch/delivery summary, never a handle or reusable authority.
+
+- Completion freshly admits the exact PREPARING/PREPARED pair and holds the shared physical-DB owner continuously through
+  actual R07 push Empty/terminal-tail commit, required barrier, combined Room publication/completion, vault CAS and final
+  rereads. The internally captured actual tail checkpoint—not a supplied bootstrap/progress summary or old last-success—
+  binds the exact cursor/last-success/epoch. Retained stages and missing baseline/checkpoint do not redownload or abandon;
+  rejection, budget/transport stop and outstanding/newer intent cannot complete preparation.
+- The paired internal publisher reuses the existing whole-graph/collision/generation materialization; public publication
+  and ordinary stores remain ACTIVE-only, and bootstrap remains canonical-only. One Room transaction publishes coherent
+  complete projection/cache and writes exact journal/device ACTIVE/ready. Revision increments once; reserved generation,
+  origin/account/operation remain. No vault/HTTP/clock work occurs inside Room. Full tuple/cache/checkpoint/stage/outbox/
+  local-root/currentness/lease checks after writes protect rollback, including trigger rewrites/count-zero/cancellation.
+- Retire prepared refresh before completion. Fresh post-tail PREPARED record/revision pins legitimate same-completion
+  grant rotation, not the old admission revision. After known Room return AND lease close, promote only that exact full
+  record via one PREPARED→ACTIVE phase-only CAS; preserve original grant and exact pending operation/key/body/token.
+  Checked Room/vault exhaustion refuses before publication. No retry-over-conflict, cleanup, rekey or generation restart.
+- Each full READY observation reads strict ACTIVE journal/ready device/cache and selected checkpoint/stage/outbox/local
+  roots in ONE Room transaction. Alternating Room/vault/Room/vault/Room before a new CAS and after promotion compares exact
+  revision/identity/clean materialized epoch/full checkpoint and semantic full vault evidence. Missing, mismatched,
+  unreadable, changed or corrupt evidence never authorizes a new CAS or COMPLETED. Generic barrier I/O faults are closed;
+  explicit invalid leases may return NOT_READY after rollback. Stored labels alone never authorize application visibility.
+- Completion-gap recovery holds the same owner and makes no HTTP/refresh/clock/UUID/barrier/publication/domain/journal
+  write. Exact RoomACTIVE/vaultPREPARED can phase-promote; matching ACTIVE is read-only idempotence without another revision.
+  Expired grants and whitespace-exact pending refresh stay retained. Non-ACTIVE Room stays NOT_READY without vault adoption.
+  This narrow recovery requires clean materialization/no selected work; it is not general account recovery after editing.
+- An already-started Room/CAS write may commit despite canceled/invalidated/failed return. Dead invocation cannot report
+  completion. Lease-close failure after Room commit leaves a retained unpromoted gap, not rollback; reread durable stores,
+  never compensate or infer completion from a result/phase/stage disappearance. Keep operation and origin provenance.
+
+[R09d review](../archive/remaining-work/R09d-review.md) owns scoped execution. No app construction, recovered handle,
+repository/UI rebinding, occupied-credential reauthentication, legacy import/deletion/reassignment, convergence or live
+activation is delivered. Core R10 and R12a remain prerequisites before activating the app.
 
 ## Legacy auth replay limitation
 

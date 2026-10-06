@@ -30,8 +30,9 @@ real-Room app-flow tests. With no override, it remembers `GymRepository(applicat
 still binds the original signed-out session; no account/session rebinding is wired into the app. The unused
 [startup recovery seams](sync/implementation.md#startup-recovery-seams) can now use R09a's inert durable Room-authority
 adapter. R09b's [prepared vault/Room coordinator](sync/implementation.md#prepared-vaultroom-coordination-and-recovery)
-now supplies inert private grant persistence/restart observations; engine admission/promotion/activation coordination
-remains future work. None is constructed at production startup or authorizes cached-account presentation alone.
+supplies inert private grant persistence/restart observations. R09c supplies registered private engine admission/bootstrap;
+R09d supplies [inert completed preparation/promotion](sync/implementation.md#private-completed-preparation-and-vault-promotion).
+App activation/rebinding remains future work. None is constructed at production startup or authorizes presentation alone.
 
 ## Room database
 
@@ -104,13 +105,15 @@ canonical baseline or visible publication; see [staging boundaries](sync/impleme
 
 `sync_session_authority` stores nonsecret revision/generation, phase, service-origin/cache provenance and activation
 operation independently of credentials. The inert Room adapter reads strict transactional observations and can atomically
-reserve private preparation or fence private state with the device generation. It cannot write ACTIVE or mutate
+reserve private preparation or fence private state with the device generation; these paths do not mutate
 vault/domain/outbox/cache data. See [durable private authority](sync/implementation.md#durable-private-room-account-authority).
-The separate R09b coordinator composes this reservation with the encrypted vault's existing CAS and alternating rereads;
-its prepared observations are advisory, not authority for engines, repositories or projection activation. R09c's separate
-inert coordinator freshly admits the matching pair through registered exact private permits, holds shared run ownership
-through canonical bootstrap/actual tail, and leaves ordinary repositories/publication ACTIVE-only. See
-[private engine boundaries](sync/implementation.md#private-prepared-session-engine-and-bootstrap).
+The separate R09b coordinator composes reservation with exact encrypted-vault CAS/rereads; its observations are advisory.
+R09c freshly admits the matching pair through registered exact private permits and shared canonical bootstrap/tail
+ownership. R09d's explicit internal completion path reuses protected projection publication and writes journal/device
+ACTIVE/ready in the SAME Room transaction, then phase-promotes the exact vault record with coherent pre/post-CAS
+rereads. Operation/origin/generation remain retained. Ordinary repositories/public publication stay ACTIVE-only and
+bootstrap stays canonical-only. No app activation/rebinding is constructed; see
+[completion boundaries](sync/implementation.md#private-completed-preparation-and-vault-promotion).
 
 ## Persistence and state flow
 
@@ -150,8 +153,9 @@ through canonical bootstrap/actual tail, and leaves ordinary repositories/public
   dirty baselines can publish under a fresh run at the observed epoch without redownload. See
   [complete baseline/recovery](sync/implementation.md#complete-snapshot-baseline-and-publication-recovery).
   The app constructs none of it. R09a/b private authority/preparation and R09c private engine admission/canonical bootstrap
-  are delivered separately, with exact durable and process fences. Complete readiness/promotion, app-facing publication,
-  live barriers, convergence and activation remain outstanding; ordinary repositories never follow private preparation.
+  are delivered separately, with exact durable and process fences. R09d completes inert protected projection/Room-ready
+  and exact vault promotion/gap recovery under those fences. App-facing publication, live barriers, convergence,
+  occupied-credential reauthentication and activation remain outstanding; repositories never follow private preparation.
   The [shared driver](sync/implementation.md#shared-push-before-pull-and-valid-tail),
   [push](sync/implementation.md#bounded-push-delivery), [checkpoint](sync/implementation.md#incremental-checkpoint-transactions)
   and [pull](sync/implementation.md#bounded-incremental-pull) references own details.

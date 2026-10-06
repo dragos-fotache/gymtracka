@@ -5,6 +5,7 @@ import com.dragosfotache.gymtracka.data.gym.GymDatabase
 import com.dragosfotache.gymtracka.data.sync.mapping.toRoomAggregate
 import com.dragosfotache.gymtracka.data.sync.model.AggregateType
 import com.dragosfotache.gymtracka.data.sync.model.SyncModelException
+import com.dragosfotache.gymtracka.data.sync.session.PreparedSessionEnginePermit
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -133,6 +134,30 @@ class ProjectionStore(
         }
     }
 
+    /**
+     * Explicit internal paired publication entry for inert prepared completion.
+     * Must run inside the caller's active Room transaction (the same
+     * transaction that carries the journal/device activation, so publication
+     * and activation roll back together). Reuses the exact whole-graph
+     * validation, collision checks, account-only replacement, generation
+     * preservation and materialization as the public path; only the fence
+     * carries the registered prepared permit instead of ACTIVE device state.
+     * Performs no barrier, vault, HTTP or clock work inside Room. The caller
+     * holds the shared owner and handling locks and owns barrier acquisition
+     * and lease lifetime outside Room.
+     */
+    internal suspend fun publishPreparedInsideTransaction(
+        accountId: String,
+        expectedCacheEpoch: Long,
+        lease: ProjectionPublicationLease,
+        permit: PreparedSessionEnginePermit,
+    ): ProjectionPublicationResult {
+        if (!database.inTransaction()) {
+            throw IllegalStateException("Prepared publication requires an active transaction")
+        }
+        return publishGraphInsideTransaction(accountId, expectedCacheEpoch, lease, permit)
+    }
+
     private suspend fun publishInsideTransaction(
         accountId: String,
         expectedCacheEpoch: Long,
@@ -146,6 +171,40 @@ class ProjectionStore(
             session.sessionGeneration,
             expectedCacheEpoch,
         )
+        return publishGraphFromEpoch(accountId, expectedCacheEpoch, lease, null, oldEpoch)
+    }
+
+    /**
+     * Shared whole-graph publication body from an already-fenced epoch.
+     * A null permit keeps the ordinary ACTIVE device fence; a nonnull permit
+     * uses the registered prepared fence instead. No new owner, barrier or
+     * permissive lease is introduced here.
+     */
+    private suspend fun publishGraphInsideTransaction(
+        accountId: String,
+        expectedCacheEpoch: Long,
+        lease: ProjectionPublicationLease,
+        permit: PreparedSessionEnginePermit,
+    ): ProjectionPublicationResult {
+        currentCoroutineContext().ensureActive()
+        lease.checkValid()
+        val oldEpoch = checkCanonicalFences(
+            database,
+            accountId,
+            session.sessionGeneration,
+            expectedCacheEpoch,
+            permit,
+        )
+        return publishGraphFromEpoch(accountId, expectedCacheEpoch, lease, permit, oldEpoch)
+    }
+
+    private suspend fun publishGraphFromEpoch(
+        accountId: String,
+        expectedCacheEpoch: Long,
+        lease: ProjectionPublicationLease,
+        permit: PreparedSessionEnginePermit?,
+        oldEpoch: Long,
+    ): ProjectionPublicationResult {
         val canonicalDao = database.syncCanonicalDao()
         val syncDao = database.syncDao()
         val projectionDao = database.syncProjectionDao()
@@ -212,11 +271,11 @@ class ProjectionStore(
         val preserved = preserveGenerationReservations(database, accountId, retained, snapshot, live)
         currentCoroutineContext().ensureActive()
         lease.checkValid()
-        checkCanonicalFences(database, accountId, session.sessionGeneration, expectedCacheEpoch)
+        checkCanonicalFences(database, accountId, session.sessionGeneration, expectedCacheEpoch, permit)
         replaceAccountGraph(accountId, live, snapshot, preserved)
         currentCoroutineContext().ensureActive()
         lease.checkValid()
-        checkCanonicalFences(database, accountId, session.sessionGeneration, expectedCacheEpoch)
+        checkCanonicalFences(database, accountId, session.sessionGeneration, expectedCacheEpoch, permit)
         val newEpoch = try {
             Math.addExact(oldEpoch, 1L)
         } catch (_: ArithmeticException) {

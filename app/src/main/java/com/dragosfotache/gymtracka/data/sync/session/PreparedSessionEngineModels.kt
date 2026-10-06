@@ -22,6 +22,36 @@ internal class PreparedBootstrapResult internal constructor(
     override fun toString(): String = "PreparedBootstrapResult"
 }
 
+/**
+ * Completion boundary status for one inert explicitly constructed preparation.
+ * COMPLETED means only a stable matching Room ACTIVE plus vault ACTIVE reread
+ * for this operation at return; it constructs no handle and performs no
+ * repository rebinding or application construction. NOT_READY carries no
+ * completion claim; an accompanying delivery value only shows an actual
+ * bounded stop. Displays are fixed and redacted.
+ */
+internal enum class PreparedCompletionStatus {
+    COMPLETED,
+    NOT_READY,
+}
+
+/**
+ * Immutable safe summary of one private prepared completion or recovery
+ * invocation. [cacheEpoch] reflects only a known durable epoch at return,
+ * never promotion authority; [delivery] is the actual bounded R07 tail run
+ * when one executed, never an inferred summary. There is no public
+ * constructor or copy; instances are created only by
+ * [PreparedSessionEngineCoordinator] after commit and stable rereads.
+ * Displays are fixed and redacted.
+ */
+internal class PreparedCompletionResult internal constructor(
+    val status: PreparedCompletionStatus,
+    val cacheEpoch: Long?,
+    val delivery: SyncDeliveryResult?,
+) {
+    override fun toString(): String = "PreparedCompletionResult(status=$status)"
+}
+
 /** Closed failures for private prepared engine admission and bootstrap. */
 internal enum class PreparedEngineFailure {
     INVALID_INPUT,

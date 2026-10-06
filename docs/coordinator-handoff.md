@@ -6,29 +6,29 @@
 
 ## Current boundary and next authority
 
-**R09c — private prepared-session engine admission and bootstrap coordination is accepted.**
-[Review](archive/remaining-work/R09c-review.md) owns scoped evidence; [spec](archive/remaining-work/R09c-task.md) records
+**R09d — private completed-preparation and vault promotion coordination is accepted.**
+[Review](archive/remaining-work/R09d-review.md) owns scoped evidence; [spec](archive/remaining-work/R09d-task.md) records
 its delivered contract. No implementation specification remains open. Production is still signed-out/local-only.
-Private canonical baseline/actual tail is not projection publication, readiness/ACTIVE completion, vault promotion,
-repository rebinding, convergence or app activation.
+Inert complete projection/Room ACTIVE-ready plus exact vault phase promotion and completion-gap recovery are NOT
+application visibility, repository rebinding, convergence or app activation.
 
-**Next: R09d — private completed-preparation and vault promotion coordination.** The reduced R09 direction and
+**Next: R09e — inert same-account occupied-credential reauthentication coordination.** The reduced R09 direction and
 [standing rotation rule](coordinator-workflow.md#coordinator-rotation-and-automatic-continuation) authorize a fresh
-coordinator to settle ONE bounded inert integration slice after verified release. Reuse actual R09a/b durable identity/
-rereads, R09c registered private admission and R08 baseline/publication foundations. Settle concrete readiness/publication/
-promotion transaction and two-store crash boundaries, disjoint allowlists, proportional gates and exact stop before
-implementation; do not recreate storage/drivers, infer readiness from progress summaries, specify all activation ahead
-or enable the live app. Escalate every unresolved blocker/question; split further if one safe boundary warrants it.
+coordinator to settle ONE bounded dependency-ready slice after verified release. Reuse actual Room12 authority,
+R09b exact vault/Room coordination, registered R09c engine and R09d completion/recovery; do not recreate storage/drivers.
+Settle concrete occupied-grant/uncertain-refresh/session-fence and two-store crash boundaries, retained account/outbox/
+cache preservation, disjoint allowlists, proportional gates and exact stop before implementation. No other service UUID
+may adopt retained data. Do not specify all remaining activation ahead or enable the live app. Escalate every unresolved
+blocker/question; split further if one safe boundary warrants it.
 
 [P16](../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions) owns mandatory initial sign-in
 and established-account offline use/editing/restart without online login every launch. General signed-out editing,
 account switching/sign-out and import-replace UI remain deferred public scope.
 **Legacy local-only disposition is unresolved:** no import/delete/reassignment is authorized; preparation refuses those
-roots unchanged. Obtain owner direction before work that must handle their activation. R12a real finite-edit/timer
-barriers and core R10 convergence still precede production account/projection activation. Store/engine tests may inject
-controlled barriers; never substitute a no-op in a live editing app. Same-account occupied-credential reauthentication
-and production activation/recovery remain later bounded obligations. No push, deployment, private configuration, live
-Google/account/personal-device action or deferred milestone is covered.
+roots unchanged, including roots appearing after reservation. Obtain owner direction before work that must handle their
+activation. R12a real finite-edit/timer barriers and core R10 convergence still precede production account/projection
+activation. Store/engine tests may inject controlled barriers; never substitute a no-op in a live editing app.
+No push, deployment, private configuration, live Google/account/personal-device action or deferred milestone is covered.
 
 ## Pickup and execution
 
@@ -48,28 +48,31 @@ rewrite, silently substitute a model, skip a gate, select legacy disposition, ch
 
 ## Foundations and unresolved obligations
 
-- [R09a private Room authority](sync/implementation.md#durable-private-room-account-authority): strict observations,
-  exact reservation/private fencing, checked revision/generation and retained account/origin provenance. No ACTIVE writer,
-  local-data import/deletion or ordinary preparation repository exists.
-- [R09b prepared coordination](sync/implementation.md#prepared-vaultroom-coordination-and-recovery): exact empty/tombstone
-  grant CAS, reservation-only resume and stable advisory rereads. Occupied grants/pending refresh are never replaced/
-  cleared by preparation. NeedsGrant cannot reconstruct credentials or authorize another exchange/key.
-- [R09c private engine](sync/implementation.md#private-prepared-session-engine-and-bootstrap): permits require concrete
-  coordinator referential registration after fresh two-store admission. Shared ownership includes durable epoch read;
-  exact private authority guards every composed transaction and refresh/HTTP seam. Ordinary writers stay ACTIVE-only;
-  private run publication rejects before barrier. Retained/corrupt stages never grant completion/automatic cleanup.
-  Explicit valid restart uses a new UUID and forces snapshot, even over an older baseline. Same-session refresh retains
-  exact pending identity; completed dirty baseline recovery uses durable rereads and actual R07 tail, never redownload/
-  last-success inference. Returned progress is not promotion authority.
-- [Vault/refresh/recovery](sync/implementation.md#encrypted-vault-and-refresh): Room/vault share no transaction. Already-
-  started writes may commit after cancellation/invalidation; preserve uncertain keys/bodies/grants, fence and reread.
-  Stored phases/process leases alone are not authorization. R08's paired publisher still requires an explicit barrier.
+- [Private Room authority](sync/implementation.md#durable-private-room-account-authority): strict observations,
+  exact reservation/private fencing and registered completion writer, checked revision/generation, retained origin/
+  account/operation provenance. No legacy import/deletion or ordinary preparation repository exists.
+- [Prepared coordination](sync/implementation.md#prepared-vaultroom-coordination-and-recovery): exact empty/tombstone
+  grant CAS and reservation-only resume; occupied grants/pending refresh are never replaced/cleared by these methods.
+  NeedsGrant cannot reconstruct credentials or authorize another exchange/key.
+- [Private engine](sync/implementation.md#private-prepared-session-engine-and-bootstrap): referential registered permits,
+  durable epoch read INSIDE shared owner, exact private transaction/refresh/HTTP fences. Ordinary bootstrap stays
+  canonical-only; public prepared-run publication refuses. Retained/corrupt stages never grant automatic cleanup.
+- [Completed preparation](sync/implementation.md#private-completed-preparation-and-vault-promotion): actual terminal-tail
+  provenance plus complete protected projection/journal/device in ONE Room transaction, then exact phase-only vault CAS.
+  Every readiness leg coherently reads ready tuple/cache/checkpoint/no-stage/no-outbox/no-local-root state in ONE Room
+  transaction; exact alternating pre/post-CAS rereads fence grant/identity drift. Post-tail rotation and exact expired/
+  pending bytes stay preserved. Lease-close or uncertain CAS return is not rollback; reread without compensation.
+  Completion-gap recovery is narrower than established-account offline recovery after later editing.
+- [Vault/refresh/recovery](sync/implementation.md#encrypted-vault-and-refresh): Room/vault share no transaction.
+  Already-started writes may commit after cancellation/invalidation; preserve uncertain keys/bodies/grants, fence and
+  reread. Phases/process leases/results alone are not application authorization.
 - Runtime Room12; entity changes require preserving migration, KSP/export and all-supported-start/copied-v1 gates.
   Never destructive fallback or editing the bundled source asset.
-- R09c evidence is fresh full offline JVM, focused real Room/Keystore/client-adapter/session and affected driver Android,
-  assembly/lint/APK and preservation checks. It is NOT fresh unfiltered instrumentation, two-store HTTP convergence or
-  live activation. Full instrumentation/convergence remain R09/R10 integration obligations before activation; API24,
-  hosted CI, actual Google, OEM/cloud transfer and deployed phone journeys remain unverified.
+- Latest [R09d evidence](archive/remaining-work/R09d-review.md) is fresh full offline JVM, focused real Room/Keystore/
+  actual-adapter completion and affected regression classes, assembly/lint/APK and preservation. It is NOT fresh full
+  unfiltered instrumentation, two-store real-service HTTP convergence or live activation. Full instrumentation/convergence
+  remain R09/R10 integration obligations BEFORE activation; API24, hosted CI, Google, OEM transfer and phone journeys
+  remain unverified milestone gates.
 - [Legacy accepted-auth replay](sync/implementation.md#legacy-auth-replay-limitation) remains unresolved. Never round/
   rewrite/rekey uncertain grants, infer broad revocation or credential/cache cleanup around the error.
 - Approved secure laptop endpoint/private connectivity, OAuth audience/signing and authorized phone/account/test data
@@ -78,7 +81,7 @@ rewrite, silently substitute a model, skip a gate, select legacy disposition, ch
 
 ## Resources
 
-The test-owned emulator and isolated Android/AVD home are stopped/removed before transfer. No Gradle slot, device or
+The test-owned emulator is stopped and isolated Android/AVD homes are removed before transfer. No Gradle slot, device or
 backend ownership transfers; default ADB/Gradle resources and unrelated work remain untouched. Contributor panels may
 remain suitable for reuse, but completed sessions do not transfer: rediscover live state, settle/exit old conversations
 and start fresh native sessions. No historical pane/model ownership is assumed. Accepted local commit references belong

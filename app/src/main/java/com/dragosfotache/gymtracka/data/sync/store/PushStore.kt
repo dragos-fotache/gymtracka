@@ -2147,6 +2147,51 @@ class PushRun internal constructor(
             result
         }
     }
+
+    /**
+     * Explicit internal paired completion lock for inert prepared promotion.
+     * Serializes the entire barrier acquisition plus the caller's combined
+     * Room publication/activation transaction on the existing handling Mutex
+     * under the already-held shared owner. Verifies the run, requires no
+     * enclosing Room transaction, checks publisher pairing with the SAME
+     * physical database/account/session, and conservatively retires the prior
+     * checkpoint/stage process-local capabilities before the block without
+     * durable cleanup; failures require durable reread rather than reusing an
+     * old token after an uncertain attempt. The block acquires the required
+     * publication barrier outside Room and runs the combined Room transaction
+     * (paired prepared publication plus journal/device activation) before
+     * returning its result. No new owner, barrier or permissive lease is
+     * introduced. Only successful return may be treated as committed.
+     */
+    internal suspend fun <T> withPreparedCompletionLock(
+        projection: ProjectionStore,
+        permit: PreparedSessionEnginePermit,
+        block: suspend () -> T,
+    ): T {
+        if (preparedPermit == null || preparedPermit !== permit) {
+            throw IllegalStateException("Prepared completion requires its prepared run and permit")
+        }
+        requireAdmitted()
+        if (database.inTransaction()) {
+            throw IllegalStateException("Prepared completion requires no active transaction")
+        }
+        currentCoroutineContext().ensureActive()
+        return handlingMutex.withLock {
+            requireAdmitted()
+            if (!projection.bindsTo(database, accountId, sessionGeneration)) {
+                throw IllegalArgumentException("Projection publisher is not paired to this run")
+            }
+            // Conservative capability retirement before the paired barrier and
+            // combined Room work; never restored. No durable cleanup.
+            currentPullCheckpoint = null
+            currentSnapshotStage = null
+            currentCoroutineContext().ensureActive()
+            val result = block()
+            currentCoroutineContext().ensureActive()
+            requireAdmitted()
+            result
+        }
+    }
 }
 
 /**

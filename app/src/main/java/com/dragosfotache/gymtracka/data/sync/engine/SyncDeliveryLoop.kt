@@ -80,6 +80,7 @@ class SyncDeliveryLoop(
         maxPushMutations: Int = MAX_PUSH_DELIVERY_MUTATIONS,
         maxPullPages: Int = MAX_PULL_DELIVERY_PAGES,
         pullPageLimit: Int = DEFAULT_PULL_LIMIT,
+        onTailCommit: ((PullTailCommitResult) -> Unit)? = null,
     ): SyncDeliveryResult {
         if (maxPushMutations !in 1..MAX_PUSH_DELIVERY_MUTATIONS) {
             throw IllegalArgumentException("maxPushMutations must be in 1..100")
@@ -110,6 +111,10 @@ class SyncDeliveryLoop(
             tailCommit = run.recordPullTail(checkpoint, tailTime)
         }
         currentCoroutineContext().ensureActive()
+        val committed = tailCommit
+        if (committed != null) {
+            onTailCommit?.invoke(committed)
+        }
         return SyncDeliveryResult(
             push = pushResult,
             pull = pullResult,
