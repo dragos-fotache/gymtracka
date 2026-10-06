@@ -21,7 +21,8 @@ snapshot publication. Accepted personal slices never imply completion of their d
 
 ## Status and dependencies
 
-Statuses below reflect accepted delivery through R08b. “Pending” requires eligibility under explicit/standing authority
+Statuses below reflect accepted delivery through R08c. The owner requires stopping after R08c with durable handoff
+notes: no successor coordinator or next-slice work starts automatically at this boundary. “Pending” requires eligibility under explicit/standing authority
 and a bounded pickup spec, not another approval for each eligible next slice. “Deferred” remains required for its later
 milestone and is not automatically brought forward. Historical M-series assignments are not a second execution plan.
 
@@ -34,7 +35,7 @@ milestone and is not automatically brought forward. Historical M-series assignme
 | R05 canonical Room / local intent | **a storage/capture watermarks, b canonical batches and c protected publication accepted**; production activation remains later integration | R02b and approved integration design |
 | R06 durable push | **a claiming/exact replay, b outcomes/retry, c atomic canonical acknowledgment and d bounded delivery loop accepted**; production activation remains later integration | R03b, R04, R05 |
 | R07 incremental pull | **a checkpoint transactions, b bounded HTTP pull, c shared push-first/valid-tail orchestration and package gates accepted** | R06; b after a, c after b |
-| R08 bootstrap/full resync | **a durable staging storage and b bounded HTTP download validation accepted; c complete baseline/absence/publication recovery next eligible** | R05–R07; b after a, c after b |
+| R08 bootstrap/full resync | **a staging, b bounded HTTP download and c complete canonical baseline/absence/protected publication recovery accepted; no further R08 slice** | R05–R07; app-facing authority/convergence/barriers remain R09/R10/R12 |
 | R09 account transitions/import | Pending | R04, R08; production activation also needs R12a |
 | R10 engine convergence/recovery | Core a pending; expanded b before public release | R03b/c, R06–R09 |
 | R11 Google identity/proofs | Personal sign-in/out a/b pending; lifecycle c deferred | Relevant R02, R04 |
@@ -71,8 +72,8 @@ outcome/retry handling, R06c atomic acknowledgment and R06d bounded push deliver
 and production integration remain outstanding.
 
 Actual store boundaries and regression invariants are owned by [sync implementation](sync/implementation.md).
-R05 requires no further implementation slice. Complete baseline establishment remains R08; durable session authority
-remains R09; live edit/timer leases and observation remain R12. Accepted store evidence does not authorize activation.
+R05 requires no further implementation slice. R08c supplies inert complete baseline establishment; durable session
+authority remains R09 and live edit/timer leases/observation R12. Accepted store evidence does not authorize activation.
 
 ### R06 — Durable push
 
@@ -108,9 +109,8 @@ on Room v10; [R07b review](archive/remaining-work/R07b-review.md) accepts bounde
 [R07c review](archive/remaining-work/R07c-review.md) accepts uninterrupted shared push-first orchestration,
 retained-error policy, exact-checkpoint valid-tail/last-success bookkeeping and full R07 package instrumentation/
 assembly/lint/APK gates. Outstanding newer intent, publication and convergence stay separate from bounded tail.
-No further R07 slice remains; R08a staging storage foundations is accepted and R08b bounded download validation is next
-eligible under the standing workflow.
-No implementation task is currently open.
+No further R07 slice remains. R08a–c are accepted; R09 is dependency-ready for a future explicitly started coordinator.
+No implementation task is currently open, and automatic continuation is stopped at the owner's R08c boundary.
 
 ### R08 — Staged bootstrap and full resync
 
@@ -129,9 +129,16 @@ complete bootstrap, absence authority or activation.
 HTTP download on the same admitted run, exact staged tokens/fixed limit and response/failure/cancellation/expiry fences.
 Same-run bounded continuation has no permanent account-size cap; durable read/restart never grants append authority.
 Downloaded remains inert transport/staging progress, not a validated account graph or canonical/domain publication.
-**R08c complete canonical baseline, absence and publication recovery** is next eligible. Settle one bounded normative
-specification at each pickup; complete-graph, old-unchanged/empty account, atomic baseline/absence/newer-intent and
-publication recovery gates remain outstanding.
+[R08c complete canonical baseline, absence and publication recovery](archive/remaining-work/R08c-review.md) accepts
+actual-terminal issuance/current-run completion, whole frozen account graph/revision/family validation and one atomic
+canonical baseline/absence/checkpoint/stage-removal transaction. Same-run paired publication protects newer intent,
+adopts returned epochs and recovers durable dirty/clean baselines after crash or lost results. Completion/publication
+preserve last-success; a subsequent actual pull tail remains separate. Full R08 package instrumentation, JVM, isolated
+backend, assembly/lint/APK and preservation gates passed as scoped in that review.
+
+No further R08 slice remains. App-facing bootstrap still depends on R09 durable authority/journal, R10 convergence and
+R12a real edit/timer barriers before activation. R09 is dependency-ready; do not start it or a successor coordinator until
+the owner explicitly starts/releases future work. Settling its bounded spec belongs to that future coordinator.
 
 ### R09 — Account transitions and import/replace
 

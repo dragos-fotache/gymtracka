@@ -143,7 +143,7 @@ class PushRun internal constructor(
     private val database: GymDatabase,
     private val accountId: String,
     private val sessionGeneration: Long,
-    private val expectedCacheEpoch: Long,
+    private var expectedCacheEpoch: Long,
 ) {
     @Volatile
     private var open = true
@@ -1704,6 +1704,339 @@ class PushRun internal constructor(
                 currentCoroutineContext().ensureActive()
                 throw SnapshotStageStorageException()
             }
+        }
+    }
+
+    /**
+     * Committed outcome of one complete baseline transaction, carried out of
+     * Room before the live run epoch advances. Private to this file.
+     */
+    private data class BaselineCommit(
+        val newEpoch: Long,
+        val baseline: String,
+        val pageCount: Long,
+        val recordCount: Long,
+        val hasOutstandingLocalWork: Boolean,
+    )
+
+    /**
+     * Atomically establishes the complete canonical baseline for one actually
+     * issued terminal downloaded stage on this SAME admitted run. The driver
+     * proves terminal issuance and consumes it through [onEligible] at the
+     * eligible boundary: after token identity admission under the handling
+     * Mutex and before entering the Room transaction. The callback must
+     * require successful removal, so concurrently prechecked attempts cannot
+     * both pass; later graph/revision/overflow validation failures leave the
+     * issuance retired, with recovery through durable reread and explicit
+     * abandon/restart. Wrong/closed/outside/current-token rejection never
+     * reaches consumption and cannot retire another valid result. This
+     * operation proves the current exact stage referentially and performs the
+     * fenced Room work. No HTTP, push/pull, retry, clock, cleanup-on-error or
+     * automatic publication occurs here.
+     *
+     * Under the handling Mutex, in ONE fenced Room transaction: rechecks the
+     * exact full stage header with all strict retained record/token/page
+     * evidence (downloaded terminal phase, positive page count, null
+     * continuation, exact nonempty baseline, origin generation/epoch and the
+     * original full source sync-state/baseline observation); deep-decodes all
+     * staged whole canonical upserts and validates the COMPLETE frozen graph;
+     * validates family bindings against retained evidence; arbitrates
+     * revisions fail-closed (lower fails, equal must agree authoritatively and
+     * never restores delete/absence, higher replaces); retires the exact
+     * stage/checkpoint capabilities before the first write; installs every
+     * staged root as a complete upsert at the checked new epoch preserving
+     * exact watermarks; marks previously observed missing roots
+     * snapshot_absent retaining known revisions; establishes baselineComplete,
+     * the new cache epoch and dirty while preserving the materialized epoch;
+     * sets the cursor to the exact frozen baseline preserving source
+     * last-success; deletes exactly the completed stage; and rechecks all
+     * outcomes, counts, the new epoch, session, admission and cancellation
+     * before commit. Any graph/conflict/fence/storage/cancellation failure
+     * rolls everything back together. Only a committed resumption with active
+     * resumption advances the live run epoch and returns the result. No
+     * visible domain rows change. Newer captured outbox work stays preserved
+     * and is only observed, never required empty, parsed or rewritten.
+     */
+    internal suspend fun completeSnapshotStage(
+        stage: SnapshotStage,
+        onEligible: () -> Unit,
+    ): SnapshotBaselineResult {
+        requireStageToken(stage)
+        requireAdmitted()
+        if (database.inTransaction()) {
+            throw IllegalStateException("Snapshot baseline requires no active transaction")
+        }
+        if (!stage.downloaded || stage.canAppend) {
+            throw StaleSnapshotStageException()
+        }
+        currentCoroutineContext().ensureActive()
+        return handlingMutex.withLock {
+            if (currentSnapshotStage !== stage) {
+                throw StaleSnapshotStageException()
+            }
+            currentCoroutineContext().ensureActive()
+            // Eligible boundary: consume driver terminal issuance here, after
+            // admission and current-token identity under the handling Mutex
+            // and before the Room transaction/first suspension. The callback
+            // requires successful removal; later validation failures leave it
+            // retired without authorizing another attempt.
+            onEligible()
+            try {
+                val committed = database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    val oldEpoch = checkCanonicalFences(
+                        database,
+                        accountId,
+                        sessionGeneration,
+                        expectedCacheEpoch,
+                    )
+                    val validated = readValidatedSnapshotStage(database, accountId)
+                        ?: throw StaleSnapshotStageException()
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    if (validated.header != stage.header) {
+                        throw StaleSnapshotStageException()
+                    }
+                    if (validated.header.phase != SNAPSHOT_STAGE_DOWNLOADED ||
+                        validated.header.pageCount < 1L ||
+                        validated.header.nextPageToken != null ||
+                        validated.header.baselineCursor.isNullOrEmpty()
+                    ) {
+                        throw SnapshotStageStorageException()
+                    }
+                    if (validated.header.sessionGeneration != sessionGeneration ||
+                        validated.header.cacheEpoch != expectedCacheEpoch
+                    ) {
+                        throw StaleSnapshotStageException()
+                    }
+                    requireExactSnapshotSource(database, accountId, validated.header)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    val baseline = validated.header.baselineCursor
+                    val staged = decodeStagedBaseline(validated.records)
+                    val retained = loadValidatedRetained(database, accountId, oldEpoch)
+                    checkFamilyBindings(retained, staged.map { it.change })
+                    validateCompleteBaselineGraph(database, staged)
+                    arbitrateBaselineRevisions(retained, staged)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    if (oldEpoch == Long.MAX_VALUE) {
+                        throw SnapshotStageStorageException()
+                    }
+                    val newEpoch = oldEpoch + 1L
+                    // Fail-closed capability retirement before the first write;
+                    // never restored on rollback or uncertain commit. Driver
+                    // terminal issuance already retired at the eligible boundary.
+                    currentPullCheckpoint = null
+                    currentSnapshotStage = null
+                    val canonicalDao = database.syncCanonicalDao()
+                    val syncDao = database.syncDao()
+                    val snapshotDao = database.syncSnapshotDao()
+                    val stagedByKey = staged.associateBy { it.key }
+                    val expectedWatermarks = HashMap<Pair<String, String>, Long>()
+                    for (item in staged) {
+                        val existing = retained.byKey[item.key]
+                        expectedWatermarks[item.key] =
+                            existing?.localGenerationWatermark ?: 0L
+                        if (existing == null) {
+                            canonicalDao.insertCanonicalRoot(
+                                accountId = accountId,
+                                aggregateType = item.change.aggregateType.wireValue,
+                                aggregateId = item.change.aggregateId,
+                                serverRevision = item.change.revision,
+                                canonicalState = "upsert",
+                                canonicalJson = item.json,
+                                watermark = 0L,
+                                cacheEpoch = newEpoch,
+                            )
+                        } else {
+                            val updated = canonicalDao.updateCanonicalBody(
+                                accountId = accountId,
+                                aggregateType = item.change.aggregateType.wireValue,
+                                aggregateId = item.change.aggregateId,
+                                serverRevision = item.change.revision,
+                                canonicalState = "upsert",
+                                canonicalJson = item.json,
+                                cacheEpoch = newEpoch,
+                            )
+                            if (updated != 1) {
+                                throw IllegalStateException(
+                                    "Canonical root changed during transaction",
+                                )
+                            }
+                        }
+                        currentCoroutineContext().ensureActive()
+                    }
+                    requireAdmitted()
+                    val absentKeys = retained.rows
+                        .filter { it.canonicalState != "unobserved" }
+                        .map { it.aggregateType to it.aggregateId }
+                        .filter { it !in stagedByKey }
+                    for (key in absentKeys) {
+                        val existing = retained.byKey[key]
+                            ?: throw CanonicalStorageException()
+                        val updated = canonicalDao.updateCanonicalBody(
+                            accountId = accountId,
+                            aggregateType = key.first,
+                            aggregateId = key.second,
+                            serverRevision = existing.serverRevision,
+                            canonicalState = "snapshot_absent",
+                            canonicalJson = null,
+                            cacheEpoch = newEpoch,
+                        )
+                        if (updated != 1) {
+                            throw IllegalStateException(
+                                "Canonical root changed during transaction",
+                            )
+                        }
+                    }
+                    canonicalDao.insertAccountCache(accountId)
+                    val oldMaterialized =
+                        canonicalDao.getAccountCache(accountId)?.materializedEpoch ?: 0L
+                    val baselined = canonicalDao.establishBaseline(accountId, newEpoch)
+                    if (baselined != 1) {
+                        throw IllegalStateException("Account cache changed during transaction")
+                    }
+                    syncDao.upsertSyncState(
+                        SyncStateEntity(
+                            accountId = accountId,
+                            cursor = baseline,
+                            lastSuccessMillis = validated.header.sourceLastSuccessMillis,
+                        ),
+                    )
+                    val hasWork = syncDao.hasOutboxForAccount(accountId)
+                    val deleted = snapshotDao.deleteStage(stage.stageId, accountId)
+                    if (deleted != 1) {
+                        throw StaleSnapshotStageException()
+                    }
+                    if (snapshotDao.getStage(stage.stageId) != null ||
+                        snapshotDao.getRecords(stage.stageId).isNotEmpty() ||
+                        snapshotDao.getTokens(stage.stageId).isNotEmpty()
+                    ) {
+                        throw StaleSnapshotStageException()
+                    }
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    val rereadRoots = canonicalDao.getRootsForAccount(accountId)
+                        .associateBy { it.aggregateType to it.aggregateId }
+                    for (item in staged) {
+                        val row = rereadRoots[item.key]
+                            ?: throw IllegalStateException(
+                                "Canonical root changed during transaction",
+                            )
+                        if (row.canonicalState != "upsert" ||
+                            row.serverRevision != item.change.revision ||
+                            row.canonicalJson != item.json ||
+                            row.cacheEpoch != newEpoch ||
+                            row.localGenerationWatermark != expectedWatermarks[item.key]
+                        ) {
+                            throw IllegalStateException(
+                                "Canonical root changed during transaction",
+                            )
+                        }
+                    }
+                    for (key in absentKeys) {
+                        val row = rereadRoots[key]
+                            ?: throw IllegalStateException(
+                                "Canonical root changed during transaction",
+                            )
+                        val before = retained.byKey[key]
+                            ?: throw CanonicalStorageException()
+                        if (row.canonicalState != "snapshot_absent" ||
+                            row.canonicalJson != null ||
+                            row.serverRevision != before.serverRevision ||
+                            row.cacheEpoch != newEpoch
+                        ) {
+                            throw IllegalStateException(
+                                "Canonical root changed during transaction",
+                            )
+                        }
+                    }
+                    val cache = canonicalDao.getAccountCache(accountId)
+                        ?: throw IllegalStateException("Account cache changed during transaction")
+                    if (!cache.baselineComplete ||
+                        cache.cacheEpoch != newEpoch ||
+                        !cache.projectionDirty ||
+                        cache.materializedEpoch != oldMaterialized
+                    ) {
+                        throw IllegalStateException("Account cache changed during transaction")
+                    }
+                    val state = syncDao.getSyncState(accountId)
+                        ?: throw IllegalStateException("Sync checkpoint changed during transaction")
+                    if (state.cursor != baseline ||
+                        state.lastSuccessMillis != validated.header.sourceLastSuccessMillis
+                    ) {
+                        throw IllegalStateException("Sync checkpoint changed during transaction")
+                    }
+                    checkCanonicalFences(database, accountId, sessionGeneration, newEpoch)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    BaselineCommit(
+                        newEpoch = newEpoch,
+                        baseline = baseline,
+                        pageCount = validated.header.pageCount,
+                        recordCount = validated.header.recordCount,
+                        hasOutstandingLocalWork = hasWork,
+                    )
+                }
+                currentCoroutineContext().ensureActive()
+                requireAdmitted()
+                expectedCacheEpoch = committed.newEpoch
+                SnapshotBaselineResult(
+                    cacheEpoch = committed.newEpoch,
+                    baselineCursor = committed.baseline,
+                    pageCount = committed.pageCount,
+                    recordCount = committed.recordCount,
+                    hasOutstandingLocalWork = committed.hasOutstandingLocalWork,
+                )
+            } catch (_: SQLiteException) {
+                currentCoroutineContext().ensureActive()
+                throw SnapshotStageStorageException()
+            }
+        }
+    }
+
+    /**
+     * Publishes the complete dirty baseline through the paired publisher on
+     * this SAME admitted run. Admits and rechecks the run, requires no
+     * enclosing Room transaction, verifies publisher pairing with the SAME
+     * physical database/account/session before lease acquisition, and
+     * serializes the entire publication invocation on the existing handling
+     * Mutex. Before invoking the paired publisher it conservatively retires
+     * the prior checkpoint/stage process-local capabilities without durable
+     * cleanup; failures require durable reread rather than reusing an
+     * unchanged old checkpoint token after an uncertain attempt. The existing
+     * publisher runs outside an enclosing Room transaction, allowing its
+     * required barrier pause/drain before its own transaction. No new owner,
+     * barrier or permissive lease is introduced.
+     * A returned publication advances the live run epoch to the returned
+     * cache epoch; only successful return installs it. Failed or uncertain
+     * publication leaves the epoch unchanged for durable reread recovery.
+     */
+    suspend fun publishProjection(
+        projection: ProjectionStore,
+    ): ProjectionPublicationResult {
+        requireAdmitted()
+        if (database.inTransaction()) {
+            throw IllegalStateException("Projection publication requires no active transaction")
+        }
+        currentCoroutineContext().ensureActive()
+        return handlingMutex.withLock {
+            requireAdmitted()
+            if (!projection.bindsTo(database, accountId, sessionGeneration)) {
+                throw IllegalArgumentException("Projection publisher is not paired to this run")
+            }
+            // Conservative capability retirement before invoking the paired
+            // publisher; never restored. No durable cleanup: failures require
+            // durable reread, never reuse of an old checkpoint token.
+            currentPullCheckpoint = null
+            currentSnapshotStage = null
+            currentCoroutineContext().ensureActive()
+            val result = projection.publish(expectedCacheEpoch)
+            currentCoroutineContext().ensureActive()
+            requireAdmitted()
+            expectedCacheEpoch = result.cacheEpoch
+            result
         }
     }
 }

@@ -11,6 +11,7 @@ import com.dragosfotache.gymtracka.data.sync.model.SyncModelException
 import com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid
 import com.dragosfotache.gymtracka.data.sync.store.PushRun
 import com.dragosfotache.gymtracka.data.sync.store.PushStore
+import com.dragosfotache.gymtracka.data.sync.store.SnapshotBaselineResult
 import com.dragosfotache.gymtracka.data.sync.store.SnapshotStage
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -40,6 +41,14 @@ class SnapshotDeliveryLoop(
     private val api: GymSyncApi,
     private val nowMillis: () -> Long = System::currentTimeMillis,
 ) {
+    /**
+     * Actual terminal Downloaded results issued by THIS driver, tracked by
+     * referential identity. Only membership here authorizes [complete];
+     * generic stop/stage shapes never do. Guarded by [issuanceLock].
+     */
+    private val issuanceLock = Any()
+    private val issuedTerminals = HashSet<SnapshotDownloadResult>()
+
     /**
      * Runs bounded push work on the SAME admitted [run], then only after an
      * empty push boundary begins one NEW stage with the fixed [pageLimit] and
@@ -75,6 +84,56 @@ class SnapshotDeliveryLoop(
         val download = downloadPages(run, stage, maxPages)
         currentCoroutineContext().ensureActive()
         return SnapshotStartResult(push, download)
+    }
+
+    /**
+     * Completes one actually issued terminal Downloaded result from THIS
+     * driver on the SAME uninterrupted admitted [run]. Generic stop/stage
+     * shapes are not authority: only referential membership in this driver's
+     * terminal issuance authorizes completion. Foreign driver results,
+     * nonterminal/failure/restart stops, recovery read observations,
+     * superseded tokens, wrong/closed/outside runs and repeated completions
+     * reject before any Room, HTTP or clock effects. The first eligible
+     * attempt conservatively consumes the terminal issuance under the run's
+     * handling Mutex after token identity and before Room work, even when
+     * later baseline validation itself fails; the consumption requires
+     * successful removal so concurrently prechecked attempts cannot both
+     * pass. Recovery then rereads durable stage/cache state with explicit
+     * abandon/restart, never fabricated results. No HTTP, push/pull, retry,
+     * clock, cleanup-on-error or automatic publication occurs here.
+     */
+    suspend fun complete(
+        run: PushRun,
+        previous: SnapshotDownloadResult,
+    ): SnapshotBaselineResult {
+        if (previous.stop != SnapshotDownloadStop.Downloaded) {
+            throw IllegalArgumentException("Only a Downloaded result can complete")
+        }
+        if (previous.driver !== this) {
+            throw IllegalArgumentException("Snapshot completion belongs to another driver")
+        }
+        val stage = previous.stage
+        if (!stage.downloaded || stage.canAppend) {
+            throw IllegalArgumentException("Snapshot completion requires a terminal stage")
+        }
+        if (stage.run !== run) {
+            throw IllegalStateException("Snapshot completion belongs to another run")
+        }
+        synchronized(issuanceLock) {
+            if (!issuedTerminals.contains(previous)) {
+                throw IllegalArgumentException("Snapshot completion was not issued by this driver")
+            }
+        }
+        currentCoroutineContext().ensureActive()
+        return run.completeSnapshotStage(stage) {
+            synchronized(issuanceLock) {
+                if (!issuedTerminals.remove(previous)) {
+                    throw IllegalArgumentException(
+                        "Snapshot completion was not issued by this driver",
+                    )
+                }
+            }
+        }
     }
 
     /**
@@ -162,13 +221,17 @@ class SnapshotDeliveryLoop(
             committedRecords += owned.records.size
             currentCoroutineContext().ensureActive()
             if (!owned.hasMore) {
-                return SnapshotDownloadResult(
+                val completed = SnapshotDownloadResult(
                     stage,
                     committedPages,
                     committedRecords,
                     SnapshotDownloadStop.Downloaded,
                     this,
                 )
+                synchronized(issuanceLock) {
+                    issuedTerminals.add(completed)
+                }
+                return completed
             }
             if (committedPages >= maxPages) {
                 return SnapshotDownloadResult(

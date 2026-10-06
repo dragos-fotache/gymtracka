@@ -65,6 +65,18 @@ abstract class SyncCanonicalDao {
     )
     internal abstract suspend fun publishProjection(accountId: String, newEpoch: Long): Int
 
+    /**
+     * Establishes a complete snapshot baseline at the checked new epoch: marks
+     * the baseline complete and the projection dirty while preserving the old
+     * materialized epoch. The caller creates the row when absent and verifies
+     * the affected count is exactly one.
+     */
+    @Query(
+        """UPDATE sync_account_cache SET baseline_complete = 1, cache_epoch = :newEpoch,
+            projection_dirty = 1 WHERE account_id = :accountId""",
+    )
+    internal abstract suspend fun establishBaseline(accountId: String, newEpoch: Long): Int
+
     @Query("UPDATE sync_account_cache SET projection_dirty = 1 WHERE account_id = :accountId")
     internal abstract suspend fun markProjectionDirty(accountId: String): Int
 

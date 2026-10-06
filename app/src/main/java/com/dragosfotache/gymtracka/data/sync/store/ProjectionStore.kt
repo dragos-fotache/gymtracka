@@ -90,6 +90,15 @@ class ProjectionStore(
         }
     }
 
+    /**
+     * Nonmutating pairing check for coordinated publication: the publisher
+     * binds the SAME physical database instance, account and session
+     * generation as the caller's admitted run. Reads only immutable
+     * constructor fields; performs no Room, barrier or clock work.
+     */
+    internal fun bindsTo(db: GymDatabase, accountId: String, generation: Long): Boolean =
+        database === db && session.accountId == accountId && session.sessionGeneration == generation
+
     suspend fun publish(expectedCacheEpoch: Long): ProjectionPublicationResult {
         if (expectedCacheEpoch < 0) {
             throw IllegalArgumentException("Expected cache epoch must be nonnegative")
@@ -143,6 +152,9 @@ class ProjectionStore(
         val cache = canonicalDao.getAccountCache(accountId)
         val currentCacheEpoch = cache?.cacheEpoch ?: oldEpoch
         val currentMaterialized = cache?.materializedEpoch ?: 0L
+        if (database.syncSnapshotDao().getStageForAccount(accountId) != null) {
+            throw SnapshotStageActiveException()
+        }
         if (syncDao.getOutboxForAccount(accountId).isNotEmpty()) {
             currentCoroutineContext().ensureActive()
             lease.checkValid()

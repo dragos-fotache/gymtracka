@@ -90,8 +90,9 @@ Inert [head claiming/replay admission](#durable-head-claiming-and-replay-admissi
 [bounded push driver](#bounded-push-delivery), [incremental checkpoint transactions](#incremental-checkpoint-transactions)
 and [bounded incremental pull](#bounded-incremental-pull) exist, composed by the inert
 [shared push-before-pull driver](#shared-push-before-pull-and-valid-tail). Inert
-[snapshot staging storage](#frozen-snapshot-staging-storage) exists, but no complete bootstrap, vault/Room journal,
-convergence integration or production publication activation exists.
+[snapshot staging storage](#frozen-snapshot-staging-storage), [bounded download](#bounded-frozen-snapshot-download)
+and [complete baseline/recovery](#complete-snapshot-baseline-and-publication-recovery) exist. No app-facing bootstrap,
+vault/Room journal, convergence integration or production publication activation exists.
 The independent ledger is not itself a visible projection.
 
 ### Protected publication
@@ -124,9 +125,11 @@ The app constructs no publisher.
   owned SQLite failures use fixed safe storage errors without raw causes; barrier/lease-origin failures preserve identity.
   A caller-supplied lease must release without blocking/throwing; cleanup failure is not proof of rollback after commit.
 
-Current canonical/physical bindings are not account-lifetime removed-child reservation storage. R08 still owns baseline,
-complete snapshot/absence establishment; R09 owns durable transition authority, and R12a owns the real finite-edit/timer
-barrier before any live publication or account activation. These components do not authorize those integrations.
+Current canonical/physical bindings are not account-lifetime removed-child reservation storage. R08c supplies inert
+[complete baseline/absence and coordinated recovery](#complete-snapshot-baseline-and-publication-recovery).
+Any selected durable snapshot stage blocks direct publication before writes, including downloaded/corrupt stages;
+foreign stages do not. R09 owns durable transition authority and R12a the real finite-edit/timer barrier before live
+publication or account activation. These components do not authorize those integrations.
 
 ## Durable head claiming and replay admission
 
@@ -262,8 +265,8 @@ store and share one required `PushRunOwner` per physical database; the driver cr
 This is bounded push orchestration, not a complete running sync engine or durable session authority. R07a's
 [checkpoint transactions](#incremental-checkpoint-transactions) and [bounded pull driver](#bounded-incremental-pull)
 exist and the [shared driver](#shared-push-before-pull-and-valid-tail) composes them uninterrupted with valid-tail
-bookkeeping. R08 owns complete bootstrap, R09 the Room/session journal, R10 convergence and R12 live publication/UI
-reconciliation.
+bookkeeping. R08c supplies inert complete-snapshot baseline/recovery; R09 owns the Room/session journal,
+R10 app-facing bootstrap/convergence and R12 live publication/UI reconciliation.
 
 ## Incremental checkpoint transactions
 
@@ -367,9 +370,9 @@ there is no nested admission, release/reacquire gap, additional owner or backgro
   successful tail commit, not false/clean. Nonnull is only the observation at that transaction. Neither false nor
   last-success establishes account convergence, visible publication or absence of later edits. Displays remain redacted.
 
-No complete bootstrap, durable Room/vault authority, live edit/timer barrier, engine convergence or production activation
-is implied. Existing inert publication still advances epoch when used; eventual callers must use its returned epoch.
-Those integrations remain R08/R09/R10/R12 and their later activation gates.
+No app-facing bootstrap, durable Room/vault authority, live edit/timer barrier, engine convergence or production
+activation is implied. R08c adds separate inert complete-baseline establishment and same-run publication coordination;
+callers use returned epochs. Production integrations remain R09/R10/R12 and their later activation gates.
 
 ## Frozen-snapshot staging storage
 
@@ -398,7 +401,8 @@ there is no second owner, public unguarded writer or network transaction.
   page/position and token evidence, EVERY nonterminal page and optional empty terminal. It compares actual evidence
   counts before iterating; corrupt Long-sized counters never become fabricated iteration/allocation targets.
   Later-page dependencies, family namespace overlaps and intermediate multiple active roots can stage; complete-account
-  graph/physical collision validation and absence authority remain separate R08 validation/publication obligations.
+  graph/absence establishment and physical collision validation belong to the separate complete-baseline/publisher
+  boundaries below, never staging alone.
 - `readSnapshotStage()` supersedes earlier tokens and returns only a nonappendable recovery observation, including
   after reopen or uncertain writes. `checkSnapshotStage` validates exact current capability/durable evidence; appendable
   capabilities additionally recheck origin/source fences. `abandonSnapshotStage` explicitly deletes only that exact
@@ -416,8 +420,9 @@ there is no second owner, public unguarded writer or network transaction.
 
 A `downloaded` stage proves only stored terminal page/progress validity, NOT actual transport exhaustion, a complete
 validated graph, complete bootstrap, canonical baseline/absence, last-success, convergence or visible publication.
-The bounded driver below now validates actual transport pages; R08c still owns complete canonical baseline/absence/
-publication recovery. R09 authority/journal, R12a real edit/timer barriers and R10 convergence still precede activation.
+The bounded driver below validates actual transport pages; its separate R08c completion boundary establishes the
+canonical baseline/absence and coordinates protected publication recovery. R09 authority/journal, R12a real edit/timer
+barriers and R10 convergence still precede activation.
 Existing secure HTTP/refresh and protected publisher are reused, never constructed by this storage.
 
 ## Bounded frozen-snapshot download
@@ -454,8 +459,54 @@ and hold ONE application-owned `PushRunOwner` per physical DB uninterrupted acro
 
 Downloaded now summarizes actual validated terminal transport/staging progress for that uninterrupted chain, NOT full
 account graph validation, canonical baseline/absence, bootstrap, last-success, publication or convergence. The existing
-incremental shared driver's recovery signal is not automatically routed here. R08c/R09/R10/R12 and activation remain
-separate dependent gates; production constructs none of these drivers.
+incremental shared driver's recovery signal is not automatically routed here. R08c supplies the separate completion
+boundary below; R09/R10/R12 and activation remain dependent gates. Production constructs none of these drivers.
+
+## Complete snapshot baseline and publication recovery
+
+R08c adds inert `SnapshotDeliveryLoop.complete(run, previous)` over Room11 with no entity/schema change. It accepts only
+an actually issued terminal Downloaded result from THIS driver on the SAME uninterrupted admitted run. Private
+referential issuance evidence, the current exact stage capability and durable fences all apply: generic Downloaded
+shapes, storage-only terminals, superseded/read/restarted observations, foreign/closed runs and repeated attempts never
+establish a baseline. The first eligible attempt consumes issuance before Room admission; graph/revision/overflow or
+later write failure cannot reuse it. Staging/checkpoint tokens retire before writes, never as success evidence.
+
+- One fenced Room transaction validates the entire frozen graph, including valid empty accounts, old unchanged roots,
+  later-page custom dependencies, catalogue/relationship lookups, at most one active workout and known family roles/
+  root/entry/set parents. It rechecks strict retained stage/page/token/body evidence, original session/epoch and full
+  source checkpoint/baseline observation, including on nonappendable terminal tokens.
+- Every staged upsert installs whole at checked `oldEpoch+1`, preserving existing local-generation watermarks. Lower
+  observed revisions and equal authoritative disagreement fail closed rather than silently omit a frozen member;
+  equal authoritative upserts may refresh frozen convenience labels. Equal/lower delete/absence restoration rejects.
+  Previously observed missing roots become `snapshot_absent`, retaining known revisions without invented deletion
+  revisions; missing unobserved local reservations stay unobserved. Canonical evidence/watermarks are never hard-deleted.
+- The same transaction establishes complete/dirty cache metadata at the new epoch, preserves materialized epoch, writes
+  the exact baseline cursor, preserves source last-success (null for a missing source), and removes only the completed
+  stage/children. All effects roll back together on uncommitted failure/cancellation. Completion performs no HTTP,
+  clock, automatic publication, outbox parsing/removal or visible-domain changes. Newer capture after begin remains
+  valid/protected, with exact IDs/bytes/order/generations, other scopes and catalogue unchanged.
+- Returned `SnapshotBaselineResult` reports the baseline epoch/cursor, durable page/record totals and selected outbox
+  presence; its display is fixed/redacted and it is not fresh authorization, last-success or convergence. Only successful
+  committed resumption installs the returned epoch into the live run. Physical UUID collisions are still checked at
+  publication, so a valid canonical baseline can remain durable while its projection is protected or fails safely.
+- `PushRun.publishProjection(pairedProjectionStore)` serializes the existing publisher on the SAME handling Mutex under
+  uninterrupted physical-DB owner admission. It verifies the same database instance/account/session before the required
+  barrier, retires old process-local checkpoint/stage tokens conservatively, and invokes the barrier/publisher outside
+  an enclosing Room transaction. No new owner, default lease or live edit/timer implementation is supplied.
+- Any selected outbox work protects the entire old/local graph. Clean complete publication reuses existing whole-graph/
+  physical collision/foreign-reference checks and atomic materialization. Actual publication advances epoch again;
+  only returned active resumption adopts its `cacheEpoch`. Old callbacks fail; fresh same-run checkpoint reads use the
+  returned epoch. Failed/protected/no-op publication never masquerades as baseline download or convergence.
+- After crash/uncertain writes, reread durable stage/cache/canonical/checkpoint under current authority; neither a thrown
+  result, stage disappearance nor token retirement proves that call succeeded. Retained stages remain observation-only
+  for explicit valid abandon/NEW UUID/null-token restart. A durable complete dirty baseline with no selected stage can
+  publish from a fresh paired run at its observed epoch without another snapshot. Clean recovery returns UNCHANGED;
+  lease-close failure after commit is not rollback evidence. Snapshot completion/publication preserve last-success;
+  only the existing actual valid pull-tail seam establishes it later.
+
+Production constructs none of this. Durable Room/vault authority/journal (R09), real finite edit/timer barriers (R12a),
+engine convergence (R10), account/import/sign-out actions and activation remain separate prerequisites. Exact uncertain
+legacy accepted-auth replay limitations are unchanged.
 
 ## Models, codecs, and durable identity
 

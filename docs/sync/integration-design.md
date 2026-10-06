@@ -12,10 +12,10 @@ exact replay admission; R06b adds inert single-head outcome classification and r
 atomic canonical acknowledgment; R06d adds an inert bounded push delivery driver; R07a adds inert incremental batch/
 checkpoint transactions on that same admitted run; R07b adds bounded incremental HTTP pull receiving an already
 admitted run. R07c adds an inert shared push-first driver and separate fenced valid-tail/last-success transaction.
-R08a adds inert durable whole-page snapshot staging on the same run with the data-preserving Room10→11 migration;
-actual bounded download and complete baseline/absence/publication recovery remain planned.
-Production projection activation, convergence, complete snapshots, the durable Room-authority adapter/journal, account
-transitions and cross-feature publication barriers remain planned. Stored vault phases and explicit refresh leases alone never
+R08a adds inert durable whole-page snapshot staging with the data-preserving Room10→11 migration; R08b adds actual
+bounded HTTP download and R08c complete canonical baseline/absence plus coordinated protected publication/recovery.
+All reuse the same admitted run/physical-DB owner. Production bootstrap/projection activation, convergence, the durable
+Room-authority adapter/journal, account transitions and cross-feature publication barriers remain planned. Stored vault phases and explicit refresh leases alone never
 authorize activation. Preserve the unresolved
 [legacy auth replay limitation](implementation.md#legacy-auth-replay-limitation) in all recovery work.
 
@@ -84,12 +84,13 @@ Room storage boundaries below retain the approved design. R05a has delivered the
 `sync_account_cache` in v10; exact current fields/capture/migration behavior are owned by
 [the implementation reference](implementation.md#canonical-ledger-and-capture-watermarks). R05b adds
 [fenced canonical batch writers](implementation.md#fenced-canonical-batches), preserving watermarks and marking dirty
-without incrementing cache epochs or changing visible data. R05c's protected publisher reuses this storage; snapshot staging storage is delivered in R08a; complete snapshot/journal integration remains future work:
+without incrementing cache epochs or changing visible data. R05c's protected publisher reuses this storage; R08a–c
+supply inert staging/download/complete-baseline recovery. Journal and production activation remain future work:
 
 | Storage | Required logical fields and constraints |
 |---|---|
 | `sync_canonical_roots` | PK `(account_id, aggregate_type, aggregate_id)`; nullable highest observed positive revision; state `unobserved`, `upsert`, `delete`, or `snapshot_absent`; validated complete canonical JSON only for upsert; local-generation watermark; cache epoch. No FK cascade from domain tables |
-| Account cache metadata (`sync_account_cache`, delivered R05a) | Account PK; complete-baseline flag; cache epoch; projection-dirty flag; materialized epoch. Existing opaque cursor/last success stay in `sync_state`; admission reuses immutable session/cache epoch, the frozen row's attempt count and a live run capability. Outcome bookkeeping and atomic acknowledgment additionally use conservative process-local write tokens; bounded push orchestration reuses these seams without advancing pull checkpoints or epochs |
+| Account cache metadata (`sync_account_cache`, delivered R05a) | Account PK; complete-baseline flag; cache epoch; projection-dirty flag; materialized epoch. Existing opaque cursor/last success stay in `sync_state`; admission binds immutable session and per-callback cache-epoch fences, the frozen row's attempt count and a live run capability; successful snapshot completion/publication adopts returned run epochs. Outcome bookkeeping and atomic acknowledgment additionally use conservative process-local write tokens; bounded push orchestration reuses these seams without advancing pull checkpoints or epochs |
 | Snapshot staging (R08a delivered Room11) | Unique account/stage; origin session/epoch, fixed limit, original full checkpoint/baseline observation, frozen baseline/continuation and phase/counters; whole records PK `(stage_id,type,id)` plus page/position; durable exact continuation/page evidence. Stage-only child cascades, no visible-domain/canonical FKs. Read/restart observes for explicit abandon/new-stage restart, never resumes append authority |
 | Transition journal (R09) | Singleton current operation ID, phase, source/target account and generation, local choice, captured source generations/IDs, import preparation/completion state; original import snapshots/error context if needed. **No credentials/Google proofs** |
 
@@ -223,7 +224,9 @@ run(scope fence):
   fences. Failed/uncertain writes require durable reread; retired tokens are not commit evidence. The supplied
   nonnegative wall time is retained exactly, including equal/backward observations, and is never a conflict clock.
   Track outstanding local work and projection publication separately: a bounded valid tail/empty observed outbox is
-  not account convergence or absence of later edits. Bootstrap last-success establishment remains R08.
+  not account convergence or absence of later edits. R08c complete-snapshot establishment/publication preserve source
+  last-success: a frozen baseline is not a post-baseline valid pull tail. Future bootstrap orchestration reuses the actual
+  R07 tail after snapshot catch-up, rather than treating download/baseline/publication as last-success evidence.
 
 ## 5. Frozen snapshots and full resync
 
@@ -255,10 +258,20 @@ run can append. Durable reread yields an abandonable observation, never new appe
 remains outside canonical/domain publication and is not complete bootstrap. Existing storage validates whole records/
 progress without resolving account-wide dependencies; R08b now implements actual bounded HTTP download on that same
 admitted run after fenced push Empty. Only its own LimitReached result permits same-run bounded continuation;
-transport failures/expiry retain stages for explicit recovery. R08c still owns complete baseline/absence/publication
-recovery. Budgets must bound invocation work, never become a permanent account-size cap; continuation within a live
-uninterrupted run is distinct from cross-run recovery. Frozen requests/outbox are unaffected. Expired snapshot and
-invalid token are distinct failures. Do not combine pages from a fresh snapshot with a prior stage.
+transport failures/expiry retain stages for explicit recovery. R08c now implements separate actual-driver-issued terminal
+completion: complete-graph/retained revision/family validation and canonical baseline/absence/checkpoint/stage removal
+commit atomically at epoch+1 without visible edits or last-success. Missing unobserved reservations remain unobserved.
+The paired protected publisher runs on the SAME admitted run/handling Mutex; actual publication advances epoch again,
+and callers use returned epochs. Physical collisions are checked at publication, never repaired by remapping.
+
+Failed/uncertain writes require durable reread, never result/token-retirement or stage-absence success inference.
+Downloaded retained stages cannot be adopted for completion after restart: explicit valid abandon/NEW stage remains
+policy. A complete dirty baseline surviving crash can publish under a fresh authorized run at the durable epoch without
+redownload; clean postcommit recovery returns UNCHANGED. A lease-close failure is not rollback evidence. No credentials,
+personal import/sign-out authority, live barrier, engine convergence or app activation is inferred.
+
+Budgets bound invocation work, never permanent account size; live same-run continuation differs from cross-run recovery.
+Frozen requests/outbox are unaffected. Expired snapshot and invalid token stay distinct; never mix fresh/prior pages.
 
 A complete empty account is valid. It can remove cached cloud roots only in the complete publication transaction;
 separate local data is untouched except its explicitly confirmed replace choice. Initial sign-in has no visible account

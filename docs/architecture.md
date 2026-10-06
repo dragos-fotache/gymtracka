@@ -129,9 +129,14 @@ canonical baseline or visible publication; see [staging boundaries](sync/impleme
   Inert `SnapshotDeliveryLoop.start(run, ...)` now follows only fenced push Empty into actual bounded snapshot HTTP on
   that same admitted run; pages are owned before response fences and appended through the existing stage chain.
   Same-driver LimitReached results can continue only in the uninterrupted run, without a permanent account-size cap;
-  durable restart cannot resume. Downloaded is transport/staging progress, not full graph/baseline/absence/publication.
-  See [bounded download](sync/implementation.md#bounded-frozen-snapshot-download) for its failure/recovery boundary.
-  The app constructs none of it; complete bootstrap, durable authority, convergence and activation remain outstanding.
+  durable restart cannot resume. Downloaded alone is transport/staging progress. Separate inert
+  `SnapshotDeliveryLoop.complete(run, previous)` requires actual terminal issuance/current same-run authority and commits
+  the validated complete canonical graph, absence, baseline checkpoint and stage removal atomically at epoch+1 without
+  visible edits or last-success. Same-run `publishProjection(pairedStore)` reuses the protected publisher and adopts its
+  returned epoch (actual publication advances again). Retained stages cannot be adopted after restart; durable complete
+  dirty baselines can publish under a fresh run at the observed epoch without redownload. See
+  [complete baseline/recovery](sync/implementation.md#complete-snapshot-baseline-and-publication-recovery).
+  The app constructs none of it; app-facing bootstrap, durable authority, convergence and activation remain outstanding.
   The [shared driver](sync/implementation.md#shared-push-before-pull-and-valid-tail),
   [push](sync/implementation.md#bounded-push-delivery), [checkpoint](sync/implementation.md#incremental-checkpoint-transactions)
   and [pull](sync/implementation.md#bounded-incremental-pull) references own details.

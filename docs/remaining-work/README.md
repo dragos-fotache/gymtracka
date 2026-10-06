@@ -1,11 +1,10 @@
 # Active task specifications
 
 **No implementation task is currently open here.**
-[R08b bounded frozen-snapshot HTTP download](../archive/remaining-work/R08b-review.md), R08a, R07a–c, R06a–d and R05a–c are accepted.
-R08c complete canonical baseline/absence/publication recovery is next dependency-ready under the
-[standing workflow](../coordinator-workflow.md#coordinator-rotation-and-automatic-continuation).
-Its fresh coordinator must settle concrete complete-stage/validation/publication/recovery seams and ONE bounded spec
-before independent delegation; full R08 package gates remain outstanding.
+[R08c complete canonical baseline, absence and publication recovery](../archive/remaining-work/R08c-review.md) closes
+R08a–c after accepted R05–R07. The owner requires stopping at this boundary: no successor coordinator or next-slice
+work starts automatically. R09 is dependency-ready for a future explicitly started/released coordinator, which must
+settle ONE bounded journal/authority specification with concrete interfaces, independent allowlists and selected gates.
 See [current pickup](../coordinator-handoff.md) and [roadmap](../remaining-work-roadmap.md).
 Production remains signed-out/local-only; accepted inert components do not authorize activation.
 

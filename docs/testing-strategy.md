@@ -93,7 +93,8 @@ future assignments. Total test count alone does not explain delivery time or jus
 | Shared push-first driver and valid tail | Real Room/scripted transport: uninterrupted push/pull/tail ownership, retained/budget stop policy, exact boundary/standalone compatibility, separate outstanding newer intent, full-row/null-safe last-success fences, exact equal/backward clock, pre/post presence, trigger rollback/count-zero/session/epoch/row/baseline faults, canceled-child retirement and durable reopen/reread. Bounded valid tail is not account convergence or publication |
 | Frozen-snapshot staging storage | Real Room whole-page/record ownership, strict retained bodies/progress and corrupt Long counters, root/token/baseline/limit rules, absent source, newer-intent and scope preservation, stage exclusion, exact capability/source/session/epoch fences, trigger/count-zero/post-write cancellation rollback and explicit abandon/reopen recovery; downloaded is not bootstrap/publication |
 | Bounded frozen-snapshot HTTP download | Real Room plus scripted API/production adapter: pushEmpty-only start, exact limit/token chain, deep ownership before response suspension, terminal/budget stops, same-run continuation beyond invocation cap, typed expiry versus invalid/wrong-context failures, late source/session/epoch fences, intent races, cancellation/retired-token rollback, shared owner through continuation and exact-intent file reopen/restart; no canonical baseline/publication |
-| Still outstanding | Engine convergence, complete baseline/snapshot establishment, journal/account flows, live publication/edit/timer barriers and UI observation, actual Google, WorkManager and live deployment/lifecycle gates; see roadmap |
+| Complete snapshot baseline and coordinated recovery | Real Room actual terminal issuance versus storage/read/result shapes, whole frozen graph/later dependencies/empty/old-unchanged roots, revision/family/reference rejection, atomic baseline/absence/checkpoint/stage removal, protected exact newer intent and whole-domain preservation, same-run returned-epoch chaining, corruption/session/source/epoch fences, late SQL/overflow/following-query cancellation rollback, committed-but-canceled resumption, lease-close lost-result recovery and file reopen without redownload |
+| Still outstanding | App-facing bootstrap/engine convergence, durable Room-vault authority/journal/account flows, live publication/edit/timer barriers and UI observation, actual Google, WorkManager and live deployment/lifecycle gates; see roadmap |
 
 ## Standard commands
 
@@ -213,6 +214,10 @@ v1 asset to add user data. Seed tests are not Android JVM/device tests.
   cancelling on the write callback does not prove post-write cancellation. For canceled-child token checks, launch
   through an explicit inherited `coroutineScope` inside the live run: a `runTest` receiver's `async` can lose the run
   context marker. Keep the parent run active to prove old-token rejection plus unchanged fresh readmission.
+- Separate rollback from lost-result-after-commit evidence: a captured transaction executor can signal after its Room
+  runnable returns while a test-only queued caller dispatcher holds result resumption. Inspect actual durable state,
+  cancel before delivery, then recover using a fresh durable-epoch run. No sleeps or result/token-success inference.
+  A lease-close failure after publication similarly does not prove rollback; inspect durable dirty/materialized epochs.
 
 ## CI
 
@@ -229,13 +234,14 @@ stays in the linked reviews; consult only when assessing coverage freshness or i
 
 | Layer | Latest relevant recorded evidence | Limitation |
 |---|---|---|
-| Offline JVM/compilation | [R08b review](archive/remaining-work/R08b-review.md): fresh full offline JVM and production/KSP/Android-test compilation | Bounded download plus existing offline coverage, not complete bootstrap/convergence, durable authority or new backend gate |
-| Debug assembly/lint/APK | [R08a review](archive/remaining-work/R08a-review.md): explicit debug assembly/lint passed, no new findings; packaged asset/notices preserved and checked test/backend/JDBC helpers excluded | Existing newer-version warning; targeted packaging gate, not release/security audit |
-| Vault device | [R08a review](archive/remaining-work/R08a-review.md): 27 vault cases included in the full API 37 regression | No API 24 or live OEM/cloud transfer |
-| Real service | [R03c review](archive/remaining-work/R03c-review.md): unchanged auth 10/10 and broad HTTP 56/56 after service correction | No new backend run at R06d; legacy replay remains unresolved |
-| Full instrumentation | [R08a review](archive/remaining-work/R08a-review.md): fresh620 unique unfiltered cases / 52 classes on isolated API37 16KB-page emulator; includes new35 staging/migration cases, every-supported-start1–10→11/copied-v1, R07 and existing persistence/sync/HTTP/vault/Compose/app-flow regression | No API 24, live phone/Google, hosted CI, two-store convergence or activated-app publication evidence |
-| Focused snapshot download/ownership Room | [R08b review](archive/remaining-work/R08b-review.md): new driver/fence classes and selected staging/pull/shared-driver regressions, each separate executed filter | Focused evidence, not a fresh full device/packaging/backend gate; broader R08 package gates at R08c and R10 |
-| Focused staging/migrations | [R08a review](archive/remaining-work/R08a-review.md): separately executed21 stage / 13 fence / 1 populated10 migration / 3 existing all-start/asset/historical migration cases | Filtered evidence stays scoped; complete baseline/publication gates remain R08c |
+| Offline JVM/compilation | [R08c review](archive/remaining-work/R08c-review.md): fresh full offline JVM and executed production/KSP/Android-test compilation | Inert snapshot baseline/recovery plus existing offline coverage, not durable authority/convergence/activation |
+| Debug assembly/lint/APK | [R08c review](archive/remaining-work/R08c-review.md): explicit debug assembly and lint, packaged asset/notices/permissions/backup rules preserved; checked test/backend/JDBC helpers excluded | One existing newer-version warning; scoped packaging gate, not release/security audit |
+| Vault device | [R08c review](archive/remaining-work/R08c-review.md): unchanged vault regression included in fresh full API37 instrumentation | No API24 or live OEM/cloud transfer |
+| Real service | [R08c review](archive/remaining-work/R08c-review.md): fresh full isolated real-backend HTTP/auth package | Local interoperability, not deployed TLS/Google or real Room-backed engine convergence; legacy replay unresolved |
+| Full instrumentation | [R08c review](archive/remaining-work/R08c-review.md): fresh full unfiltered API37/Android17 16KB-page emulator regression, including complete baseline/recovery, R08a/b, supported-start/copied-v1 migrations and existing persistence/sync/HTTP/vault/Compose/app flows | No API24, live phone/Google, hosted CI, two-store convergence or activated-app publication evidence |
+| Focused complete baseline/ownership Room | [R08c review](archive/remaining-work/R08c-review.md): separate baseline/fence class runs and final refined cancellation/corruption method reruns before the full gate | Repeated methods are not extra distinct tests; focused passes do not substitute for the separately executed full gate |
+| Focused snapshot download/ownership Room | [R08b review](archive/remaining-work/R08b-review.md): separate driver/fence and staging/pull/shared-driver filters | Historical scoped evidence; fresh full package execution is owned by the R08c review |
+| Focused staging/migrations | [R08a review](archive/remaining-work/R08a-review.md): separate staging/fence and populated10/all-start/copied-asset migration cases | Historical filtered evidence; unchanged migrations also execute in the R08c full gate |
 | Focused shared-driver/tail Room | [R07c review](archive/remaining-work/R07c-review.md): separately executed 3 new classes before the full package gate; R07a/b checkpoint/paging cases included in full regression | Filtered evidence remains scoped; full and packaging gate claims come only from their separate executions |
 | Launcher | [Retirement review](archive/fake-retirement-review.md): 11 Python launcher tests | Not freshly rerun by later session slices |
 
