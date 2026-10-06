@@ -29,8 +29,9 @@ Accepted delivery is through [R09g](archive/remaining-work/R09g-review.md): comp
 same-account credentials install atomically with exact encrypted uncertain evidence retention/fencing, including signed-out
 and interrupted older-generation gaps. Cached data/intent remain unchanged; no app activation or automatic cleanup.
 The finite [R09 plan](#remaining-r09-plan) remains **R09g (accepted), R09h, then reduced personal R09 closure**.
-**R09h is blocked on R12a real edit/timer barriers and core R10 convergence before production activation.** Escalate
-prerequisite sequencing to the user; do not bypass gates, add R09 slices or choose another package automatically.
+**R09h is blocked on R12a real edit/timer barriers and core R10 convergence before production activation.**
+The owner selected **R12 next, beginning with R12a**, and paused execution at prepared handoff: no successor launch or
+implementation until owner resumption and verified release. Core R10 remains required; do not bypass gates or add R09 slices.
 “Pending” requires eligibility under explicit/standing authority and a bounded pickup spec, not another approval for each
 eligible next slice. “Deferred” remains required for its later
 milestone and is not automatically brought forward. Historical M-series assignments are not a second execution plan.
@@ -48,7 +49,7 @@ milestone and is not automatically brought forward. Historical M-series assignme
 | R09 single-account activation/recovery | a private authority/journal, b prepared coordination/recovery, c private engine/bootstrap, d completion/promotion and e settled occupied ACTIVE reauthentication and f exact ACTIVE pending-refresh replay accepted; g complete inert same-account recovery accepted under P17; h app-facing activation/offline recovery blocked on R12a/core R10, then closure; legacy-data disposition unresolved; general transitions/import-replace UI deferred public | R04, R08; production activation also needs R12a/core R10 |
 | R10 engine convergence/recovery | Core a pending; expanded b before public release | R03b/c, R06–R09 |
 | R11 Google identity/proofs | Personal sign-in/reauthentication pending; sign-out UI and lifecycle proofs deferred public | Relevant R02, R04 |
-| R12 feature/app reconciliation | a edit/publication barriers, b observation, c app/timer rebinding pending | R05/R07/R09 integration; barriers can be developed earlier |
+| R12 feature/app reconciliation | Owner-selected next package, beginning with a real edit/publication/timer barriers; pickup paused; b observation and c app/timer rebinding pending finite whole-package planning on fresh pickup | R05/R07/R09 integration; barriers can be developed earlier |
 | R13 account UI/foreground sync | Pending | R09, core R10, personal R11, R12 |
 | R14 cloud JSON export | Deferred public | R02e, R03d export, R11 proofs, R13 |
 | R15 deletion/status recovery | Deferred public | R02e, R03d delete/status, R09, R11 proofs, R13, R14 |
@@ -225,6 +226,12 @@ proof/client secret. Deferred c supplies purpose/account-bound export/delete/sta
 at pickup, not from old planning versions. Deterministic adapter tests and actual Google journeys are separate gates.
 
 ### R12 — Feature and app reconciliation
+
+**Owner-selected next package, beginning with R12a; prepared pickup is paused until owner resumption/release.**
+The first fresh R12 coordinator must settle a finite whole-package plan (count, outcomes, dependencies and completion
+boundary) before implementation under the [major-task slicing rule](coordinator-workflow.md#major-task-slicing--owner-rule).
+The a/b/c outline remains the outcome inventory, not an already settled contributor specification. Later outcomes must
+respect actual prerequisites; selecting R12 does not authorize activation or bypass core R10.
 
 Implement a failure-aware finite-edit/admission/publication barrier across routines, pickers, history, app shell and active
 workout; then observe Room epochs and rebind scoped repositories/states. Refresh same-ID fields and custom-reference names

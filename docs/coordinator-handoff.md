@@ -19,12 +19,18 @@ records are evidence only, never credentials/data authority; resume needs a fres
 No retirement, cleanup, old-token rekey, expiry rounding, orphan credential adoption or server-revocation claim.
 Cached domain/children/relationships, canonical/cache/intent/frozen bytes, checkpoints/stages and foreign scopes remain intact.
 
-**Next outcome: R09h — app-facing activation/offline recovery, BLOCKED on prerequisites.**
-The owner-approved [finite R09 plan](remaining-work-roadmap.md#remaining-r09-plan) remains R09g (accepted), R09h, then reduced
-personal R09 closure. **R12a real finite-edit/timer barriers and core R10 actual two-Room-store engine/HTTP convergence must
-precede production activation.** Ask the user which prerequisite package to execute next; do not bypass them, select another
-branch automatically or invent R09i/sub-slices. A dependency-ready authorized slice needs a fresh coordinator transfer.
-R11 Google sign-in and R13 account UI/foreground triggers remain separate, not duplicate R09h scope.
+**Owner-selected next package: R12 — feature/app reconciliation, beginning with R12a real edit/timer barriers.**
+**Pickup is prepared but paused: do not launch a successor, specify, delegate, edit implementation or build until the owner
+resumes and verified fresh-coordinator ownership is released.** The first coordinator taking this new major package must
+settle its finite whole-R12 outcome/dependency plan in the roadmap before implementation; the existing a/b/c outline is
+not a detailed assignment. Prepare the concrete R12a specification only after release, following the
+[major-task slicing rule](coordinator-workflow.md#major-task-slicing--owner-rule).
+
+R09h app-facing activation/offline recovery remains BLOCKED. The [finite R09 plan](remaining-work-roadmap.md#remaining-r09-plan)
+stays R09g (accepted), R09h, then reduced personal closure. R12a real finite-edit/timer barriers and core R10 actual
+two-Room-store engine/HTTP convergence must precede production activation. Selecting R12 does not waive core R10 or
+bring dependency-blocked R12 outcomes forward. Escalate sequencing/blockers instead of bypassing gates or inventing R09
+slices. R11 Google sign-in and R13 account UI/foreground triggers remain separate.
 
 [P16/P17](../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions) own mandatory initial sign-in,
 established-account offline use and evidence-only same-account supersession. General switching/sign-out/import-replace UI

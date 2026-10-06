@@ -8,7 +8,9 @@ fresh-grant evidence-only supersession; no cleanup, rekey, old-credential author
 
 The finite [R09 plan](../remaining-work-roadmap.md#remaining-r09-plan) remains R09g (accepted), then R09h after its gates,
 then reduced personal closure. **R09h is blocked on R12a real edit/timer barriers and core R10 convergence before production
-activation.** Escalate prerequisite sequencing to the user instead of inventing another R09 slice or choosing a branch.
+activation.** The owner selected **R12 next, beginning with R12a**, but paused at prepared handoff: no new agent or
+implementation now. On owner resumption and verified fresh-coordinator release, settle the finite whole-R12 plan before
+creating the first concrete specification. Do not invent R09 slices or bring dependency-blocked outcomes forward.
 See [current pickup](../coordinator-handoff.md) and [roadmap](../remaining-work-roadmap.md).
 
 Initial sign-in and established-account offline use remain the personal milestone. Legacy local-only disposition is
