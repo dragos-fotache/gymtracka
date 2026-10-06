@@ -10,8 +10,9 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/data/
 
 ## Room and local capture
 
-Room v11 retains the v9 root metadata and v10 canonical ledger/publication bookkeeping. Independent staging is
-[described below](#frozen-snapshot-staging-storage). Root metadata remains: nullable account/server revision/deletion time, local generation, and sync state
+Room v12 retains the v9 root metadata, v10 canonical ledger/publication bookkeeping and v11 staging. Independent
+[staging](#frozen-snapshot-staging-storage) and [private authority/journal](#durable-private-room-account-authority) are
+described below. Root metadata remains: nullable account/server revision/deletion time, local generation, and sync state
 (default `local_only`). `sync_outbox` stores explicit sequence order, immutable mutation identity/version/payload and
 local affected-root bindings; `sync_state` stores account cursor state; `sync_device_state` distinguishes active and
 privately cached account; `catalogue_state` stores catalogue metadata. These storage fields do not implement sign-out.
@@ -620,7 +621,8 @@ primitive compatibility path; recovered sessions always supply their bound autho
 
 `SessionRecoveryCoordinator` is an inert, reads-only reconciler. Its required `SessionRecoveryAuthority` supplies immutable
 nonsecret observations of revision, session generation, private cached identity, activation operation, phase and complete
-baseline. **No real Room adapter is implemented**, and the app constructs none of this machinery.
+baseline. R09a supplies the [inert real Room adapter](#durable-private-room-account-authority); the app still constructs
+none of this machinery.
 
 - Starts privacy-locked. Unconfigured use is local-only without I/O; signed-out observations never inspect/adopt orphan
   vault credentials. Preparing/transitional state, incomplete baseline, missing/unreadable vault, changed origin or
@@ -639,10 +641,39 @@ baseline. **No real Room adapter is implemented**, and the app constructs none o
   most one access-401 retry still follow the accepted refresh rules.
 
 These observations and handles are not Room transaction authorization or durable sign-out. An already-started synchronous
-vault CAS may commit after invalidation; dead handles cannot use its result. R09 must implement the durable authority
-adapter/journal, generation changes, prepared promotion and two-store crash recovery; result application still rechecks
-inside Room transactions. R12 barriers, complete bootstrap and engine convergence precede app activation. No engine,
+vault CAS may commit after invalidation; dead handles cannot use its result. R09a supplies private durable Room
+observations/reservation/fencing; later R09 must coordinate prepared vault writes/promotion and two-store crash recovery.
+Result application still rechecks inside Room transactions. R12 barriers, complete bootstrap and engine convergence precede app activation. No engine,
 sign-in/out orchestration, account UI, Google adapter, or scheduler is constructed by these classes.
+
+## Durable private Room account authority
+
+R09a adds unused `RoomSessionAuthority(database) : SessionRecoveryAuthority` over Room12's independent
+`sync_session_authority` table. Its additive11→12 migration starts the table empty; all prior tables/rows/schema/sequence,
+exported1–11 and bundled v1 asset bytes remain unchanged. No legacy device/cache label invents origin, operation or ACTIVE.
+
+- One real Room transaction strictly observes all authority/device singleton rows and selected cache metadata. Extra
+  rows, SQLite type coercion, invalid counters/UUIDs/canonical HTTPS origin, unknown phases or inconsistent tuples fail
+  closed and remain preserved. Existing active device without journal is not adoptable authority.
+- Read returns immutable revision/generation/private-cache/phase/identity/baseline observations. SIGNED_OUT has no
+  identity/baseline; PREPARING/TRANSITIONING stay private even with a complete cache. Only a valid ACTIVE tuple can
+  report selected canonical baseline completeness; the existing reconciler still requires matching ACTIVE vault evidence.
+- `beginPreparation(expected,origin,accountId,operationId)` admits only an exact SIGNED_OUT observation. It refuses
+  different/unknown retained account-origin provenance and any local workout/routine/custom root, including deleted
+  drafts. Bundled-only data is allowed. No legacy import/delete/reassignment is inferred.
+- Preparation atomically increments checked revision/generation, binds the target privately and clears device active
+  account; existing repositories at an older generation are fenced. It does not authorize an account-bound preparation
+  engine/repository. A concurrent reservation with the same observation cannot also win.
+- `fencePrivate(expected)` increments the same fences, clears activation operation and retains cached account and known
+  service origin. It is not sign-out/vault cleanup, pending-stage abandonment or deletion. Exact domain/child/relationship,
+  outbox/uncertain bytes, cursor, stage, cache, canonical watermarks, foreign scopes and catalogue remain untouched.
+- Inserts/update counts and complete expected post-write journal/device tuples are verified before commit, including
+  hidden signed-out provenance/cache_state. Valid-but-wrong trigger rewrites fail closed and roll back. Caller cancellation
+  takes precedence; uncertain returns require durable reread, not an in-memory success cache. Errors/displays are closed.
+- No application-facing adapter operation writes ACTIVE, reads/writes credentials, generates IDs, calls HTTP or
+  constructs app/session machinery. Raw Room storage primitives are not app-facing authorization.
+  Prepared grant coordination/promotion, legacy choice, real edit/timer barriers, convergence and activation remain later
+  gated work. Full suite boundaries and actual scoped gates belong to the [R09a review](../archive/remaining-work/R09a-review.md).
 
 ## Legacy auth replay limitation
 

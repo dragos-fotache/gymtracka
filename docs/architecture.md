@@ -28,14 +28,15 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/`.
 `ui/GymRepositoryProvider.kt` supplies `rememberGymRepository()` and optional internal `LocalGymRepositoryOverride` for
 real-Room app-flow tests. With no override, it remembers `GymRepository(applicationContext)`. Production construction
 still binds the original signed-out session; no account/session rebinding is wired into the app. The unused
-[startup recovery seams](sync/implementation.md#startup-recovery-seams) require a future durable Room-authority adapter;
-they do not alter production startup or authorize cached-account presentation.
+[startup recovery seams](sync/implementation.md#startup-recovery-seams) can now use R09a's inert durable Room-authority
+adapter; vault/Room activation coordination remains future work. Neither is constructed at production startup or
+authorizes cached-account presentation by its existence alone.
 
 ## Room database
 
 `app/src/main/assets/databases/gym.db` is the unchanged **version-1 source catalogue**. Room copies it into app-private
 storage and migrates the runtime database. Never add user-data tables to the asset or use destructive migration fallback.
-Runtime `GymDatabase` is **version 11**; exported versions 1–11 are retained in `app/schemas/`.
+Runtime `GymDatabase` is **version 12**; exported versions 1–12 are retained in `app/schemas/`.
 
 ### Catalogue and custom exercises
 
@@ -89,6 +90,7 @@ blank/empty autosaves are distinct from save/start eligibility validation.
 | 8 → 9 | Root account/revision/generation/state/deletion metadata and indexes; outbox, account cursor, device/session and catalogue state tables |
 | 9 → 10 | Independent account/type/root canonical ledger and separate account publication bookkeeping; unobserved generation reservations backfilled without fabricating canonical records/baselines |
 | 10 → 11 | Independent snapshot stage headers, whole records and durable continuation/page evidence; old tables/bytes/sequence unchanged, new tables empty |
+| 11 → 12 | Independent singleton account-authority/preparation journal; prior tables/bytes/sequence unchanged, new table empty; no fabricated activation |
 
 Each future entity change requires a version bump, data-preserving migration, schema export/KSP, all supported starting
 versions, and a copied real v1 asset test. Domain table UUID primary keys remain global within each physical table;
@@ -98,6 +100,11 @@ canonical publication refuses incompatible physical identities instead of overwr
 of domain/canonical tables. Child FKs cascade only from their stage. One stage per account binds origin session/epoch,
 fixed limit, original full checkpoint/baseline observation and frozen page baseline/progress. Downloaded is not a complete
 canonical baseline or visible publication; see [staging boundaries](sync/implementation.md#frozen-snapshot-staging-storage).
+
+`sync_session_authority` stores nonsecret revision/generation, phase, service-origin/cache provenance and activation
+operation independently of credentials. The inert Room adapter reads strict transactional observations and can atomically
+reserve private preparation or fence private state with the device generation. It cannot write ACTIVE or mutate
+vault/domain/outbox/cache data. See [durable private authority](sync/implementation.md#durable-private-room-account-authority).
 
 ## Persistence and state flow
 
@@ -136,7 +143,8 @@ canonical baseline or visible publication; see [staging boundaries](sync/impleme
   returned epoch (actual publication advances again). Retained stages cannot be adopted after restart; durable complete
   dirty baselines can publish under a fresh run at the observed epoch without redownload. See
   [complete baseline/recovery](sync/implementation.md#complete-snapshot-baseline-and-publication-recovery).
-  The app constructs none of it; app-facing bootstrap, durable authority, convergence and activation remain outstanding.
+  The app constructs none of it; app-facing bootstrap, vault/Room coordination, convergence and activation remain
+  outstanding. Inert durable private Room authority is delivered separately; it does not admit an engine or activate UI.
   The [shared driver](sync/implementation.md#shared-push-before-pull-and-valid-tail),
   [push](sync/implementation.md#bounded-push-delivery), [checkpoint](sync/implementation.md#incremental-checkpoint-transactions)
   and [pull](sync/implementation.md#bounded-incremental-pull) references own details.

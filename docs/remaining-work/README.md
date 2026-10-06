@@ -1,22 +1,23 @@
 # Active task specifications
 
-**No implementation task is currently open here.**
-[R08c complete canonical baseline, absence and publication recovery](../archive/remaining-work/R08c-review.md) closes
-R08a–c after accepted R05–R07. The owner requires stopping at this boundary: no successor coordinator or next-slice
-work starts automatically. R09 is dependency-ready for a future explicitly started/released coordinator, which must
-settle ONE bounded journal/authority specification with concrete interfaces, independent allowlists and selected gates.
-See [current pickup](../coordinator-handoff.md) and [roadmap](../remaining-work-roadmap.md).
-Production remains signed-out/local-only; accepted inert components do not authorize activation.
+**No implementation specification is currently open.**
+[R09a private account authority/journal](../archive/remaining-work/R09a-review.md) is accepted and archived.
+Next R09b prepares one bounded vault/Room coordination/crash-recovery slice under the standing short-prompt coordinator
+handoff workflow, after verified ownership release. See [current pickup](../coordinator-handoff.md) and
+[roadmap](../remaining-work-roadmap.md).
 
-Create `RNN-task.md` (or subtask equivalent) only when that planning slice is authorized. Include the concrete contract,
-allowlists, independent acceptance tests, proportional gates and stop condition from
-[coordinator workflow](../coordinator-workflow.md). An in-progress review may live beside its task until accepted;
-do not label unresolved/failing work complete.
+The personal milestone requires initial sign-in and established-account offline use. Legacy local-only data disposition
+remains unresolved; no import/delete/reassignment is authorized. Production remains signed-out/local-only until later
+activation gates. Stored authority/credential labels alone are not app activation permission.
 
-At closure, extract enduring implementation facts, approved design refinements and unresolved obligations into their
-[owning documents](../README.md#single-sources-of-truth), then move the completed spec/review into `docs/archive/remaining-work/`.
-Update links and the archive index. Partial parent packages stay in the roadmap with outstanding slices; do not
-keep a completed split plan here merely because a deferred slice remains.
+Create `RNN-task.md` (or subtask equivalent) only for the authorized planning slice. Include concrete behavior/APIs,
+disjoint allowlists, proportional independent tests/gates and exact stop from
+[coordinator workflow](../coordinator-workflow.md). An in-progress review may live beside its task; do not label partial or
+failing work complete. Do not duplicate a successor's full assignment into its initial orientation prompt.
 
-**Replace current state; append only to historical evidence.** Old completed records are in the
-[archive](../archive/README.md), not prerequisite reading for each new assignment.
+At closure, extract durable facts/decisions/obligations into their [owning docs](../README.md#single-sources-of-truth),
+archive the completed spec/review under `docs/archive/remaining-work/`, and replace current roadmap/handoff state.
+Keep incomplete/deferred scopes visible; no completed plan remains active merely because its parent is incomplete.
+
+**Replace current state; append only to historical evidence.** [Archive records](../archive/README.md) are not startup
+reading or current authorization.

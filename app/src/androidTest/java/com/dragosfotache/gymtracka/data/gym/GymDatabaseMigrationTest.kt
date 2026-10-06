@@ -30,15 +30,15 @@ class GymDatabaseMigrationTest {
 
     @Test
     fun everySupportedVersion_migratesToCurrentSchemaAndPreservesAvailableData() {
-        for (startVersion in 1..10) {
-            val databaseName = "migration-$startVersion-to-11.db"
+        for (startVersion in 1..11) {
+            val databaseName = "migration-$startVersion-to-12.db"
             migrationHelper.createDatabase(databaseName, startVersion).use { database ->
                 seedLegacyDatabase(database, startVersion)
             }
 
             migrationHelper.runMigrationsAndValidate(
                 databaseName,
-                11,
+                12,
                 true,
                 *GymDatabase.MIGRATIONS,
             ).use { database ->
@@ -82,6 +82,7 @@ class GymDatabaseMigrationTest {
             assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM sync_snapshot_stages"))
             assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM sync_snapshot_records"))
             assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM sync_snapshot_tokens"))
+            assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM sync_session_authority"))
         } finally {
             database.close()
         }

@@ -4,6 +4,17 @@
 > This records the owner's standing slice-commit and coordinator rotation/continuation authorization below, not blanket
 > permission for pushes, deployment, live actions or changes outside the approved roadmap scope.
 
+## Minimal successor prompts — owner rule
+
+**Keep the next coordinator's initial prompt short: orient, identify the next slice, report readiness, wait for release.**
+Durable docs carry project state, authority, dependencies, safeguards and execution rules. Do not paste summaries of
+architecture/contracts, capability inventories, contributor instructions, test plans or the workflow into the prompt.
+Use the [short template](#successor-prompt-template), with the exact slice and live outgoing report target; an optional
+single-line accepted commit/review reference is enough for a receipt. Put missing durable facts in their owning document,
+not a growing handoff packet. The successor discovers live state and follows the progressive reading route itself.
+Send ownership release separately after readiness acknowledgment. Prompt brevity does not waive any existing gate,
+authority check, contributor independence or transfer safeguard, and never overrides an explicit owner stop.
+
 ## Scope and planning
 
 - Follow [progressive reading](README.md#progressive-reading-and-context-discipline). Pickup readiness verifies authority,
@@ -125,11 +136,10 @@ launching around the problem. Documentation-only maintenance is not itself an im
    and `--no-focus`. Do not reuse Worker/QA or an unrelated pane, create a new worktree, or change global configuration.
    Start Pi with the verified coordinator model/reasoning and a fresh session (no `--continue`, `--resume`, old
    `--session` or old session ID). Use a unique temporary live name while the outgoing `gym-coordinator` still exists.
-5. **Send the next-slice prompt asynchronously.** Include the exact next slice and standing authority, pickup route,
-   current accepted review and commit hash(es), relevant capability seams, boundary/dependency/allowlist/testing
-   requirements, working-tree preservation, contributor independence, fresh contributor sessions and serialized Gradle ownership.
-   Explicitly require user escalation for blockers/questions and the progressive reading route. The successor verifies
-   minimal pickup facts and reports readiness to the outgoing coordinator via fire-and-forget
+5. **Send the minimal next-slice prompt asynchronously.** Use the [short template](#successor-prompt-template), not a
+   duplicated handoff packet. Identify the exact next slice, documentation entry point and live outgoing readiness target;
+   optionally add one accepted commit/review reference line. All standing rules and durable scope facts stay in docs.
+   The successor verifies minimal pickup facts and reports readiness via fire-and-forget
    `herdr agent prompt <outgoing-name> ...`; do not require complete design/contract/code ingestion for this acknowledgment.
    It must not specify, edit, delegate or build until ownership is released. Task-relevant design/source reading follows
    release, before specification/delegation. Do not use `--wait`, `agent wait`, or poll for readiness; use the acknowledgment
@@ -148,32 +158,24 @@ launching around the problem. Documentation-only maintenance is not itself an im
 
 ### Successor prompt template
 
-Fill in the current facts; do not paste old pane IDs, inventories or verification claims as live state:
+Use this brief prompt; do not expand it into an implementation packet. Substitute only current live facts:
 
 ```text
-You are the next GymTracka coordinator, taking over <next bounded slice> after accepted <previous slice>.
-The owner authorizes scoped acceptance commits, automatic next-slice planning/implementation and coordinator rotation
-under docs/coordinator-workflow.md#coordinator-rotation-and-automatic-continuation.
-Use supplied AGENTS.md and docs/README.md progressive reading policy; read the current handoff,
-roadmap status/dependencies and workflow authority/transfer rules, then inspect both live trees/indexes/untracked/HEADs
-and roles/models/resource ownership. Preserve existing changes. Do not reread supplied unchanged instructions or ingest
-the full architecture/contract/OpenAPI/code suite just to report pickup readiness.
-After release, read task-relevant authoritative sections, referenced wire types and concrete code/harness seams before
-settling the bounded specification; expand when dependencies or safety questions require it. Read the full workflow
-before delegation. Contract authority and required safeguards/gates are unchanged.
-Accepted evidence: <review path>. Accepted commit(s): <hash(es)>; verify live HEADs/trees rather than assuming clean.
-Reuse <capability seams>; do not recreate them.
-Next scope: <goal, dependencies and non-goals>. Prepare a bounded spec with concrete interfaces,
-independent Worker/QA allowlists, proportional tests/gates and a stop condition before delegation.
-Use fresh native Contributor/high Worker and QA sessions; keep reports asynchronous and Gradle serialized.
-Bring every unresolved blocker/question back to the user; no silent substitutions, gate weakening or scope drift.
-Commit only your accepted slice's changes before handoff. No push, deployment, private configuration or live
-account/device actions without separate permission.
-First report bounded pickup readiness for <slice> asynchronously to <outgoing live agent name>;
-do not specify/edit/delegate/build until its release prompt. Readiness is not a completed implementation design.
-After release, own the slice as gym-coordinator, design/specify/implement/review/verify it,
-update the durable handoff, commit the accepted slice, and rotate to a fresh coordinator using the same protocol.
+You are the next GymTracka coordinator for <next bounded slice>.
+Orient yourself using supplied AGENTS.md and docs/README.md, then the current handoff and roadmap.
+Verify live state and report pickup readiness asynchronously to <outgoing live agent name>.
+Do not specify, edit, delegate or build until ownership is released.
+After release, execute the slice under docs/coordinator-workflow.md; escalate blockers/questions to the user.
 ```
+
+If useful, append only `Accepted: <commit hash(es)>; <review path>.` No copied inventories or verification claims.
+After verified acknowledgment and role transfer, send a separate short release message:
+
+```text
+Ownership of <slice> is released to you as gym-coordinator. Begin under docs/coordinator-workflow.md.
+```
+
+This release is sent only when the current slice/start authority permits it; the template itself grants no authority.
 
 ## External boundaries
 

@@ -1,7 +1,8 @@
 # Approved Android sync integration design
 
 **Approved design, not a claim that the integration is implemented.** This is the task-relevant reference for Android
-choices, not coordinator startup reading. The finalized shared v1 contract is unchanged. Execution requires authorization
+choices, not coordinator startup reading. The public v1/backend contract is unchanged; the personal account scope follows
+[P16](../../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions). Execution requires authorization
 for a bounded slice; [the roadmap](../remaining-work-roadmap.md) owns status and dependencies.
 
 The original R01 design was approved on 2026-10-03. Existing model, transport, vault and refresh primitives now implement
@@ -14,8 +15,10 @@ checkpoint transactions on that same admitted run; R07b adds bounded incremental
 admitted run. R07c adds an inert shared push-first driver and separate fenced valid-tail/last-success transaction.
 R08a adds inert durable whole-page snapshot staging with the data-preserving Room10→11 migration; R08b adds actual
 bounded HTTP download and R08c complete canonical baseline/absence plus coordinated protected publication/recovery.
-All reuse the same admitted run/physical-DB owner. Production bootstrap/projection activation, convergence, the durable
-Room-authority adapter/journal, account transitions and cross-feature publication barriers remain planned. Stored vault phases and explicit refresh leases alone never
+All reuse the same admitted run/physical-DB owner. R09a now supplies inert Room12 private authority observations and
+atomic preparation/fencing; see [implementation](implementation.md#durable-private-room-account-authority).
+Production bootstrap/projection activation, convergence, vault/Room coordination and cross-feature publication barriers
+remain planned. Broader account transitions are deferred public scope. Stored vault phases and explicit refresh leases alone never
 authorize activation. Preserve the unresolved
 [legacy auth replay limitation](implementation.md#legacy-auth-replay-limitation) in all recovery work.
 
@@ -48,8 +51,9 @@ Room domain projection <--- publication gate --- canonical cache / staging
 
 Proposed narrow responsibilities (names are design labels, not yet API signatures):
 
-- **SessionCoordinator**: startup privacy lock, foreground attempts, vault/Room journal protocol, account/scope selection,
-  sign-out and reauthentication fences. Domain cleanup is explicit and account-bound.
+- **SessionCoordinator**: startup privacy lock, foreground attempts, vault/Room journal protocol, initial single-account
+  activation and reauthentication fences. Sign-out/switching UI belongs to deferred public workflows; durable identity
+  and late-result fences remain personal prerequisites. Domain cleanup is explicit and account-bound.
 - **SyncEngine**: one serialized account/session run, durable head claiming, pushes, pulls and snapshots. It never derives
   identity from Google/email, never opens credential UI, and never performs network calls in Room transactions.
 - **CanonicalStore**: independent complete canonical records/deletion evidence and publication bookkeeping;
@@ -85,14 +89,15 @@ Room storage boundaries below retain the approved design. R05a has delivered the
 [the implementation reference](implementation.md#canonical-ledger-and-capture-watermarks). R05b adds
 [fenced canonical batch writers](implementation.md#fenced-canonical-batches), preserving watermarks and marking dirty
 without incrementing cache epochs or changing visible data. R05c's protected publisher reuses this storage; R08a–c
-supply inert staging/download/complete-baseline recovery. Journal and production activation remain future work:
+supply inert staging/download/complete-baseline recovery. R09a delivers private authority/journal storage; vault/Room
+coordination and production activation remain future work:
 
 | Storage | Required logical fields and constraints |
 |---|---|
 | `sync_canonical_roots` | PK `(account_id, aggregate_type, aggregate_id)`; nullable highest observed positive revision; state `unobserved`, `upsert`, `delete`, or `snapshot_absent`; validated complete canonical JSON only for upsert; local-generation watermark; cache epoch. No FK cascade from domain tables |
 | Account cache metadata (`sync_account_cache`, delivered R05a) | Account PK; complete-baseline flag; cache epoch; projection-dirty flag; materialized epoch. Existing opaque cursor/last success stay in `sync_state`; admission binds immutable session and per-callback cache-epoch fences, the frozen row's attempt count and a live run capability; successful snapshot completion/publication adopts returned run epochs. Outcome bookkeeping and atomic acknowledgment additionally use conservative process-local write tokens; bounded push orchestration reuses these seams without advancing pull checkpoints or epochs |
 | Snapshot staging (R08a delivered Room11) | Unique account/stage; origin session/epoch, fixed limit, original full checkpoint/baseline observation, frozen baseline/continuation and phase/counters; whole records PK `(stage_id,type,id)` plus page/position; durable exact continuation/page evidence. Stage-only child cascades, no visible-domain/canonical FKs. Read/restart observes for explicit abandon/new-stage restart, never resumes append authority |
-| Transition journal (R09) | Singleton current operation ID, phase, source/target account and generation, local choice, captured source generations/IDs, import preparation/completion state; original import snapshots/error context if needed. **No credentials/Google proofs** |
+| `sync_session_authority` (R09a delivered Room12) | Independent singleton id1, checked revision/session generation, strict phase and nullable canonical service_origin/account_id/operation_id. Private signed-out cache retains known origin provenance. Only private preparation/fencing writers exist; no ACTIVE/vault activation. Legacy-data fields require owner-selected migration; broader local-choice/import provenance is deferred public. **No credentials/Google proofs** |
 
 A generation watermark survives domain rematerialization/removal; canonical writes must not lower a local generation.
 Capture advances any relevant ledger watermark in the same transaction as its existing domain/outbox update. Local-only
@@ -282,11 +287,27 @@ cache until this gate passes. An old unchanged root must be discoverable without
 The [implemented vault and refresh primitives](implementation.md#encrypted-vault-and-refresh) provide app-private
 `noBackupFilesDir`, Keystore AES/GCM, versioned atomic records, backup exclusions, and exact uncertain-refresh persistence.
 The [startup recovery seams](implementation.md#startup-recovery-seams) now supply read-only eligibility and runtime
-fencing over an explicit authority interface, but no real Room adapter. The remaining design below delivers durable
-coordination with Room, not a replacement vault implementation. Vault records bind
+fencing over an explicit authority interface, now supplied by R09a's
+[private Room adapter](implementation.md#durable-private-room-account-authority). The remaining design below delivers
+cross-store coordination, not replacement vault or authority storage. Vault records bind
 service credentials, pending attempt, account/generation/operation and revision. Google ID tokens remain bounded
-foreground memory; no persistence across restart. The planned Room journal holds only nonsecret identity/transition state.
+foreground memory; no persistence across restart. R09a's Room journal holds only nonsecret private identity/transition
+state; cross-store coordination remains planned.
 Ordinary local backup need not be disabled to exclude credentials.
+
+### Personal scope boundary
+
+The personal milestone requires initial sign-in and complete account activation, then permits the established account's
+cached data and edits offline across ordinary restarts without online login every launch. Same-account reauthentication
+resumes retained intent; access expiry follows normal serialized refresh, and only unavailable credential recovery
+requires foreground reauthentication for delivery, not local-data deletion. Missing/unreadable/
+mismatched vault binding still fails closed/private, and another service UUID cannot adopt the account's data or queue.
+
+No signed-out editing, account switching, sign-out UI or general import/replace UI is required for personal delivery.
+Existing local-only data disposition is unresolved: retain it without import/deletion/reassignment until owner direction.
+A selected one-time migration/import or confirmed clean/cloud-only start needs its own bounded scope and gates.
+The protocol below retains durable account authority/journal, crash recovery and late-result fences; legacy-choice
+branches apply only after that decision, and broader transition branches remain deferred public obligations.
 
 ### Startup and activation
 
@@ -295,14 +316,15 @@ PrivacyLocked -> reconcile Room journal with vault
    match + ready phase + complete cache -> selected authenticated account scope
    recoverable prepared transition    -> resume preparation privately, no ordinary account UI
    missing/unreadable/mismatched vault -> fence active identity off, retain private cache, require sign-in
-   configuration unavailable          -> signed-out local use; never activate credentials against another origin
+   configuration unavailable          -> setup/sign-in gate for initial use; never activate against another origin
 ```
 
 Bind vault to configured HTTPS service identity as well as account and session generation: credentials from one service
 must never be sent to another origin just because an endpoint setting changed. A configuration change requires a
 separately fenced sign-out/reconfiguration flow; do not fall back to cleartext or another origin.
 
-Proposed durable activation protocol:
+Proposed durable activation protocol (no local-choice branch on a new empty personal installation; no legacy-data
+branch is authorized until its disposition is selected):
 
 1. Drain/gate old UI mutations; reserve monotonic new device generation and transition operation in Room. Hide any
    preparing account; no new ordinary repository follows the provisional target. Freeze captured local choice inputs.
@@ -321,6 +343,10 @@ or fails closed/private. Orphan prepared vault grants do not authorize an unmatc
 monotonic generations; overflow is a retained error, not wraparound.
 
 ### Import/replace and initial activation
+
+General import/replace choices and account switching below are deferred public workflows. Their preservation/collision
+rules also constrain any owner-selected one-time legacy migration; they do not authorize selecting it. Same-account
+reauthentication and complete initial bootstrap remain personal prerequisites.
 
 - Gate new local admissions and drain finite actions before capturing the local graph/choice. Unsaved custom editor
   draft values are presentation state: require Save/Discard/Cancel before replacing its scope, not a hidden autosave.
@@ -345,6 +371,9 @@ monotonic generations; overflow is a retained error, not wraparound.
   proceeding. This implements the existing one-account cache contract, not permission to copy A's queue into B.
 
 ### Refresh and sign-out
+
+Refresh/recovery and identity fencing remain personal scope. The sign-out UI/journey and signed-out repository behavior
+below are deferred public scope, not required to enable the mandatory-sign-in personal milestone.
 
 - Serialize refresh selection/persistence; before transmission, atomically store unchanged old refresh token, exact
   encoded body and idempotency key in the vault. Retry that attempt after cancellation/lost response/restart.
@@ -395,10 +424,10 @@ barrier; app integration must not silently replace it with a no-op while composi
 R05a delivered the **data-preserving v9→v10 migration** for canonical ledger/publication state and capture watermarks.
 R05b canonical batches and R05c protected publication reuse v10 without entity/schema changes. R08a delivered the
 **data-preserving v10→v11 staging migration** while preserving all prior entity definitions/bytes and the v1 asset.
-The R09a transition journal/device-phase migration remains separate; assign its exact schema version only after
-checking the live branch on pickup. Combine adjoining changes only if they are one
-reviewed deliverable, not to avoid migration
-coverage. No entity change without KSP/export, preserved snapshots, all supported starts and copied v1 asset tests.
+R09a delivered the **data-preserving v11→v12 authority/journal migration**, adding only an empty independent table;
+no existing device/root/schema bytes change and no activation is fabricated. Later schema versions are assigned only on
+pickup. Combine adjoining changes only if they are one reviewed deliverable, not to avoid migration coverage.
+No entity change without KSP/export, preserved snapshots, all supported starts and copied v1 asset tests.
 
 | Invariant / fault | Mandatory layer and gate |
 |---|---|
@@ -414,11 +443,13 @@ coverage. No entity change without KSP/export, preserved snapshots, all supporte
 | Full snapshot references on later pages, old unchanged/empty cache, cycles/duplicates/mixed baselines | Scripted page sources + real Room staging; R08; real-service frozen view R10 |
 | Failure on middle/final snapshot; checkpoint/projection rollback; stale prior-epoch page | Real Room crash/restart tests; R08 |
 | Global physical PK collision with local/bundled/foreign root/child never overwrites | Real Room full publication/import/switch; R05/R09 |
-| Refresh intent persisted before HTTP; each vault/Room journal crash boundary; stale grant after sign-out | JVM state-machine + injected vault/Room failures; Android atomic-file/Keystore/backup checks R04/R09 |
-| A/B/local privacy, prepared activation, import collision, replace failure, same-account resume/new signup UUID | Real Room + vault/identity scripted boundary, then Compose; R09/R13 |
+| Refresh intent persisted before HTTP; each vault/Room journal crash boundary; late grant cannot cross generation/account | JVM state-machine + injected vault/Room failures; Android atomic-file/Keystore/backup checks R04/reduced R09 |
+| Initial gate, prepared activation, matching offline restart/edit/reconnect, same-account reauth; reject mismatched/new account UUID | Real Room + vault/identity scripted boundary, then Compose; reduced R09/R13 |
+| Legacy local-data preservation and selected one-time migration/clean-start behavior | Owner decision and bounded spec before affected activation; real Room/vault/publication gates R09/R13 |
+| General A/B/local privacy, sign-out/switch, import choice/collision and replace failure | Deferred public R09/R13 workflows; not personal acceptance claims |
 | Accepted routine/picker/history edits and failed timer drain cannot disappear on remote/scope changes | Virtual-time state tests and real Compose/app flows; R12 |
 | Current custom names, navigation/active pill and same-ID fields after remote updates | State + real Compose with Room; R12 |
-| Secure origin/TLS, no redirect credential leak/log bodies; unconfigured local-only use | Deterministic HTTP/config, APK/config review, Android startup; R03/R04/R13 |
+| Secure origin/TLS, no redirect credential leak/log bodies; unconfigured initial-use sign-in/setup gate | Deterministic HTTP/config, APK/config review, Android startup; R03/R04/R13 |
 | Two independent stores converge after offline/restart/lost-response/delete/snapshot | Real Room-backed engine through isolated black-box service; core R10 before activation |
 | Real Google, phone/laptop trusted HTTPS, foreground/then background recovery | Explicit owner-approved device/account journeys; R17a/R17b, blocked until configuration |
 | Export/deletion/status/old receipt/new signup, public device/signing/CI/retention claims | Deferred R14/R15/R17c/R18, never marked passed by personal sync |

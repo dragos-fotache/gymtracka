@@ -30,8 +30,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SyncSnapshotStageEntity::class,
         SyncSnapshotRecordEntity::class,
         SyncSnapshotTokenEntity::class,
+        SyncSessionAuthorityEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = true,
 )
 @TypeConverters(GymTypeConverters::class)
@@ -46,6 +47,7 @@ abstract class GymDatabase : RoomDatabase() {
     abstract fun syncCanonicalDao(): SyncCanonicalDao
     abstract fun syncProjectionDao(): SyncProjectionDao
     abstract fun syncSnapshotDao(): SyncSnapshotDao
+    abstract fun syncSessionAuthorityDao(): SyncSessionAuthorityDao
 
     companion object {
         private const val DATABASE_NAME = "gym.db"
@@ -319,6 +321,7 @@ abstract class GymDatabase : RoomDatabase() {
             MIGRATION_8_9,
             CanonicalStorageMigration,
             SnapshotStorageMigration,
+            SessionAuthorityStorageMigration,
         )
 
     }

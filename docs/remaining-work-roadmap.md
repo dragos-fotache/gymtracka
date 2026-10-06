@@ -5,12 +5,14 @@ outcomes and dependencies; the owner's [standing workflow rule](coordinator-work
 authorizes scoped slice commits and fresh-coordinator continuation to the next eligible slice, with user escalation for
 blockers/questions. Detailed specifications are created [on pickup](coordinator-workflow.md).
 Current pickup and blockers are in [the handoff](coordinator-handoff.md); Android integration decisions are in
-[the approved design](sync/integration-design.md). Shared v1 requirements are unchanged.
+[the approved design](sync/integration-design.md). Public v1/backend requirements are unchanged; the narrower personal
+account milestone is approved in [P16](../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions).
 
 ## Delivery priorities
 
-1. **Usable personal app:** owner’s phone against an always-on laptop service; R01–R09, core R10, sign-in/out R11,
-   R12–R13 and R17a. Foreground/edit-triggered sync and manual retry suffice for this milestone.
+1. **Usable personal app:** owner’s phone against an always-on laptop service; R01–R08, reduced single-account R09,
+   core R10, sign-in/reauthentication R11, R12–R13 and R17a. Initial sign-in is mandatory; activated account use/editing
+   continues offline without online login every launch. Foreground/edit-triggered sync and manual retry suffice.
 2. **Unattended personal use:** R16 and R17b offline/restart/background recovery. No new hosting platform or high-availability
    promise is required.
 3. **Future public release:** lifecycle/export/deletion slices, expanded compatibility/CI/live gates and R18. These remain
@@ -21,9 +23,10 @@ snapshot publication. Accepted personal slices never imply completion of their d
 
 ## Status and dependencies
 
-Statuses below reflect accepted delivery through R08c. The owner requires stopping after R08c with durable handoff
-notes: no successor coordinator or next-slice work starts automatically at this boundary. “Pending” requires eligibility under explicit/standing authority
-and a bounded pickup spec, not another approval for each eligible next slice. “Deferred” remains required for its later
+Accepted delivery is through [R09a](archive/remaining-work/R09a-review.md), the first reduced personal account slice.
+The standing short-prompt coordinator rotation applies to the next eligible R09b preparation/recovery slice.
+“Pending” requires eligibility under explicit/standing authority and a bounded pickup spec, not another approval for each
+eligible next slice. “Deferred” remains required for its later
 milestone and is not automatically brought forward. Historical M-series assignments are not a second execution plan.
 
 | Package | Status / outstanding scope | Dependencies |
@@ -36,9 +39,9 @@ milestone and is not automatically brought forward. Historical M-series assignme
 | R06 durable push | **a claiming/exact replay, b outcomes/retry, c atomic canonical acknowledgment and d bounded delivery loop accepted**; production activation remains later integration | R03b, R04, R05 |
 | R07 incremental pull | **a checkpoint transactions, b bounded HTTP pull, c shared push-first/valid-tail orchestration and package gates accepted** | R06; b after a, c after b |
 | R08 bootstrap/full resync | **a staging, b bounded HTTP download and c complete canonical baseline/absence/protected publication recovery accepted; no further R08 slice** | R05–R07; app-facing authority/convergence/barriers remain R09/R10/R12 |
-| R09 account transitions/import | Pending | R04, R08; production activation also needs R12a |
+| R09 single-account activation/recovery | a private authority/journal accepted; b prepared vault/Room coordination/recovery next; activation pending; legacy local-data decision unresolved; general transitions/import-replace UI deferred public | R04, R08; production activation also needs R12a |
 | R10 engine convergence/recovery | Core a pending; expanded b before public release | R03b/c, R06–R09 |
-| R11 Google identity/proofs | Personal sign-in/out a/b pending; lifecycle c deferred | Relevant R02, R04 |
+| R11 Google identity/proofs | Personal sign-in/reauthentication pending; sign-out UI and lifecycle proofs deferred public | Relevant R02, R04 |
 | R12 feature/app reconciliation | a edit/publication barriers, b observation, c app/timer rebinding pending | R05/R07/R09 integration; barriers can be developed earlier |
 | R13 account UI/foreground sync | Pending | R09, core R10, personal R11, R12 |
 | R14 cloud JSON export | Deferred public | R02e, R03d export, R11 proofs, R13 |
@@ -54,7 +57,8 @@ Dependencies are capability gates, not a mandate to implement every independent 
   may inject controllable barriers; the live app must never substitute a no-op while screens accept edits.
 - Initial sign-in needs R08's complete snapshot; null-cursor incremental pull is not bootstrap. Core R10 must pass before
   user-facing activation. R09 journal tests can precede R12a, but visible activation cannot.
-- Room v11, existing mutation capture/watermarks, all 17 kinds, codecs, transport, vault, refresh, inert staging/recovery seams are
+- Room v12, existing mutation capture/watermarks, all 17 kinds, codecs, transport, vault, refresh, inert staging/recovery and
+  private authority/journal seams are
   foundations to reuse, not tasks to recreate. The retired simulator is not a prerequisite or backlog item.
 
 ## Outstanding acceptance outcomes
@@ -109,8 +113,8 @@ on Room v10; [R07b review](archive/remaining-work/R07b-review.md) accepts bounde
 [R07c review](archive/remaining-work/R07c-review.md) accepts uninterrupted shared push-first orchestration,
 retained-error policy, exact-checkpoint valid-tail/last-success bookkeeping and full R07 package instrumentation/
 assembly/lint/APK gates. Outstanding newer intent, publication and convergence stay separate from bounded tail.
-No further R07 slice remains. R08a–c are accepted; R09 is dependency-ready for a future explicitly started coordinator.
-No implementation task is currently open, and automatic continuation is stopped at the owner's R08c boundary.
+No further R07 slice remains. R08a–c and reduced R09a private authority/journal are accepted; the current handoff owns
+R09b pickup under the standing rotation workflow.
 
 ### R08 — Staged bootstrap and full resync
 
@@ -137,20 +141,36 @@ preserve last-success; a subsequent actual pull tail remains separate. Full R08 
 backend, assembly/lint/APK and preservation gates passed as scoped in that review.
 
 No further R08 slice remains. App-facing bootstrap still depends on R09 durable authority/journal, R10 convergence and
-R12a real edit/timer barriers before activation. R09 is dependency-ready; do not start it or a successor coordinator until
-the owner explicitly starts/releases future work. Settling its bounded spec belongs to that future coordinator.
+R12a real edit/timer barriers before activation. [R09a private account authority/journal](archive/remaining-work/R09a-review.md)
+is accepted; its inert storage/read/private-fencing boundary does not activate production.
 
-### R09 — Account transitions and import/replace
+### R09 — Single-account activation, recovery and reauthentication
 
-Coordinate encrypted vault and nonsecret Room journal without pretending they share a transaction. Sign-out retains private
-account cache/outbox; same-account sign-in resumes; different-account sign-in clears only prior account state, not separate
-local data/catalogue. Drain accepted edits/terminal rest, advance fences and cancel old work. Import preserves IDs and
-captures dependency-ordered create-only customs/routines/workouts, including drafts/valid history; collisions remain
-errors, not remapping. Replace deletes the confirmed local graph only with successful complete cloud publication.
+**Reduced personal scope:** coordinate encrypted vault and durable nonsecret Room account authority/journal without
+pretending they share a transaction. Initial sign-in and complete account bootstrap gate workout use. Recover interrupted
+activation and same-account reauthentication; bind service/account/generation, preserve exact uncertain requests and
+pending edits, drain accepted edits/terminal rest when required, and fence late results. An activated matching account
+remains usable/editable offline across ordinary restarts without a fresh online login each launch. Access expiry follows
+normal serialized refresh; unrecoverable credential expiry suspends delivery for same-account reauthentication, not
+local-data deletion. Missing/mismatched vault fails closed/private.
+A different service account UUID cannot silently adopt retained data or pending work, even for the same Google identity.
 
-**Gate:** A/B/local isolation, both choices with/without local data, interrupted activation/sign-out/switch, collisions,
-vault mismatch and delayed responses. Offline sign-out needs no network, but failed disk/drain operations are not success.
-Suggested slices: transition journal, import/choice preparation, crash-safe activation/switch/sign-out.
+Pre-existing local-only data disposition is **unresolved**. Before any activation that encounters it, obtain the owner's
+choice of one-time preservation/import or confirmed clean/cloud-only start and scope that work. No deletion/import is
+currently authorized; no general choice UI is required for new installations.
+
+**Personal gate:** interrupted initial activation/reauthentication, matching offline restart/edit/reconnect, vault/Room
+mismatch, delayed callbacks, different-account rejection and pending-work preservation; include the selected legacy-data
+migration gate once decided. R12a barriers and core R10 remain required before production activation. First bounded
+slice: [R09a durable private account authority/journal](archive/remaining-work/R09a-review.md), accepted with inert
+storage/read/reservation/private fencing. Next R09b settles one bounded prepared-vault/Room coordination and crash-recovery
+slice; do not recreate R09a storage or design all activation ahead. Prepared promotion and actual activation/recovery
+follow in bounded work after their gates; no legacy-data disposition is inferred.
+
+**Deferred public:** signed-out local editing, sign-out and switching UI, and general import/replace choices. Retain their
+existing isolation, drain, crash and collision obligations: sign-out keeps private account cache/outbox; switching never
+copies A into B; import preserves IDs/create-only dependency order; replace deletes only the confirmed separate local
+graph with complete successful cloud publication. Deferral is not acceptance or permission to erase legacy data.
 
 ### R10 — Engine convergence and recovery
 
@@ -162,8 +182,9 @@ or wait 90 days. Record independently expected complete outcomes and external li
 
 ### R11 — Foreground Google identity
 
-Personal a/b adds Credential Manager behind the identity interface, supplied nonce/server audience/package/signing inputs,
-foreground exchange/cancellation and credential-state clearing. Service account identity—not email or decoded Google
+Personal delivery adds Credential Manager behind the identity interface, supplied nonce/server audience/package/signing
+inputs and foreground sign-in/reauthentication exchange/cancellation. Sign-out UI and its credential-state clearing
+journey are deferred with public account workflows. Service account identity—not email or decoded Google
 claims—owns local data. Keep bounded foreground exchange retries exact; no interactive worker auth or persisted Google
 proof/client secret. Deferred c supplies purpose/account-bound export/delete/status proofs. Verify dependency compatibility
 at pickup, not from old planning versions. Deterministic adapter tests and actual Google journeys are separate gates.
@@ -178,11 +199,15 @@ redesign. **Gate:** virtual-time state plus real Compose/app-flow tests, includi
 
 ### R13 — Account UI and foreground sync
 
-Specify usable account controls, unconfigured state, sign-in/out, import/replace confirmations, pending/last-success/error/
-reauth status, foreground/edit/manual triggers and retained rejection recovery. Confirm destructive recovery; settle
-uncertain frozen work unchanged before discarding confirmed remaining intent and reloading a complete snapshot. Never
-claim offline sign-out revoked the service. Preserve signed-out workflows, autosave draining, accessibility and cancellation.
-**Gate:** state/Compose/actual app journeys for choices, failure, recovery and account switch; core R10 before activation.
+Personal UI gates workout access on initial sign-in/complete activation, exposes configuration/sign-in/reauthentication
+and pending/last-success/error status, and permits established-account offline editing. Add foreground/edit/manual
+triggers and retained rejection recovery. An unconfigured new installation shows configuration/sign-in state, not
+signed-out workout editing. Confirm destructive recovery; settle uncertain frozen work unchanged before discarding
+confirmed remaining intent and reloading a complete snapshot. Preserve autosave draining, accessibility and cancellation.
+**Personal gate:** state/Compose/actual app journeys for initial access gating, offline restart/edit/reconnect, failure,
+reauthentication and recovery; selected legacy-data handling once decided; core R10 before activation.
+**Deferred public:** signed-out workflows, sign-out/account-switch controls and general import/replace confirmations with
+their choice/isolation gates. Offline sign-out must never claim server revocation.
 
 ### R02e / R03d — Deferred lifecycle foundations
 

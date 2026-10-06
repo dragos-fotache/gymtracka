@@ -80,7 +80,7 @@ future assignments. Total test count alone does not explain delivery time or jus
 | Area | Existing coverage / expansion boundary |
 |---|---|
 | Domain persistence | Finish cleanup/renumbering/rollback, cascades, history defaults, replacement identity, cloning, routines/custom guards |
-| Room v11, capture, canonical batches and publication | Every v1–10 start and real asset; independent staging migration with exact prior-table/schema/sequence preservation; outbox order/identity/coalescing, scoped mutation families, independent generation ledger/cache bookkeeping, exact-byte migration preservation, fenced complete canonical batches/revisions/deletions/family bindings, strict retained evidence, deep-owned inputs, account-wide protection, complete-graph/physical collision validation, publication epoch/generation preservation, lease provenance and post-write rollback/cancellation/overflow/Room reopen |
+| Room v12, capture, canonical batches and publication | Every v1–11 start and real asset; independent staging migration with exact prior-table/schema/sequence preservation; outbox order/identity/coalescing, scoped mutation families, independent generation ledger/cache bookkeeping, exact-byte migration preservation, fenced complete canonical batches/revisions/deletions/family bindings, strict retained evidence, deep-owned inputs, account-wide protection, complete-graph/physical collision validation, publication epoch/generation preservation, lease provenance and post-write rollback/cancellation/overflow/Room reopen |
 | Pure logic and feature state | Locale formatting, naming/filtering, validation, ordered autosave, failure/cancellation and stale-load guards |
 | App/timer | Active discovery/replacement/finish/discard, finite edit drains, serial terminal writes, ownership/at-most-once persistence, clock and hardware behavior |
 | Compose/app flows | Catalogue/picker/editor/routine/set/history controls; actual startup, custom edit/add, workout finish/history, routine start and perform-again journeys |
@@ -94,7 +94,8 @@ future assignments. Total test count alone does not explain delivery time or jus
 | Frozen-snapshot staging storage | Real Room whole-page/record ownership, strict retained bodies/progress and corrupt Long counters, root/token/baseline/limit rules, absent source, newer-intent and scope preservation, stage exclusion, exact capability/source/session/epoch fences, trigger/count-zero/post-write cancellation rollback and explicit abandon/reopen recovery; downloaded is not bootstrap/publication |
 | Bounded frozen-snapshot HTTP download | Real Room plus scripted API/production adapter: pushEmpty-only start, exact limit/token chain, deep ownership before response suspension, terminal/budget stops, same-run continuation beyond invocation cap, typed expiry versus invalid/wrong-context failures, late source/session/epoch fences, intent races, cancellation/retired-token rollback, shared owner through continuation and exact-intent file reopen/restart; no canonical baseline/publication |
 | Complete snapshot baseline and coordinated recovery | Real Room actual terminal issuance versus storage/read/result shapes, whole frozen graph/later dependencies/empty/old-unchanged roots, revision/family/reference rejection, atomic baseline/absence/checkpoint/stage removal, protected exact newer intent and whole-domain preservation, same-run returned-epoch chaining, corruption/session/source/epoch fences, late SQL/overflow/following-query cancellation rollback, committed-but-canceled resumption, lease-close lost-result recovery and file reopen without redownload |
-| Still outstanding | App-facing bootstrap/engine convergence, durable Room-vault authority/journal/account flows, live publication/edit/timer barriers and UI observation, actual Google, WorkManager and live deployment/lifecycle gates; see roadmap |
+| Private account authority/journal | Strict transactional singleton/cache reads, canonical account/origin provenance, local-root refusal, exact preparation/private fencing, concurrent reservation, checked counters, stale real repositories, valid-tamper/abort/cancellation rollback, file reopen and additive11→12 whole-schema/byte/sequence preservation; no ACTIVE or vault writer |
+| Still outstanding | App-facing bootstrap/engine convergence, vault/Room coordination/promotion/account flows, live publication/edit/timer barriers and UI observation, actual Google, WorkManager and live deployment/lifecycle gates; see roadmap |
 
 ## Standard commands
 
@@ -132,7 +133,10 @@ checks. Missing device/backend inputs leave required gates unverified. Documenta
 whitespace, diff and scope-preservation checks, not an invented build/test pass.
 
 Inspect actual nested XML `testcase` names/counts/failures/errors/skips; table-driven subcases are not extra test counts.
-Keep failed shell exits visible. Relevant reports:
+Keep failed shell exits visible. Verify **executed classes as well as totals** against every requested filter. In the
+R09a environment a comma-separated runner `class` argument executed only its first class; package filters and separate
+single-class invocations supplied the actual scoped gates. Do not infer all requested classes ran from a green Gradle exit
+or use those filtered runs as full unfiltered regression evidence. Relevant reports:
 
 - JVM: `app/build/test-results/testDebugUnitTest/`, `app/build/reports/tests/testDebugUnitTest/`.
 - Device: `app/build/outputs/androidTest-results/connected/debug/`, `app/build/reports/androidTests/connected/debug/`.
@@ -234,11 +238,12 @@ stays in the linked reviews; consult only when assessing coverage freshness or i
 
 | Layer | Latest relevant recorded evidence | Limitation |
 |---|---|---|
-| Offline JVM/compilation | [R08c review](archive/remaining-work/R08c-review.md): fresh full offline JVM and executed production/KSP/Android-test compilation | Inert snapshot baseline/recovery plus existing offline coverage, not durable authority/convergence/activation |
-| Debug assembly/lint/APK | [R08c review](archive/remaining-work/R08c-review.md): explicit debug assembly and lint, packaged asset/notices/permissions/backup rules preserved; checked test/backend/JDBC helpers excluded | One existing newer-version warning; scoped packaging gate, not release/security audit |
-| Vault device | [R08c review](archive/remaining-work/R08c-review.md): unchanged vault regression included in fresh full API37 instrumentation | No API24 or live OEM/cloud transfer |
+| Offline JVM/compilation | [R09a review](archive/remaining-work/R09a-review.md): fresh full offline JVM and executed production/KSP/Android-test compilation | Inert private Room authority plus existing offline coverage, not vault coordination/convergence/activation |
+| Debug assembly/lint/APK | [R09a review](archive/remaining-work/R09a-review.md): explicit debug assembly/lint, schema/packaged asset/permissions/credential backup exclusions preserved; new named test classes and credential artifacts excluded | One existing newer-version warning; scoped packaging checks, not release/security audit |
+| Vault device | [R09a review](archive/remaining-work/R09a-review.md): unchanged vault regression included in fresh focused API37 session-package execution | No new full instrumentation claim, API24 or live OEM/cloud transfer |
 | Real service | [R08c review](archive/remaining-work/R08c-review.md): fresh full isolated real-backend HTTP/auth package | Local interoperability, not deployed TLS/Google or real Room-backed engine convergence; legacy replay unresolved |
 | Full instrumentation | [R08c review](archive/remaining-work/R08c-review.md): fresh full unfiltered API37/Android17 16KB-page emulator regression, including complete baseline/recovery, R08a/b, supported-start/copied-v1 migrations and existing persistence/sync/HTTP/vault/Compose/app flows | No API24, live phone/Google, hosted CI, two-store convergence or activated-app publication evidence |
+| Focused private authority/migrations | [R09a review](archive/remaining-work/R09a-review.md): authority/session package plus separate populated11→12, all-supported/copied-asset, staging migration and foundation classes | Strict fixture correction retained; current-slice scoped evidence, not full unfiltered instrumentation or app activation |
 | Focused complete baseline/ownership Room | [R08c review](archive/remaining-work/R08c-review.md): separate baseline/fence class runs and final refined cancellation/corruption method reruns before the full gate | Repeated methods are not extra distinct tests; focused passes do not substitute for the separately executed full gate |
 | Focused snapshot download/ownership Room | [R08b review](archive/remaining-work/R08b-review.md): separate driver/fence and staging/pull/shared-driver filters | Historical scoped evidence; fresh full package execution is owned by the R08c review |
 | Focused staging/migrations | [R08a review](archive/remaining-work/R08a-review.md): separate staging/fence and populated10/all-start/copied-asset migration cases | Historical filtered evidence; unchanged migrations also execute in the R08c full gate |

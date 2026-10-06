@@ -2,6 +2,10 @@
 
 > **Replace current state; append only to historical evidence.**
 > Active documentation is an operating guide, not a transcript or delivery journal.
+>
+> **Coordinator handoffs: short prompt, durable docs.** Use the
+> [minimal successor-prompt rule](coordinator-workflow.md#minimal-successor-prompts--owner-rule): orient, identify the next
+> slice, report readiness, wait for release. Do not paste a large project/workflow summary into the successor prompt.
 
 ## Documentation rules
 
@@ -15,8 +19,8 @@
    subsequently…” paragraphs or explanations that earlier current-state paragraphs are historical.
 5. **Preserve decisions, not session noise.** Keep invariants, design rationale, unresolved risks, and reproducible
    verification procedures. Leave pane IDs, intermediate fixes, temporary paths, old dirty-tree inventories, and commit
-   receipts out of active docs; pass accepted commit hashes in the successor prompt instead. Discover live
-   repository/agent state at pickup.
+   receipts out of active docs; an optional one-line commit/review reference in the short successor prompt suffices.
+   Discover live repository/agent state at pickup.
 6. **Evidence is scoped and dated.** Record actual commands, results, environment, and unverified gates in one acceptance
    review. Never present an old/cached/filtered run as a new/full pass or copy test-count progressions into every document.
 7. **Close tasks deliberately.** Extract durable implementation/design facts and unresolved obligations before archiving
