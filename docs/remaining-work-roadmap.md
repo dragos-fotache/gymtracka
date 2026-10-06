@@ -23,8 +23,9 @@ snapshot publication. Accepted personal slices never imply completion of their d
 
 ## Status and dependencies
 
-Accepted delivery is through [R09a](archive/remaining-work/R09a-review.md), the first reduced personal account slice.
-The standing short-prompt coordinator rotation applies to the next eligible R09b preparation/recovery slice.
+Accepted delivery is through [R09b](archive/remaining-work/R09b-review.md), inert prepared vault/Room coordination
+and crash recovery. The next eligible bounded R09c slice settles private prepared-session engine admission/bootstrap
+coordination after verified ownership transfer; it does not activate the app.
 “Pending” requires eligibility under explicit/standing authority and a bounded pickup spec, not another approval for each
 eligible next slice. “Deferred” remains required for its later
 milestone and is not automatically brought forward. Historical M-series assignments are not a second execution plan.
@@ -39,7 +40,7 @@ milestone and is not automatically brought forward. Historical M-series assignme
 | R06 durable push | **a claiming/exact replay, b outcomes/retry, c atomic canonical acknowledgment and d bounded delivery loop accepted**; production activation remains later integration | R03b, R04, R05 |
 | R07 incremental pull | **a checkpoint transactions, b bounded HTTP pull, c shared push-first/valid-tail orchestration and package gates accepted** | R06; b after a, c after b |
 | R08 bootstrap/full resync | **a staging, b bounded HTTP download and c complete canonical baseline/absence/protected publication recovery accepted; no further R08 slice** | R05–R07; app-facing authority/convergence/barriers remain R09/R10/R12 |
-| R09 single-account activation/recovery | a private authority/journal accepted; b prepared vault/Room coordination/recovery next; activation pending; legacy local-data decision unresolved; general transitions/import-replace UI deferred public | R04, R08; production activation also needs R12a |
+| R09 single-account activation/recovery | a private authority/journal and b prepared vault/Room coordination/recovery accepted; c private prepared engine admission/bootstrap next; promotion/reauthentication/activation pending; legacy local-data decision unresolved; general transitions/import-replace UI deferred public | R04, R08; production activation also needs R12a |
 | R10 engine convergence/recovery | Core a pending; expanded b before public release | R03b/c, R06–R09 |
 | R11 Google identity/proofs | Personal sign-in/reauthentication pending; sign-out UI and lifecycle proofs deferred public | Relevant R02, R04 |
 | R12 feature/app reconciliation | a edit/publication barriers, b observation, c app/timer rebinding pending | R05/R07/R09 integration; barriers can be developed earlier |
@@ -58,8 +59,8 @@ Dependencies are capability gates, not a mandate to implement every independent 
 - Initial sign-in needs R08's complete snapshot; null-cursor incremental pull is not bootstrap. Core R10 must pass before
   user-facing activation. R09 journal tests can precede R12a, but visible activation cannot.
 - Room v12, existing mutation capture/watermarks, all 17 kinds, codecs, transport, vault, refresh, inert staging/recovery and
-  private authority/journal seams are
-  foundations to reuse, not tasks to recreate. The retired simulator is not a prerequisite or backlog item.
+  private authority/journal and prepared vault/Room coordination seams are foundations to reuse, not tasks to recreate.
+  The retired simulator is not a prerequisite or backlog item.
 
 ## Outstanding acceptance outcomes
 
@@ -113,8 +114,8 @@ on Room v10; [R07b review](archive/remaining-work/R07b-review.md) accepts bounde
 [R07c review](archive/remaining-work/R07c-review.md) accepts uninterrupted shared push-first orchestration,
 retained-error policy, exact-checkpoint valid-tail/last-success bookkeeping and full R07 package instrumentation/
 assembly/lint/APK gates. Outstanding newer intent, publication and convergence stay separate from bounded tail.
-No further R07 slice remains. R08a–c and reduced R09a private authority/journal are accepted; the current handoff owns
-R09b pickup under the standing rotation workflow.
+No further R07 slice remains. R08a–c and reduced R09a/b private authority/preparation are accepted; the current handoff
+owns the next R09 slice under the standing rotation workflow.
 
 ### R08 — Staged bootstrap and full resync
 
@@ -163,9 +164,11 @@ currently authorized; no general choice UI is required for new installations.
 mismatch, delayed callbacks, different-account rejection and pending-work preservation; include the selected legacy-data
 migration gate once decided. R12a barriers and core R10 remain required before production activation. First bounded
 slice: [R09a durable private account authority/journal](archive/remaining-work/R09a-review.md), accepted with inert
-storage/read/reservation/private fencing. Next R09b settles one bounded prepared-vault/Room coordination and crash-recovery
-slice; do not recreate R09a storage or design all activation ahead. Prepared promotion and actual activation/recovery
-follow in bounded work after their gates; no legacy-data disposition is inferred.
+storage/read/reservation/private fencing. [R09b prepared coordination/recovery](archive/remaining-work/R09b-review.md)
+is accepted, stopping at stable private observations without occupied credential replacement or engine admission. Next R09c settles one bounded inert
+private prepared-session engine admission/bootstrap integration slice, reusing the existing complete-baseline drivers.
+Prepared promotion, same-account occupied-credential reauthentication and actual activation/recovery follow in bounded
+work after their gates; no legacy-data disposition is inferred.
 
 **Deferred public:** signed-out local editing, sign-out and switching UI, and general import/replace choices. Retain their
 existing isolation, drain, crash and collision obligations: sign-out keeps private account cache/outbox; switching never

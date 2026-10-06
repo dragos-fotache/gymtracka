@@ -642,7 +642,8 @@ none of this machinery.
 
 These observations and handles are not Room transaction authorization or durable sign-out. An already-started synchronous
 vault CAS may commit after invalidation; dead handles cannot use its result. R09a supplies private durable Room
-observations/reservation/fencing; later R09 must coordinate prepared vault writes/promotion and two-store crash recovery.
+observations/reservation/fencing; R09b adds [inert prepared coordination/recovery](#prepared-vaultroom-coordination-and-recovery).
+Promotion, preparation-engine admission and completed activation remain later R09 integration.
 Result application still rechecks inside Room transactions. R12 barriers, complete bootstrap and engine convergence precede app activation. No engine,
 sign-in/out orchestration, account UI, Google adapter, or scheduler is constructed by these classes.
 
@@ -672,8 +673,43 @@ exported1–11 and bundled v1 asset bytes remain unchanged. No legacy device/cac
   takes precedence; uncertain returns require durable reread, not an in-memory success cache. Errors/displays are closed.
 - No application-facing adapter operation writes ACTIVE, reads/writes credentials, generates IDs, calls HTTP or
   constructs app/session machinery. Raw Room storage primitives are not app-facing authorization.
-  Prepared grant coordination/promotion, legacy choice, real edit/timer barriers, convergence and activation remain later
-  gated work. Full suite boundaries and actual scoped gates belong to the [R09a review](../archive/remaining-work/R09a-review.md).
+  [Prepared grant coordination](#prepared-vaultroom-coordination-and-recovery) is delivered separately; promotion,
+  legacy choice, real edit/timer barriers, convergence and activation remain later gated work. Full suite boundaries and
+  actual scoped gates belong to the [R09a review](../archive/remaining-work/R09a-review.md).
+
+## Prepared vault/Room coordination and recovery
+
+R09b adds unused `SessionPreparationCoordinator(origin, authority, vault)` and the narrow
+`SessionPreparationAuthority` extension implemented by the unchanged R09a reservation method. No new schema or Room
+writer exists. Production constructs none of it; results are nonsecret private observations, never leases or engine,
+repository, refresh, publication or account-visibility admission.
+
+- `prepare` requires exact SIGNED_OUT authority and empty revision0/positive tombstone vault. Any occupied grant,
+  including same-account/orphan/expired/pending, refuses unchanged. Checked Room/vault counters precede reservation.
+  Reservation binds the service-returned account to the configured origin and supplied operation, privately increments
+  revision/generation, and retains R09a provenance/local-root refusal. Returned AND durable reread identity must match
+  before one full original-grant PREPARED CAS at the exact empty revision.
+- `resume` never reserves again. It requires the same exact PREPARING identity and supplied grant account/origin,
+  rereads Room after loading an empty vault before CAS, and uses the existing operation/generation. An existing exact
+  prepared grant permits only read-only idempotence; retained pending refresh is preserved, never cleared/rekeyed.
+- Post-write results and read-only `recover` use alternating Room/vault/Room/vault/Room rereads. Full snapshot/grant
+  equality and exact pending operation/key/body/token equality tolerate separately decoded attempt instances without
+  changing original request whitespace or expiry. Missing credentials yield NeedsGrant; Room cannot reconstruct a grant.
+  Mismatched/unreadable/change-racing state stays private/Blocked. Non-PREPARING Room and other-origin preparation do
+  not read the vault. A matching ACTIVE vault during PREPARING is mismatch, not promotion or completed activation.
+- One coordinator mutex serializes operations for a physical Room/vault pair. Newest opaque invocation fences and
+  synchronous invalidation retire old work without waiting for I/O. Caller cancellation precedes stale/error mapping;
+  injected cancellation remains identical in an active caller. No process success cache or token grants durable authority.
+- An already-started synchronous reservation/CAS may commit despite a failed/canceled/invalidated return. Keep its
+  durable operation and bytes; recover by reread, never compensating cleanup, automatic fencePrivate, generation restart
+  or grant replacement. Such an orphan cannot authorize mismatched Room. No fake cross-store transaction is claimed.
+- No HTTP/clock/UUID generation or Google proof persistence; expired stored grants are evidence, not freshness or delivery
+  permission. No ACTIVE/promotion, internal preparation-engine admission, occupied-credential reauthentication, local
+  import/deletion, UI or startup wiring. Those integrations and R12a/core R10 gates remain outstanding.
+
+[R09b review](../archive/remaining-work/R09b-review.md) owns fresh full JVM, focused actual Room/Keystore/file plus existing
+session regression, build/lint/APK and preservation evidence. It is not full instrumentation, engine convergence or live
+activation evidence.
 
 ## Legacy auth replay limitation
 

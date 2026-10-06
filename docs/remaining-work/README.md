@@ -1,10 +1,9 @@
 # Active task specifications
 
 **No implementation specification is currently open.**
-[R09a private account authority/journal](../archive/remaining-work/R09a-review.md) is accepted and archived.
-Next R09b prepares one bounded vault/Room coordination/crash-recovery slice under the standing short-prompt coordinator
-handoff workflow, after verified ownership release. See [current pickup](../coordinator-handoff.md) and
-[roadmap](../remaining-work-roadmap.md).
+[R09b prepared vault/Room coordination and crash recovery](../archive/remaining-work/R09b-review.md) is accepted and
+archived. Next R09c settles one bounded inert private prepared-session engine admission/bootstrap slice after verified
+ownership release. See [current pickup](../coordinator-handoff.md) and [roadmap](../remaining-work-roadmap.md).
 
 The personal milestone requires initial sign-in and established-account offline use. Legacy local-only data disposition
 remains unresolved; no import/delete/reassignment is authorized. Production remains signed-out/local-only until later

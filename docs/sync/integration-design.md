@@ -17,9 +17,10 @@ R08a adds inert durable whole-page snapshot staging with the data-preserving Roo
 bounded HTTP download and R08c complete canonical baseline/absence plus coordinated protected publication/recovery.
 All reuse the same admitted run/physical-DB owner. R09a now supplies inert Room12 private authority observations and
 atomic preparation/fencing; see [implementation](implementation.md#durable-private-room-account-authority).
-Production bootstrap/projection activation, convergence, vault/Room coordination and cross-feature publication barriers
-remain planned. Broader account transitions are deferred public scope. Stored vault phases and explicit refresh leases alone never
-authorize activation. Preserve the unresolved
+R09b adds inert [prepared vault/Room persistence and reread recovery](implementation.md#prepared-vaultroom-coordination-and-recovery).
+Production bootstrap/projection activation, convergence, prepared engine admission/promotion and cross-feature
+publication barriers remain planned. Broader account transitions are deferred public scope. Stored vault phases and
+explicit refresh leases alone never authorize activation. Preserve the unresolved
 [legacy auth replay limitation](implementation.md#legacy-auth-replay-limitation) in all recovery work.
 
 Maintain approved decisions here in place; preserve their rationale and distinguish adopted refinements from proposals.
@@ -292,7 +293,9 @@ fencing over an explicit authority interface, now supplied by R09a's
 cross-store coordination, not replacement vault or authority storage. Vault records bind
 service credentials, pending attempt, account/generation/operation and revision. Google ID tokens remain bounded
 foreground memory; no persistence across restart. R09a's Room journal holds only nonsecret private identity/transition
-state; cross-store coordination remains planned.
+state. R09b now implements the bounded reserve/PREPARED-write/stable-reread portion privately, with reservation-only
+resume and read-only restart classification. It does not replace occupied credentials, promote, admit a preparation
+engine or activate the app; the fuller protocol below remains planned beyond that boundary.
 Ordinary local backup need not be disabled to exclude credentials.
 
 ### Personal scope boundary

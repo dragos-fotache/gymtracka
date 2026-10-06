@@ -31,7 +31,7 @@ import kotlinx.coroutines.ensureActive
  * rollback/success claim after an uncertain return: callers must reread durable
  * state. No process success cache exists.
  */
-internal class RoomSessionAuthority(private val database: GymDatabase) : SessionRecoveryAuthority {
+internal class RoomSessionAuthority(private val database: GymDatabase) : SessionPreparationAuthority {
     override suspend fun read(): RecoveryRoomSnapshot =
         transact {
             val observed = observeLocked(database.syncSessionAuthorityDao())
@@ -46,7 +46,7 @@ internal class RoomSessionAuthority(private val database: GymDatabase) : Session
      * different durable origin provenance, and any local-only root graph that
      * still requires an owner data-disposition decision.
      */
-    suspend fun beginPreparation(
+    override suspend fun beginPreparation(
         expected: RecoveryRoomSnapshot,
         origin: ServiceOrigin,
         accountId: String,

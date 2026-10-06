@@ -29,8 +29,9 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/`.
 real-Room app-flow tests. With no override, it remembers `GymRepository(applicationContext)`. Production construction
 still binds the original signed-out session; no account/session rebinding is wired into the app. The unused
 [startup recovery seams](sync/implementation.md#startup-recovery-seams) can now use R09a's inert durable Room-authority
-adapter; vault/Room activation coordination remains future work. Neither is constructed at production startup or
-authorizes cached-account presentation by its existence alone.
+adapter. R09b's [prepared vault/Room coordinator](sync/implementation.md#prepared-vaultroom-coordination-and-recovery)
+now supplies inert private grant persistence/restart observations; engine admission/promotion/activation coordination
+remains future work. None is constructed at production startup or authorizes cached-account presentation alone.
 
 ## Room database
 
@@ -105,6 +106,8 @@ canonical baseline or visible publication; see [staging boundaries](sync/impleme
 operation independently of credentials. The inert Room adapter reads strict transactional observations and can atomically
 reserve private preparation or fence private state with the device generation. It cannot write ACTIVE or mutate
 vault/domain/outbox/cache data. See [durable private authority](sync/implementation.md#durable-private-room-account-authority).
+The separate R09b coordinator composes this reservation with the encrypted vault's existing CAS and alternating rereads;
+its prepared observations are advisory, not authority for engines, repositories or projection activation.
 
 ## Persistence and state flow
 

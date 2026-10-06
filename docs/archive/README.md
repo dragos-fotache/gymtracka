@@ -45,6 +45,7 @@ Enduring Android design is maintained in [the active integration design](../sync
 | R08b bounded frozen-snapshot HTTP download | [Spec](remaining-work/R08b-task.md) | [Review](remaining-work/R08b-review.md) |
 | R08c complete canonical baseline/absence/publication recovery | [Spec](remaining-work/R08c-task.md) | [Review](remaining-work/R08c-review.md) |
 | R09a durable private account authority/preparation journal | [Spec](remaining-work/R09a-task.md) | [Review](remaining-work/R09a-review.md) |
+| R09b prepared vault/Room coordination/crash recovery | [Spec](remaining-work/R09b-task.md) | [Review](remaining-work/R09b-review.md) |
 
 [R03 split](remaining-work/R03-task.md) and [R04 split](remaining-work/R04-task.md) are historical planning records;
 outstanding lifecycle and durable account-integration requirements remain in the active roadmap. The
