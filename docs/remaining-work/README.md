@@ -3,8 +3,10 @@
 **No implementation specification is currently open.**
 [R09f exact-pending-refresh reconciliation](../archive/remaining-work/R09f-review.md) is accepted and archived, stopping at
 advisory settled old ACTIVE evidence before separately admitted R09e replacement. Unsuccessful/legacy-malformed or
-already-transitional uncertain predecessor disposition remains unresolved. No automatic R09g: settle a finite remaining
-R09 plan under the [major-task slicing rule](../coordinator-workflow.md#major-task-slicing--owner-rule) before continuing.
+already-transitional uncertain predecessor disposition remains unresolved. Next is R09g complete same-account recovery
+under the owner-approved [two-slice remaining R09 plan](../remaining-work-roadmap.md#remaining-r09-plan), followed by R09h
+app-facing activation/offline recovery after its gates. Create R09g's concrete specification only after verified release;
+its approved plan does not decide pending-credential retirement or cleanup.
 See [current pickup](../coordinator-handoff.md) and [roadmap](../remaining-work-roadmap.md).
 
 The personal milestone requires initial sign-in and established-account offline use. Legacy local-only data disposition

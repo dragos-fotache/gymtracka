@@ -13,14 +13,20 @@ ACTIVE pending replay through shared refresh machinery → original full-grant/n
 observation is NOT reauthentication, activation, projection/promotion or all same-account recovery. R09e replacement must
 separately freshly admit that settled pair. Unsuccessful/legacy-malformed uncertain attempts remain retained unchanged.
 
-**Planning stop: no automatic R09g.** Settle a finite consolidated remaining R09 plan before another implementation slice.
-The [major-task slicing rule](coordinator-workflow.md#major-task-slicing--owner-rule) assigns the first coordinator taking
-a NEW major task its whole finite breakdown, not each successor receiving a sub-slice. Existing R09 needs its remaining
-plan consolidated; additional splits require a concrete reason reported to the user, not another letter by default.
-Escalate unresolved disposition/blockers/questions. Unsuccessful/legacy-malformed or already-TRANSITIONING pending gaps,
-signed-out/missing-vault same-account recovery and app/offline integration remain outstanding. No retirement, grant cleanup,
-new uncertain key, expiry rounding, rekey or orphan adoption is authorized. No other service UUID may adopt retained data.
-Reuse delivered Room12, vault CAS, shared owner/refresh/lease machinery and R09e replacement rather than recreating them.
+**Next: R09g — complete same-account recovery**, after verified fresh-coordinator transfer. The owner approved the
+[two-slice remaining R09 plan](remaining-work-roadmap.md#remaining-r09-plan): R09g recovery, then R09h app-facing activation/
+offline recovery after its gates, then reduced personal R09 closure. R09g consolidates signed-out/missing-vault recovery,
+unsuccessful/legacy-malformed pending handling and interrupted transitions; no automatic sub-slices or R09i. The
+[major-task slicing rule](coordinator-workflow.md#major-task-slicing--owner-rule) assigns the first coordinator taking a NEW
+major task its finite whole-task breakdown, not each sub-slice successor. Additional splits need a concrete reason brought
+to the user before changing the plan.
+
+R09g pickup/design is authorized, but **failed/legacy-malformed uncertain predecessor disposition remains unresolved**.
+Escalate that decision before implementing affected recovery; this plan authorizes no retirement, grant cleanup, new
+uncertain key, expiry rounding, rekey or orphan adoption. Already-TRANSITIONING pending gaps also remain retained until
+safe disposition is settled. No other service UUID may adopt retained data. Reuse delivered Room12, vault CAS, shared
+owner/refresh/lease machinery and R09e/f boundaries rather than recreating them. Stop R09g at inert same-account preparation
+eligibility, not application activation. R09h cannot bypass R12a/core R10 or duplicate R11 Google/R13 account UI work.
 
 [P16](../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions) owns mandatory initial sign-in and
 established-account offline use/editing/restart without online login every launch. General signed-out editing, switching/
@@ -35,8 +41,9 @@ no-op in a live editing app. No push/deployment/private configuration/live Googl
 Supplied unchanged AGENTS → README policy → this handoff → roadmap status/dependencies → workflow authority/transfer rules;
 inspect BOTH live trees/indexes/all untracked/HEADs, actual roles/models and resource ownership. Readiness is bounded scope/
 authority/dependencies/gates, not a full design audit. Do not specify, edit, delegate or build until verified release.
-Read the full workflow before delegation. No successor implementation is eligible until the remaining R09 plan/blockers
-are settled with the user; do not skip to another roadmap branch around that stop.
+Read the full workflow before delegation. After release, settle R09g's concrete specification under the approved finite
+plan and escalate unresolved disposition/blockers to the user before affected implementation. Do not split again, waive
+gates or skip to another roadmap branch around a blocker.
 
 Coordinator must be EXACT fresh native Pi `openai-codex/gpt-6.1-sol`/high. Worker/QA must be FRESH native
 `meta/muse-spark-1.3-contributor`/high sessions in rediscovered task-owned panes. Reuse suitable contributor panels by

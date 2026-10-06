@@ -861,7 +861,8 @@ ACTIVE vault; R09e replacement must separately freshly admit that pair. No Room 
 
 [R09f review](../archive/remaining-work/R09f-review.md) owns fresh scoped replay/composition evidence, not complete R09 or
 live activation. Unsuccessful/legacy-malformed pending disposition, already-transitional pending gaps, signed-out/missing
-vault recovery, finite remaining R09 planning, core R10 and R12a remain outstanding. No automatic uncertain retirement.
+vault recovery, core R10 and R12a remain outstanding. The [roadmap](../remaining-work-roadmap.md#remaining-r09-plan) owns
+the remaining delivery plan; it authorizes no automatic uncertain retirement.
 
 ## Legacy auth replay limitation
 

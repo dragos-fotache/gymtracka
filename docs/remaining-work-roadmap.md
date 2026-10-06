@@ -27,8 +27,9 @@ snapshot publication. Accepted personal slices never imply completion of their d
 Accepted delivery is through [R09f](archive/remaining-work/R09f-review.md): inert exact established ACTIVE pending-refresh
 replay before separately admitted R09e settled replacement. It preserves original returned grants and retained intent,
 stopping at advisory settled evidence without app activation or unsuccessful/legacy-malformed uncertain retirement.
-**Planning stop:** settle a finite consolidated remaining R09 plan before another implementation slice; do not invent a
-successor letter automatically. Unsuccessful/legacy-malformed pending disposition still requires owner direction.
+The owner-approved [remaining R09 plan](#remaining-r09-plan) has **two slices: R09g and R09h, then R09 closure**.
+Next is R09g complete same-account recovery. Unsuccessful/legacy-malformed pending disposition still requires owner
+direction before implementing affected recovery; the plan does not authorize retirement or cleanup.
 “Pending” requires eligibility under explicit/standing authority and a bounded pickup spec, not another approval for each
 eligible next slice. “Deferred” remains required for its later
 milestone and is not automatically brought forward. Historical M-series assignments are not a second execution plan.
@@ -43,7 +44,7 @@ milestone and is not automatically brought forward. Historical M-series assignme
 | R06 durable push | **a claiming/exact replay, b outcomes/retry, c atomic canonical acknowledgment and d bounded delivery loop accepted**; production activation remains later integration | R03b, R04, R05 |
 | R07 incremental pull | **a checkpoint transactions, b bounded HTTP pull, c shared push-first/valid-tail orchestration and package gates accepted** | R06; b after a, c after b |
 | R08 bootstrap/full resync | **a staging, b bounded HTTP download and c complete canonical baseline/absence/protected publication recovery accepted; no further R08 slice** | R05–R07; app-facing authority/convergence/barriers remain R09/R10/R12 |
-| R09 single-account activation/recovery | a private authority/journal, b prepared coordination/recovery, c private engine/bootstrap, d completion/promotion and e settled occupied ACTIVE reauthentication and f exact ACTIVE pending-refresh replay accepted; remaining finite plan unresolved; unsuccessful pending/signed-out/missing-vault recovery and app activation pending; legacy disposition unresolved; general transitions/import-replace UI deferred public | R04, R08; production activation also needs R12a |
+| R09 single-account activation/recovery | a private authority/journal, b prepared coordination/recovery, c private engine/bootstrap, d completion/promotion and e settled occupied ACTIVE reauthentication and f exact ACTIVE pending-refresh replay accepted; g complete same-account recovery next, h app-facing activation/offline recovery after its gates, then closure; failed-pending disposition unresolved; legacy disposition unresolved; general transitions/import-replace UI deferred public | R04, R08; production activation also needs R12a |
 | R10 engine convergence/recovery | Core a pending; expanded b before public release | R03b/c, R06–R09 |
 | R11 Google identity/proofs | Personal sign-in/reauthentication pending; sign-out UI and lifecycle proofs deferred public | Relevant R02, R04 |
 | R12 feature/app reconciliation | a edit/publication barriers, b observation, c app/timer rebinding pending | R05/R07/R09 integration; barriers can be developed earlier |
@@ -181,10 +182,24 @@ original grant/no-pending without fresh rotation or Room writes, returning advis
 freshly admit replacement. Unsuccessful/legacy-malformed or already-transitional pending disposition remains unresolved:
 preserve exact bytes and escalate before retirement/cleanup.
 Signed-out/missing-vault same-account recovery and application activation/offline established-account integration remain
-outstanding; R12a/core R10 still gate activation. No legacy-data disposition is inferred. Before continuation beyond the
-accepted R09f, consolidate and settle a finite remaining R09 slice plan under the
-[major-task slicing rule](coordinator-workflow.md#major-task-slicing--owner-rule); do not automatically invent R09g or
-another prerequisite slice at handoff.
+outstanding; R12a/core R10 still gate activation. No legacy-data disposition is inferred. The finite remaining plan below
+owns continuation under the [major-task slicing rule](coordinator-workflow.md#major-task-slicing--owner-rule).
+
+### Remaining R09 plan
+
+**Owner-approved: exactly two remaining implementation slices, R09g and R09h, then close reduced personal R09 once its
+prerequisite/acceptance gates pass.** R09a–f are accepted. Do not add hidden prerequisite slices, sub-letter sequences or
+R09i by default. A discovered safety/dependency reason for another split must be brought to the user before revising this
+plan. Detailed APIs, independent assignments and risk-selected gates are specified by each slice's coordinator after release.
+
+| Slice | Outcome and completion boundary | Dependencies / blockers | Non-goals |
+|---|---|---|---|
+| **R09g — complete same-account recovery** | Consolidate signed-out/missing-vault recovery, unsuccessful/legacy-malformed pending-refresh handling and interrupted-transition recovery into the retained-account recovery boundary. Preserve cached account data, pending edits and exact uncertain evidence; never adopt another service UUID's data. Reuse R09a–f machinery; stop at inert, safely recoverable same-account preparation eligibility, not app activation. | R09a–f. Owner disposition for failed/legacy-malformed uncertain predecessors must be settled before implementing the affected recovery. Missing/mismatched vault stays private; no orphan adoption or legacy-data choice is inferred. | No Google adapter/account UI, fresh uncertain retry key, expiry rounding, implicit evidence retirement/cleanup, account switching/sign-out UI, legacy import/deletion, production activation or convergence work. |
+| **R09h — app-facing activation and offline recovery** | Compose delivered preparation/bootstrap/completion/recovery into the app-facing session-authority boundary. Support established-account offline startup/use without login every launch, stale-session fencing and safe reconnect. Complete reduced personal R09's activation/recovery obligations without duplicating adjacent packages. | R09g; **R12a real edit/timer barriers and core R10 convergence before production activation**, plus applicable app-facing integration gates confirmed at pickup. Missing prerequisites are blockers, not permission for no-op barriers or premature activation. | Google sign-in remains R11; account UI/foreground triggers remain R13. No general switching/sign-out/import-replace UI, legacy-data disposition, scheduler, deferred public lifecycle scope, deployment or live account/device actions. |
+
+R09g's coordinator must escalate unresolved pending-credential disposition rather than treating this approved plan as
+permission to overwrite, retire or discard uncertain evidence. R09h cannot bypass its external package dependencies; if
+sequencing those packages is required, bring the dependency/next-task question to the user instead of adding more R09 slices.
 
 **Deferred public:** signed-out local editing, sign-out and switching UI, and general import/replace choices. Retain their
 existing isolation, drain, crash and collision obligations: sign-out keeps private account cache/outbox; switching never
