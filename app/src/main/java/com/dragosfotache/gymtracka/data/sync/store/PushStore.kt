@@ -27,6 +27,7 @@ import com.dragosfotache.gymtracka.data.sync.model.SyncBatchModel
 import com.dragosfotache.gymtracka.data.sync.model.SyncModelException
 import com.dragosfotache.gymtracka.data.sync.model.UnsupportedDurableVersionException
 import com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid
+import com.dragosfotache.gymtracka.data.sync.session.PreparedSessionEnginePermit
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
@@ -67,6 +68,8 @@ class PushStore(
     private val session: RepositorySession,
     private val owner: PushRunOwner,
 ) {
+    private var preparedPermit: PreparedSessionEnginePermit? = null
+
     init {
         if (session.accountId == null) {
             throw IllegalArgumentException("Push store requires a signed-in account")
@@ -74,6 +77,21 @@ class PushStore(
         if (session.sessionGeneration <= 0) {
             throw IllegalArgumentException("Push store requires a positive session generation")
         }
+    }
+
+    /**
+     * Explicitly constructed prepared store path. Binds one exact private
+     * permit to this store; ordinary [withRun] admission stays ACTIVE-only
+     * and never uses the permit. Prepared work enters only through
+     * [withPreparedRun] with this same permit instance.
+     */
+    internal constructor(
+        database: GymDatabase,
+        session: RepositorySession,
+        owner: PushRunOwner,
+        permit: PreparedSessionEnginePermit,
+    ) : this(database, session, owner) {
+        preparedPermit = permit
     }
 
     /**
@@ -115,6 +133,81 @@ class PushStore(
                                 accountId,
                                 session.sessionGeneration,
                                 expectedCacheEpoch,
+                                null,
+                            )
+                            currentCoroutineContext().ensureActive()
+                        }
+                    } catch (_: SQLiteException) {
+                        currentCoroutineContext().ensureActive()
+                        throw PushStorageException()
+                    }
+                    currentCoroutineContext().ensureActive()
+                    val result = block(run)
+                    currentCoroutineContext().ensureActive()
+                    result
+                }
+            } finally {
+                run.close()
+            }
+        }
+    }
+
+    /**
+     * Prepared admission entry sharing the [withRun] lifecycle on the same
+     * shared owner mutex: nested/enclosing-transaction entry rejects,
+     * cancellation while waiting performs no Room work, and the capability
+     * closes with ownership release in finally after structured children
+     * settle. The strict durable epoch is read through [readEpoch] AFTER
+     * acquiring the owner mutex and BEFORE run admission; admission then
+     * rechecks private authority and that same epoch inside Room. The
+     * supplied [permit] must be this store's bound prepared permit
+     * instance. Ordinary ACTIVE admission never enters here.
+     */
+    internal suspend fun <T> withPreparedRun(
+        permit: PreparedSessionEnginePermit,
+        readEpoch: suspend () -> Long,
+        block: suspend (PushRun) -> T,
+    ): T {
+        val bound = preparedPermit
+        if (bound == null || bound !== permit) {
+            throw IllegalStateException("Prepared run requires its prepared store and permit")
+        }
+        if (database.inTransaction()) {
+            throw IllegalStateException("Push run requires no active transaction")
+        }
+        if (currentCoroutineContext()[PushRunScope.Key] != null) {
+            throw IllegalStateException("Nested push run is not allowed")
+        }
+        currentCoroutineContext().ensureActive()
+        val accountId = session.accountId ?: throw IllegalArgumentException(
+            "Push store requires a signed-in account",
+        )
+        if (permit.database !== database ||
+            permit.accountId != accountId ||
+            permit.sessionGeneration != session.sessionGeneration
+        ) {
+            throw IllegalStateException("Prepared permit does not match this store")
+        }
+        return owner.mutex.withLock {
+            currentCoroutineContext().ensureActive()
+            val expectedCacheEpoch = readEpoch()
+            if (expectedCacheEpoch < 0) {
+                throw IllegalStateException("Prepared epoch must be nonnegative")
+            }
+            currentCoroutineContext().ensureActive()
+            val run = PushRun(database, accountId, session.sessionGeneration, expectedCacheEpoch, permit)
+            try {
+                withContext(PushRunScope(run)) {
+                    currentCoroutineContext().ensureActive()
+                    try {
+                        database.withTransaction {
+                            currentCoroutineContext().ensureActive()
+                            checkCanonicalFences(
+                                database,
+                                accountId,
+                                session.sessionGeneration,
+                                expectedCacheEpoch,
+                                permit,
                             )
                             currentCoroutineContext().ensureActive()
                         }
@@ -144,6 +237,7 @@ class PushRun internal constructor(
     private val accountId: String,
     private val sessionGeneration: Long,
     private var expectedCacheEpoch: Long,
+    private val preparedPermit: PreparedSessionEnginePermit? = null,
 ) {
     @Volatile
     private var open = true
@@ -193,6 +287,13 @@ class PushRun internal constructor(
     internal fun close() {
         open = false
     }
+
+    /**
+     * Current admitted cache epoch for progress reporting. Mutated only by
+     * committed baseline/publication resumption under the handling mutex;
+     * the coordinator reads it after commit and active resumption.
+     */
+    internal fun observedCacheEpoch(): Long = expectedCacheEpoch
 
     private suspend fun requireAdmitted() {
         if (!open || currentCoroutineContext()[PushRunScope.Key]?.run !== this) {
@@ -270,7 +371,7 @@ class PushRun internal constructor(
         if (!database.inTransaction()) {
             throw IllegalStateException("Push claim requires an active transaction")
         }
-        checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+        checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
         currentCoroutineContext().ensureActive()
         if (hasSelectedSnapshotStage()) {
             currentCoroutineContext().ensureActive()
@@ -369,7 +470,7 @@ class PushRun internal constructor(
         if (dao.getOutboxHead(accountId) != frozen) {
             throw IllegalStateException("Push head changed during transaction")
         }
-        checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+        checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
         requireAdmitted()
         currentCoroutineContext().ensureActive()
         val claim = PushClaim(
@@ -411,7 +512,7 @@ class PushRun internal constructor(
                 }
                 database.withTransaction {
                     currentCoroutineContext().ensureActive()
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     requireNoSnapshotStage()
                     val head = database.syncDao().getOutboxHead(accountId)
                     currentCoroutineContext().ensureActive()
@@ -468,7 +569,7 @@ class PushRun internal constructor(
             try {
                 val outcome = database.withTransaction {
                     currentCoroutineContext().ensureActive()
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     requireNoSnapshotStage()
                     val head = database.syncDao().getOutboxHead(accountId)
                     currentCoroutineContext().ensureActive()
@@ -557,7 +658,7 @@ class PushRun internal constructor(
             try {
                 val outcome = database.withTransaction {
                     currentCoroutineContext().ensureActive()
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     requireNoSnapshotStage()
                     val head = database.syncDao().getOutboxHead(accountId)
                     currentCoroutineContext().ensureActive()
@@ -693,7 +794,7 @@ class PushRun internal constructor(
             try {
                 val outcome = database.withTransaction {
                     currentCoroutineContext().ensureActive()
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     requireNoSnapshotStage()
                     val head = database.syncDao().getOutboxHead(accountId)
                     currentCoroutineContext().ensureActive()
@@ -728,6 +829,7 @@ class PushRun internal constructor(
                                 sessionGeneration,
                                 expectedCacheEpoch,
                                 ownedBatch,
+                                preparedPermit,
                             )
                             currentCoroutineContext().ensureActive()
                             requireAdmitted()
@@ -792,6 +894,7 @@ class PushRun internal constructor(
                                 accountId,
                                 sessionGeneration,
                                 expectedCacheEpoch,
+                                preparedPermit,
                             )
                             currentCoroutineContext().ensureActive()
                             PushAcknowledgmentResult.Acknowledged(canonical, acknowledgedRoots)
@@ -851,7 +954,7 @@ class PushRun internal constructor(
         val headAfter = database.syncDao().getOutboxHead(accountId)
         currentCoroutineContext().ensureActive()
         requireAdmitted()
-        checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+        checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
         currentCoroutineContext().ensureActive()
         if (headAfter != expected) {
             throw IllegalStateException("Push head changed during transaction")
@@ -884,7 +987,7 @@ class PushRun internal constructor(
             try {
                 val observed = database.withTransaction {
                     currentCoroutineContext().ensureActive()
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     requireNoSnapshotStage()
                     currentCoroutineContext().ensureActive()
                     val cache = database.syncCanonicalDao().getAccountCache(accountId)
@@ -895,12 +998,12 @@ class PushRun internal constructor(
                         validatePullSyncState(state)
                     }
                     if (cache == null || !cache.baselineComplete || state == null || state.cursor == null) {
-                        checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                        checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                         currentCoroutineContext().ensureActive()
                         requireAdmitted()
                         null
                     } else {
-                        checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                        checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                         currentCoroutineContext().ensureActive()
                         requireAdmitted()
                         state
@@ -962,7 +1065,7 @@ class PushRun internal constructor(
             try {
                 database.withTransaction {
                     currentCoroutineContext().ensureActive()
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     requireNoSnapshotStage()
                     val cache = database.syncCanonicalDao().getAccountCache(accountId)
                     currentCoroutineContext().ensureActive()
@@ -981,7 +1084,7 @@ class PushRun internal constructor(
                         ),
                         state,
                     )
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
                 }
@@ -1045,7 +1148,7 @@ class PushRun internal constructor(
             try {
                 val canonical = database.withTransaction {
                     currentCoroutineContext().ensureActive()
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     requireNoSnapshotStage()
                     val cache = database.syncCanonicalDao().getAccountCache(accountId)
                     currentCoroutineContext().ensureActive()
@@ -1072,6 +1175,7 @@ class PushRun internal constructor(
                         sessionGeneration,
                         expectedCacheEpoch,
                         owned,
+                        preparedPermit,
                     )
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
@@ -1092,7 +1196,7 @@ class PushRun internal constructor(
                     if (postCache == null || !postCache.baselineComplete) {
                         throw StalePullCheckpointException()
                     }
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
                     result
@@ -1178,7 +1282,7 @@ class PushRun internal constructor(
             try {
                 val observedPresence = database.withTransaction {
                     currentCoroutineContext().ensureActive()
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     requireNoSnapshotStage()
                     val cache = database.syncCanonicalDao().getAccountCache(accountId)
                     currentCoroutineContext().ensureActive()
@@ -1228,7 +1332,7 @@ class PushRun internal constructor(
                     if (postCache == null || !postCache.baselineComplete) {
                         throw StalePullCheckpointException()
                     }
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
                     presenceAfter
@@ -1283,7 +1387,7 @@ class PushRun internal constructor(
             try {
                 val validated = database.withTransaction {
                     currentCoroutineContext().ensureActive()
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     currentCoroutineContext().ensureActive()
                     if (database.syncSnapshotDao().getStageForAccount(accountId) != null) {
                         throw SnapshotStageActiveException()
@@ -1346,7 +1450,7 @@ class PushRun internal constructor(
                     }
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
                     reread
@@ -1390,11 +1494,11 @@ class PushRun internal constructor(
             try {
                 val validated = database.withTransaction {
                     currentCoroutineContext().ensureActive()
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
                     val result = readValidatedSnapshotStage(database, accountId)
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
                     result
@@ -1442,7 +1546,7 @@ class PushRun internal constructor(
             try {
                 database.withTransaction {
                     currentCoroutineContext().ensureActive()
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     val validated = readValidatedSnapshotStage(database, accountId)
                         ?: throw StaleSnapshotStageException()
                     currentCoroutineContext().ensureActive()
@@ -1458,7 +1562,7 @@ class PushRun internal constructor(
                         }
                         requireExactSnapshotSource(database, accountId, validated.header)
                     }
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
                 }
@@ -1506,7 +1610,7 @@ class PushRun internal constructor(
             try {
                 val committed = database.withTransaction {
                     currentCoroutineContext().ensureActive()
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     val validated = readValidatedSnapshotStage(database, accountId)
                         ?: throw StaleSnapshotStageException()
                     currentCoroutineContext().ensureActive()
@@ -1626,7 +1730,7 @@ class PushRun internal constructor(
                         throw StaleSnapshotStageException()
                     }
                     requireExactSnapshotSource(database, accountId, header)
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
                     reread
@@ -1672,7 +1776,7 @@ class PushRun internal constructor(
             try {
                 database.withTransaction {
                     currentCoroutineContext().ensureActive()
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     val validated = readValidatedSnapshotStage(database, accountId)
                         ?: throw StaleSnapshotStageException()
                     currentCoroutineContext().ensureActive()
@@ -1694,7 +1798,7 @@ class PushRun internal constructor(
                     ) {
                         throw StaleSnapshotStageException()
                     }
-                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
                 }
@@ -1789,6 +1893,7 @@ class PushRun internal constructor(
                         accountId,
                         sessionGeneration,
                         expectedCacheEpoch,
+                        preparedPermit,
                     )
                     val validated = readValidatedSnapshotStage(database, accountId)
                         ?: throw StaleSnapshotStageException()
@@ -1968,7 +2073,7 @@ class PushRun internal constructor(
                     ) {
                         throw IllegalStateException("Sync checkpoint changed during transaction")
                     }
-                    checkCanonicalFences(database, accountId, sessionGeneration, newEpoch)
+                    checkCanonicalFences(database, accountId, sessionGeneration, newEpoch, preparedPermit)
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
                     BaselineCommit(
@@ -2016,6 +2121,9 @@ class PushRun internal constructor(
     suspend fun publishProjection(
         projection: ProjectionStore,
     ): ProjectionPublicationResult {
+        if (preparedPermit != null) {
+            throw IllegalStateException("Private prepared runs cannot publish projections")
+        }
         requireAdmitted()
         if (database.inTransaction()) {
             throw IllegalStateException("Projection publication requires no active transaction")

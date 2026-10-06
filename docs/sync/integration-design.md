@@ -18,8 +18,9 @@ bounded HTTP download and R08c complete canonical baseline/absence plus coordina
 All reuse the same admitted run/physical-DB owner. R09a now supplies inert Room12 private authority observations and
 atomic preparation/fencing; see [implementation](implementation.md#durable-private-room-account-authority).
 R09b adds inert [prepared vault/Room persistence and reread recovery](implementation.md#prepared-vaultroom-coordination-and-recovery).
-Production bootstrap/projection activation, convergence, prepared engine admission/promotion and cross-feature
-publication barriers remain planned. Broader account transitions are deferred public scope. Stored vault phases and
+R09c adds inert [private prepared engine admission/canonical bootstrap](implementation.md#private-prepared-session-engine-and-bootstrap).
+Production bootstrap/projection activation, convergence, completed preparation/promotion and cross-feature publication
+barriers remain planned. Broader account transitions are deferred public scope. Stored vault phases and
 explicit refresh leases alone never authorize activation. Preserve the unresolved
 [legacy auth replay limitation](implementation.md#legacy-auth-replay-limitation) in all recovery work.
 
@@ -294,8 +295,10 @@ cross-store coordination, not replacement vault or authority storage. Vault reco
 service credentials, pending attempt, account/generation/operation and revision. Google ID tokens remain bounded
 foreground memory; no persistence across restart. R09a's Room journal holds only nonsecret private identity/transition
 state. R09b now implements the bounded reserve/PREPARED-write/stable-reread portion privately, with reservation-only
-resume and read-only restart classification. It does not replace occupied credentials, promote, admit a preparation
-engine or activate the app; the fuller protocol below remains planned beyond that boundary.
+resume and read-only restart classification. R09c now separately supplies fresh private engine admission, canonical
+bootstrap and actual valid-tail coordination under registered Room permits/shared ownership. Neither slice replaces
+occupied credentials, publishes a prepared projection, promotes or activates the app; the fuller protocol below remains
+planned beyond that boundary. Existing canonical-only engine recovery is reused, not recreated for completed preparation.
 Ordinary local backup need not be disabled to exclude credentials.
 
 ### Personal scope boundary

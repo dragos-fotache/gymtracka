@@ -3,6 +3,7 @@ package com.dragosfotache.gymtracka.data.sync.engine
 import com.dragosfotache.gymtracka.data.sync.api.DEFAULT_PULL_LIMIT
 import com.dragosfotache.gymtracka.data.sync.api.GymSyncApi
 import com.dragosfotache.gymtracka.data.sync.store.PullTailCommitResult
+import com.dragosfotache.gymtracka.data.sync.store.PushRun
 import com.dragosfotache.gymtracka.data.sync.store.PushStore
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -62,31 +63,58 @@ class SyncDeliveryLoop(
         }
         currentCoroutineContext().ensureActive()
         return store.withRun(expectedCacheEpoch) { run ->
-            val pushResult = PushDeliveryLoop(store, api, nowMillis).deliver(run, maxPushMutations)
-            if (pushResult.stop != PushDeliveryStop.Empty) {
-                currentCoroutineContext().ensureActive()
-                return@withRun SyncDeliveryResult(
-                    push = pushResult,
-                    pull = null,
-                    hasOutstandingLocalWork = null,
-                )
-            }
-            var tailCommit: PullTailCommitResult? = null
-            val pullResult = PullDeliveryLoop(api).pullWithTail(
-                run,
-                maxPullPages,
-                pullPageLimit,
-            ) { checkpoint ->
-                val tailTime = nowMillis()
-                tailCommit = run.recordPullTail(checkpoint, tailTime)
-            }
+            deliver(run, maxPushMutations, maxPullPages, pullPageLimit)
+        }
+    }
+
+    /**
+     * Internal admitted-run overload sharing the public behavior and
+     * validation without another admission or owner gap: bounded push on
+     * the already admitted [run], then only after an empty push boundary
+     * the internal pull-with-tail seam with its exact terminal callback
+     * recording last success through [PushRun.recordPullTail]. Retains the
+     * push-only stop policy and the nullable outstanding-work contract.
+     */
+    internal suspend fun deliver(
+        run: PushRun,
+        maxPushMutations: Int = MAX_PUSH_DELIVERY_MUTATIONS,
+        maxPullPages: Int = MAX_PULL_DELIVERY_PAGES,
+        pullPageLimit: Int = DEFAULT_PULL_LIMIT,
+    ): SyncDeliveryResult {
+        if (maxPushMutations !in 1..MAX_PUSH_DELIVERY_MUTATIONS) {
+            throw IllegalArgumentException("maxPushMutations must be in 1..100")
+        }
+        if (maxPullPages !in 1..MAX_PULL_DELIVERY_PAGES) {
+            throw IllegalArgumentException("maxPullPages must be in 1..100")
+        }
+        if (pullPageLimit !in 1..200) {
+            throw IllegalArgumentException("pullPageLimit must be in 1..200")
+        }
+        currentCoroutineContext().ensureActive()
+        val pushResult = PushDeliveryLoop(store, api, nowMillis).deliver(run, maxPushMutations)
+        if (pushResult.stop != PushDeliveryStop.Empty) {
             currentCoroutineContext().ensureActive()
-            SyncDeliveryResult(
+            return SyncDeliveryResult(
                 push = pushResult,
-                pull = pullResult,
-                hasOutstandingLocalWork = tailCommit?.hasOutstandingLocalWork,
+                pull = null,
+                hasOutstandingLocalWork = null,
             )
         }
+        var tailCommit: PullTailCommitResult? = null
+        val pullResult = PullDeliveryLoop(api).pullWithTail(
+            run,
+            maxPullPages,
+            pullPageLimit,
+        ) { checkpoint ->
+            val tailTime = nowMillis()
+            tailCommit = run.recordPullTail(checkpoint, tailTime)
+        }
+        currentCoroutineContext().ensureActive()
+        return SyncDeliveryResult(
+            push = pushResult,
+            pull = pullResult,
+            hasOutstandingLocalWork = tailCommit?.hasOutstandingLocalWork,
+        )
     }
 
     override fun toString(): String = "SyncDeliveryLoop"

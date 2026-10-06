@@ -643,7 +643,8 @@ none of this machinery.
 These observations and handles are not Room transaction authorization or durable sign-out. An already-started synchronous
 vault CAS may commit after invalidation; dead handles cannot use its result. R09a supplies private durable Room
 observations/reservation/fencing; R09b adds [inert prepared coordination/recovery](#prepared-vaultroom-coordination-and-recovery).
-Promotion, preparation-engine admission and completed activation remain later R09 integration.
+Promotion and completed activation remain later R09 integration. The separate
+[private prepared engine](#private-prepared-session-engine-and-bootstrap) supplies inert engine admission, not visibility.
 Result application still rechecks inside Room transactions. R12 barriers, complete bootstrap and engine convergence precede app activation. No engine,
 sign-in/out orchestration, account UI, Google adapter, or scheduler is constructed by these classes.
 
@@ -663,8 +664,9 @@ exported1–11 and bundled v1 asset bytes remain unchanged. No legacy device/cac
   different/unknown retained account-origin provenance and any local workout/routine/custom root, including deleted
   drafts. Bundled-only data is allowed. No legacy import/delete/reassignment is inferred.
 - Preparation atomically increments checked revision/generation, binds the target privately and clears device active
-  account; existing repositories at an older generation are fenced. It does not authorize an account-bound preparation
-  engine/repository. A concurrent reservation with the same observation cannot also win.
+  account; existing repositories at an older generation are fenced. Reservation alone authorizes no engine/repository;
+  the separate private engine requires fresh vault/Room admission and exact registered permits. A concurrent reservation
+  with the same observation cannot also win.
 - `fencePrivate(expected)` increments the same fences, clears activation operation and retains cached account and known
   service origin. It is not sign-out/vault cleanup, pending-stage abandonment or deletion. Exact domain/child/relationship,
   outbox/uncertain bytes, cursor, stage, cache, canonical watermarks, foreign scopes and catalogue remain untouched.
@@ -673,8 +675,9 @@ exported1–11 and bundled v1 asset bytes remain unchanged. No legacy device/cac
   takes precedence; uncertain returns require durable reread, not an in-memory success cache. Errors/displays are closed.
 - No application-facing adapter operation writes ACTIVE, reads/writes credentials, generates IDs, calls HTTP or
   constructs app/session machinery. Raw Room storage primitives are not app-facing authorization.
-  [Prepared grant coordination](#prepared-vaultroom-coordination-and-recovery) is delivered separately; promotion,
-  legacy choice, real edit/timer barriers, convergence and activation remain later gated work. Full suite boundaries and
+  [Prepared grant coordination](#prepared-vaultroom-coordination-and-recovery) and
+  [private prepared engine admission](#private-prepared-session-engine-and-bootstrap) are delivered separately;
+  promotion, legacy choice, real edit/timer barriers, convergence and activation remain later gated work. Full suite boundaries and
   actual scoped gates belong to the [R09a review](../archive/remaining-work/R09a-review.md).
 
 ## Prepared vault/Room coordination and recovery
@@ -704,12 +707,49 @@ repository, refresh, publication or account-visibility admission.
   durable operation and bytes; recover by reread, never compensating cleanup, automatic fencePrivate, generation restart
   or grant replacement. Such an orphan cannot authorize mismatched Room. No fake cross-store transaction is claimed.
 - No HTTP/clock/UUID generation or Google proof persistence; expired stored grants are evidence, not freshness or delivery
-  permission. No ACTIVE/promotion, internal preparation-engine admission, occupied-credential reauthentication, local
-  import/deletion, UI or startup wiring. Those integrations and R12a/core R10 gates remain outstanding.
+  permission. No ACTIVE/promotion, occupied-credential reauthentication, local import/deletion, UI or startup wiring.
+  The separate private engine below supplies fresh admission/bootstrap; R12a/core R10 and activation remain outstanding.
 
 [R09b review](../archive/remaining-work/R09b-review.md) owns fresh full JVM, focused actual Room/Keystore/file plus existing
 session regression, build/lint/APK and preservation evidence. It is not full instrumentation, engine convergence or live
 activation evidence.
+
+## Private prepared-session engine and bootstrap
+
+`PreparedSessionEngineCoordinator(database, origin, vault, authApi, transport, runOwner, clockMillis, uuidProvider)` is
+internal and inert. The caller supplies ONE shared physical-DB `PushRunOwner`; construction performs no I/O. Room12,
+ordinary repositories, credential storage and the app construction path remain unchanged.
+
+- Input validation precedes newest opaque invocation fencing. R09b recovery plus fresh alternating Room/vault rereads
+  require exact PREPARING identity/revision, matching PREPARED grant and semantic pending operation/key/body/token equality.
+  Missing credentials, mismatches, corruption and stale results stay private without cleanup or generation restart.
+- Only the concrete coordinator can privately register a referential permit under its opaque invocation fence. Arbitrary
+  permit candidates cannot admit. Open/invalidate/final settlement retire the matching permit and lease without affecting
+  newer work. An already-started write may commit despite a failed/canceled result; fresh durable rereads remain required.
+- Prepared admission observes epoch INSIDE the shared owner slot, then holds that owner uninterrupted through all
+  snapshot/push/completion/pull/tail work. Explicit permits thread only through composed PushRun transactions and their
+  canonical-batch helper. Strict Room authority/device checks run before effects and after writes: origin/account/
+  generation/operation/revision exact, device active=null/cached=target/cacheState=preparing, epoch and current invocation.
+  Vault/HTTP/clock work never runs inside Room; credential/transport authorization independently rechecks the same permit.
+- The existing shared refresh/decorator preserves pending-first exact retries and permits legitimate same-session grant
+  rotation without pinning the old vault revision after admission. Ordinary PushStore, CanonicalStore, ProjectionStore
+  and capture/repository paths remain ACTIVE-only. Private PushRun publication rejects before barrier/visible writes.
+- Selected retained stages are validated observation-only and block HTTP. Explicit abandonment requires a NEW UUID and
+  forces a fresh null-token snapshot even with an older complete baseline; corrupt stages remain preserved. Failure,
+  expiry, cancellation and budget exhaustion never automatically abandon, resume retained terminals or discard intent.
+- R08 start/continuation/completion run on the SAME driver/run after actual push Empty. A positive invocation page budget
+  is chunked into the existing <=100-page calls, with no permanent account-size cap. Only actual issued terminal
+  completion establishes canonical baseline/absence/checkpoint and adopts its returned epoch; it does not publish.
+- A durable complete baseline plus valid checkpoint and no stage skips redownload, including dirty post-crash recovery.
+  The admitted R07 overload again checks actual push Empty and uses its actual validated terminal callback for
+  last-success. Snapshot itself preserves last-success; outstanding=false/tail never establishes convergence or visibility.
+- `PreparedBootstrapResult` is nonsecret private progress, not promotion authority. Typed driver stops remain stops;
+  coordinator failures have closed categories and caller cancellation precedence. No ACTIVE writer, vault promotion,
+  occupied-credential reauthentication, ordinary preparation repository, UI/scheduler/startup construction or live action.
+
+[R09c review](../archive/remaining-work/R09c-review.md) owns scoped independent Room/Keystore/actual-adapter and regression
+execution. Completed preparation/publication/promotion, core R10 convergence and R12a live barriers precede activation;
+legacy local-data disposition remains unresolved and is not inferred here.
 
 ## Legacy auth replay limitation
 

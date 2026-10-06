@@ -1,9 +1,10 @@
 # Active task specifications
 
 **No implementation specification is currently open.**
-[R09b prepared vault/Room coordination and crash recovery](../archive/remaining-work/R09b-review.md) is accepted and
-archived. Next R09c settles one bounded inert private prepared-session engine admission/bootstrap slice after verified
-ownership release. See [current pickup](../coordinator-handoff.md) and [roadmap](../remaining-work-roadmap.md).
+[R09c private prepared engine/canonical bootstrap](../archive/remaining-work/R09c-review.md) is accepted and archived,
+stopping at private canonical baseline and bounded actual tail, not projection, promotion or activation.
+Next R09d settles one bounded private completed-preparation and vault promotion coordination slice after ownership release.
+See [current pickup](../coordinator-handoff.md) and [roadmap](../remaining-work-roadmap.md).
 
 The personal milestone requires initial sign-in and established-account offline use. Legacy local-only data disposition
 remains unresolved; no import/delete/reassignment is authorized. Production remains signed-out/local-only until later

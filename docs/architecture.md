@@ -107,7 +107,10 @@ operation independently of credentials. The inert Room adapter reads strict tran
 reserve private preparation or fence private state with the device generation. It cannot write ACTIVE or mutate
 vault/domain/outbox/cache data. See [durable private authority](sync/implementation.md#durable-private-room-account-authority).
 The separate R09b coordinator composes this reservation with the encrypted vault's existing CAS and alternating rereads;
-its prepared observations are advisory, not authority for engines, repositories or projection activation.
+its prepared observations are advisory, not authority for engines, repositories or projection activation. R09c's separate
+inert coordinator freshly admits the matching pair through registered exact private permits, holds shared run ownership
+through canonical bootstrap/actual tail, and leaves ordinary repositories/publication ACTIVE-only. See
+[private engine boundaries](sync/implementation.md#private-prepared-session-engine-and-bootstrap).
 
 ## Persistence and state flow
 
@@ -146,8 +149,9 @@ its prepared observations are advisory, not authority for engines, repositories 
   returned epoch (actual publication advances again). Retained stages cannot be adopted after restart; durable complete
   dirty baselines can publish under a fresh run at the observed epoch without redownload. See
   [complete baseline/recovery](sync/implementation.md#complete-snapshot-baseline-and-publication-recovery).
-  The app constructs none of it; app-facing bootstrap, vault/Room coordination, convergence and activation remain
-  outstanding. Inert durable private Room authority is delivered separately; it does not admit an engine or activate UI.
+  The app constructs none of it. R09a/b private authority/preparation and R09c private engine admission/canonical bootstrap
+  are delivered separately, with exact durable and process fences. Complete readiness/promotion, app-facing publication,
+  live barriers, convergence and activation remain outstanding; ordinary repositories never follow private preparation.
   The [shared driver](sync/implementation.md#shared-push-before-pull-and-valid-tail),
   [push](sync/implementation.md#bounded-push-delivery), [checkpoint](sync/implementation.md#incremental-checkpoint-transactions)
   and [pull](sync/implementation.md#bounded-incremental-pull) references own details.

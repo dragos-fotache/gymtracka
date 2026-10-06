@@ -17,6 +17,8 @@ import com.dragosfotache.gymtracka.data.sync.model.SyncChangeModel
 import com.dragosfotache.gymtracka.data.sync.model.SyncModelException
 import com.dragosfotache.gymtracka.data.sync.model.WorkoutRecordModel
 import com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid
+import com.dragosfotache.gymtracka.data.sync.session.PreparedSessionEnginePermit
+import com.dragosfotache.gymtracka.data.sync.session.RoomSessionAuthority
 
 /**
  * Focused canonical validation helpers. All retained-evidence failures use fixed safe
@@ -31,17 +33,28 @@ internal suspend fun checkCanonicalFences(
     accountId: String,
     sessionGeneration: Long,
     expectedCacheEpoch: Long,
+    permit: PreparedSessionEnginePermit? = null,
 ): Long {
-    val device = database.syncDao().getDeviceState()
-    val actualAccountId = device?.activeAccountId
-    val actualGeneration = device?.sessionGeneration ?: 0L
-    if (actualAccountId != accountId || actualGeneration != sessionGeneration) {
-        throw StaleSessionException(
-            accountId,
-            sessionGeneration,
-            actualAccountId,
-            actualGeneration,
-        )
+    if (permit != null) {
+        if (permit.database !== database ||
+            permit.accountId != accountId ||
+            permit.sessionGeneration != sessionGeneration
+        ) {
+            throw IllegalStateException("Prepared permit does not match this store")
+        }
+        RoomSessionAuthority(database).checkPreparedInTransaction(permit)
+    } else {
+        val device = database.syncDao().getDeviceState()
+        val actualAccountId = device?.activeAccountId
+        val actualGeneration = device?.sessionGeneration ?: 0L
+        if (actualAccountId != accountId || actualGeneration != sessionGeneration) {
+            throw StaleSessionException(
+                accountId,
+                sessionGeneration,
+                actualAccountId,
+                actualGeneration,
+            )
+        }
     }
     val cache = database.syncCanonicalDao().getAccountCache(accountId)
     if (cache != null) {

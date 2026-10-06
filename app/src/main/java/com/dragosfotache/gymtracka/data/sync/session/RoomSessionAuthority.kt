@@ -209,6 +209,58 @@ internal class RoomSessionAuthority(private val database: GymDatabase) : Session
         }
     }
 
+    /**
+     * Rechecks one exact private PREPARING permit inside the caller's
+     * active Room transaction, before effects and after writes before
+     * commit. Reuses the strict [observeLocked] observation, including
+     * canonical origin parsing and corruption refusal: extra rows, storage
+     * type coercion, unknown phases and inconsistent tuples fail closed.
+     * Requires the journal revision/identity to match the permit exactly,
+     * the device singleton to carry active=null, the cached target, the
+     * exact generation and cacheState "preparing", and the creating
+     * process invocation to still be current. Must run inside the caller's
+     * transaction; never opens its own transaction and performs no
+     * vault/HTTP/clock work. Failures keep their closed authority
+     * categories for the caller to map.
+     */
+    internal suspend fun checkPreparedInTransaction(permit: PreparedSessionEnginePermit) {
+        currentCoroutineContext().ensureActive()
+        if (permit.database !== database) {
+            throw IllegalStateException("Prepared permit belongs to another database")
+        }
+        if (!database.inTransaction()) {
+            throw IllegalStateException("Private preparation check requires an active transaction")
+        }
+        val observed = observeLocked(database.syncSessionAuthorityDao())
+        val snapshot = observed.snapshot
+        if (snapshot.phase != RecoveryRoomPhase.PREPARING) {
+            throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.STALE_AUTHORITY)
+        }
+        val identity = snapshot.identity ?: throw corrupt()
+        if (identity.binding.origin != permit.origin ||
+            identity.binding.accountId != permit.accountId ||
+            identity.binding.sessionGeneration != permit.sessionGeneration ||
+            identity.operationId != permit.operationId
+        ) {
+            throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.ACCOUNT_MISMATCH)
+        }
+        if (snapshot.revision != permit.journalRevision) {
+            throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.STALE_AUTHORITY)
+        }
+        val device = observed.device ?: throw corrupt()
+        if (device.activeAccountId != null ||
+            device.cachedAccountId != permit.accountId ||
+            device.sessionGeneration != permit.sessionGeneration ||
+            device.cacheState != PREPARING_CACHE_STATE
+        ) {
+            throw corrupt()
+        }
+        if (!permit.isCurrent()) {
+            throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.STALE_AUTHORITY)
+        }
+        currentCoroutineContext().ensureActive()
+    }
+
     override fun toString(): String = "RoomSessionAuthority(redacted)"
 
     private suspend fun <T> transact(block: suspend () -> T): T {

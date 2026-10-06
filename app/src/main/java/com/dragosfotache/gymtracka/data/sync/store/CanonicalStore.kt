@@ -5,6 +5,7 @@ import com.dragosfotache.gymtracka.data.gym.GymDatabase
 import com.dragosfotache.gymtracka.data.sync.model.CanonicalRecord
 import com.dragosfotache.gymtracka.data.sync.model.ChangeOperation
 import com.dragosfotache.gymtracka.data.sync.model.SyncBatchModel
+import com.dragosfotache.gymtracka.data.sync.session.PreparedSessionEnginePermit
 
 data class CanonicalBatchResult(val appliedRoots: Int, val ignoredRoots: Int)
 
@@ -39,7 +40,7 @@ class CanonicalStore(
             "Canonical store requires a signed-in account",
         )
         return database.withTransaction {
-            applyOwnedCanonicalBatch(database, accountId, session.sessionGeneration, expectedCacheEpoch, owned)
+            applyOwnedCanonicalBatch(database, accountId, session.sessionGeneration, expectedCacheEpoch, owned, null)
         }
     }
 
@@ -54,7 +55,7 @@ class CanonicalStore(
             "Canonical store requires a signed-in account",
         )
         return database.withTransaction {
-            checkCanonicalFences(database, accountId, session.sessionGeneration, expectedCacheEpoch)
+            checkCanonicalFences(database, accountId, session.sessionGeneration, expectedCacheEpoch, null)
             val transaction = CanonicalTransaction(
                 database,
                 accountId,
@@ -94,7 +95,7 @@ class CanonicalTransaction internal constructor(
     suspend fun applyBatch(batch: SyncBatchModel): CanonicalBatchResult {
         val owned = ownedCanonicalBatch(batch)
         requireActive()
-        return applyOwnedCanonicalBatch(database, accountId, sessionGeneration, expectedCacheEpoch, owned)
+        return applyOwnedCanonicalBatch(database, accountId, sessionGeneration, expectedCacheEpoch, owned, null)
     }
 }
 
@@ -112,11 +113,12 @@ internal suspend fun applyOwnedCanonicalBatch(
     sessionGeneration: Long,
     expectedCacheEpoch: Long,
     owned: SyncBatchModel,
+    permit: PreparedSessionEnginePermit? = null,
 ): CanonicalBatchResult {
     if (!database.inTransaction()) {
         throw IllegalStateException("Canonical writes require an active database transaction")
     }
-    val accountEpoch = checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch)
+    val accountEpoch = checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, permit)
     val retained = loadValidatedRetained(database, accountId, accountEpoch)
     val decisions = selectCanonicalChanges(owned.changes, retained)
     val selected = decisions.filter { it.selected }.map { it.change }
