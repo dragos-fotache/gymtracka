@@ -28,6 +28,8 @@ abstract class AppFlowTestSupport : GymDatabaseTest() {
 
     protected fun editingRoutineId(): String? = rememberedAppState?.editingRoutineId
 
+    internal fun appState(): GymAppState? = rememberedAppState
+
     protected fun setUpGymApp() {
         composeRule.setContent {
             GymTrackaTheme {

@@ -102,8 +102,9 @@ R05c's inert `ProjectionStore` and focused `SyncProjectionDao` reuse Room v10 wi
 The app constructs no publisher.
 
 - A required `ProjectionPublicationBarrier` acquires a short bound lease outside Room after its caller-owned pause/drain.
-  There is no permissive default or live edit/timer implementation. Nested publication is rejected before acquisition;
-  every returned lease closes once after the fenced transaction, including blocked/failing/cancelled paths.
+  There is no permissive default. The [real app-owned edit/timer barrier](../architecture.md#finite-edit-admission-and-publication-leases)
+  exists separately; the app still constructs no publisher. Nested publication is rejected before acquisition; every
+  returned lease closes once after the fenced transaction, including blocked/failing/cancelled paths.
 - Any selected-account outbox row protects the entire visible account graph, without parsing/filtering state, payload,
   version or error. Protection precedes incomplete-baseline handling and canonical graph validation. Foreign outbox rows
   do not block the account. Missing/incomplete baseline never publishes; clean equal-epoch retry is an unchanged no-op.
@@ -129,8 +130,8 @@ The app constructs no publisher.
 Current canonical/physical bindings are not account-lifetime removed-child reservation storage. R08c supplies inert
 [complete baseline/absence and coordinated recovery](#complete-snapshot-baseline-and-publication-recovery).
 Any selected durable snapshot stage blocks direct publication before writes, including downloaded/corrupt stages;
-foreign stages do not. R09 owns durable transition authority and R12a the real finite-edit/timer barrier before live
-publication or account activation. These components do not authorize those integrations.
+foreign stages do not. R12a delivers the real finite-edit/timer seam; R09h/core R10 and R12c's authoritative timer-impact/
+scoped reconciliation remain separate integration gates. These components do not authorize live publication or activation.
 
 ## Durable head claiming and replay admission
 

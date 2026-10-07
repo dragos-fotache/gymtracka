@@ -1,20 +1,19 @@
 # Active task specifications
 
 **No implementation specification is open.**
-[R09g complete inert same-account recovery](../archive/remaining-work/R09g-review.md) is accepted and archived. It preserves
-cached data/intent and exact encrypted uncertain evidence, stopping at safely recoverable preparation eligibility, not
-app activation. [P17](../../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions) owns explicit
-fresh-grant evidence-only supersession; no cleanup, rekey, old-credential authority or legacy-data choice is inferred.
+[R12a real finite-edit admission and timer barriers](../archive/remaining-work/R12a-review.md) is accepted and archived.
+The [finite three-slice R12 plan](../remaining-work-roadmap.md#r12--feature-and-app-reconciliation) is settled; b/c remain
+outstanding. The owner requires a scoped local commit, prepared handoff and report, then **stop**: no successor launch
+or later implementation under this request. R12b is the next outcome after fresh release.
 
-The finite [R09 plan](../remaining-work-roadmap.md#remaining-r09-plan) remains R09g (accepted), then R09h after its gates,
-then reduced personal closure. **R09h is blocked on R12a real edit/timer barriers and core R10 convergence before production
-activation.** The owner selected **R12 next, beginning with R12a**, but paused at prepared handoff: no new agent or
-implementation now. On owner resumption and verified fresh-coordinator release, settle the finite whole-R12 plan before
-creating the first concrete specification. Do not invent R09 slices or bring dependency-blocked outcomes forward.
-See [current pickup](../coordinator-handoff.md) and [roadmap](../remaining-work-roadmap.md).
+[R09g inert same-account recovery](../archive/remaining-work/R09g-review.md) remains accepted. The finite
+[R09 plan](../remaining-work-roadmap.md#remaining-r09-plan) remains R09g (accepted), R09h, then reduced personal closure.
+R12a's real seam is delivered; R09h still requires core R10 and its app-facing activation gates. No no-op timer-impact
+callback, app visibility grant or production publisher/engine activation is inferred from this acceptance.
 
 Initial sign-in and established-account offline use remain the personal milestone. Legacy local-only disposition is
 unresolved; no import/delete/reassignment is authorized. Production still uses signed-out/local-only repositories.
+See [current pickup](../coordinator-handoff.md) and [roadmap](../remaining-work-roadmap.md).
 
 Create one normative `RNN-task.md` only for an authorized, dependency-ready slice after verified release. Include concrete
 behavior/APIs, disjoint allowlists, proportional independent tests/gates and exact stop under

@@ -20,6 +20,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +46,15 @@ internal fun GymApp(appState: GymAppState = rememberGymAppState()) {
     DisposableEffect(appState) {
         onDispose(appState::dispose)
     }
+    // The same app-owned coordinator reaches every mutating production feature factory below;
+    // standalone screens fall back to their local coordinator.
+    CompositionLocalProvider(LocalFiniteEditCoordinator provides appState.edits) {
+        GymAppContent(appState)
+    }
+}
+
+@Composable
+private fun GymAppContent(appState: GymAppState) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
@@ -196,7 +206,11 @@ internal fun GymApp(appState: GymAppState = rememberGymAppState()) {
                     onWorkoutNameChanged = appState::updateActiveWorkoutName,
                     onFinishWorkout = appState::requestFinishWorkout,
                     onCancelWorkout = appState::requestDiscardWorkout,
-                    onRestTimerStarted = appState::startRestTimer,
+                    // Accepted-edit timers start only from the already tracked successful
+                    // set-completion callback; every other start path uses the default refusal.
+                    onRestTimerStarted = { set, durationSeconds ->
+                        appState.startRestTimer(set, durationSeconds, acceptedEdit = true)
+                    },
                     onRestTimerEnded = appState::skipRestTimer,
                     onRestTimerAdjusted = appState::adjustRestTimer,
                     onRestTimerCancelled = appState::cancelRestTimerForSet,

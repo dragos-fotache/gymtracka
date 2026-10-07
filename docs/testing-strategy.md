@@ -82,8 +82,8 @@ future assignments. Total test count alone does not explain delivery time or jus
 | Domain persistence | Finish cleanup/renumbering/rollback, cascades, history defaults, replacement identity, cloning, routines/custom guards |
 | Room v12, capture, canonical batches and publication | Every v1–11 start and real asset; independent staging migration with exact prior-table/schema/sequence preservation; outbox order/identity/coalescing, scoped mutation families, independent generation ledger/cache bookkeeping, exact-byte migration preservation, fenced complete canonical batches/revisions/deletions/family bindings, strict retained evidence, deep-owned inputs, account-wide protection, complete-graph/physical collision validation, publication epoch/generation preservation, lease provenance and post-write rollback/cancellation/overflow/Room reopen |
 | Pure logic and feature state | Locale formatting, naming/filtering, validation, ordered autosave, failure/cancellation and stale-load guards |
-| App/timer | Active discovery/replacement/finish/discard, finite edit drains, serial terminal writes, ownership/at-most-once persistence, clock and hardware behavior |
-| Compose/app flows | Catalogue/picker/editor/routine/set/history controls; actual startup, custom edit/add, workout finish/history, routine start and perform-again journeys |
+| App/timer | Active discovery/replacement/finish/discard, shared finite admission and retained failures/cancellation, normal/terminal acceptance order, exclusive self-excluding versus external drains, request/session-bound leases and lost-return cancellation, ownership/at-most-once rest, clock/hardware behavior |
+| Compose/app flows | Catalogue/picker/editor/routine/set/history controls; actual startup, custom edit/add, workout finish/history, routine start and perform-again journeys; real root shared-admission refusal and accepted routine autosave surviving editor→picker disposal |
 | Wire/HTTP | Raw duplicates, family identities, durable exact bytes, auth scalar/expiry validation, operation-aware errors, fixed-origin TLS/redirect/retry refusal, framing/UTF-8/cancellation |
 | Vault/refresh/recovery | Real codec/CAS restart, JCA crypto, Android Keystore/file/backup placement, pending-first durable-before-send rotation, unchanged request retry, startup authority/visibility precedence, recovered-handle fencing and cancellation races |
 | Real service | All 17 kinds/imports, complete canonical results, no-effect rejection, replay/account isolation/pull/snapshot, challenge/refresh/logout and invalid Google-proof rejection |
@@ -100,7 +100,7 @@ future assignments. Total test count alone does not explain delivery time or jus
 | Private completed preparation/promotion | Real Room/Keystore/file and actual adapters: complete projection+journal/device atomicity, true foreign collision, postwrite trigger/count-zero/cancellation rollback, actual-tail/epoch protection, same-completion refresh rotation, exact expired/pending phase promotion, file-reopen gap/idempotence, pre-CAS readiness races, uncertain post-CAS invalidation/cancellation and shared-owner contention; no app activation |
 | Settled occupied reauthentication and exact pending replay | Exact R09e private replacement/finalization/resume and R09f shared-owner/shared-credential replay-only prerequisite; independent exact bytes/original expiry, required old-Room authorization, pre-CAS/late-result/newest/cancellation/error fences, semantic rereads, strict malformed legacy retention, real Room/Keystore/file reopen and retained-scope preservation; no app activation or unsuccessful pending retirement |
 | Retained-account recovery/superseded evidence | Independent v1/v2 bytes and immutable archives, exact source append and old-token fences, signed-out/missing/pre-CAS/post-commit reopen, real Room rollback/root/precedence seams, actual legacy replay then fresh-grant supersession, and archive-preserving private engine/refresh/completion/R09e regression; no app activation |
-| Still outstanding | App-facing bootstrap/publication and engine convergence, live edit/timer barriers and UI observation, legacy-data disposition, actual Google, WorkManager and live deployment/lifecycle gates; see roadmap |
+| Still outstanding | App-facing bootstrap/publication and engine convergence, canonical timer-impact selection, epoch observation and scoped app/timer reconciliation, legacy-data disposition, actual Google, WorkManager and live deployment/lifecycle gates; see roadmap |
 
 ## Standard commands
 
@@ -206,7 +206,10 @@ v1 asset to add user data. Seed tests are not Android JVM/device tests.
 - A filtered pass is not a full regression. Use unfiltered execution for a full-layer claim.
 - Use Compose testing v2 `createComposeRule` scheduling, one `setContent` per test, bounded `waitUntil` on actual UI/Room
   outcomes and `runOnIdle` for callback assertions. Avoid sleeps/busy-yield loops or `waitForIdle` alone after Room writes.
-- Dispose composition and cancel/join owned state scopes before closing Room. Isolated interaction tests may preload
+- Do not block the Compose test thread with runBlocking on an app/feature drain whose outcome needs its test scheduler.
+  Launch acquisition asynchronously, drive a bounded waitUntil on completion, then await only that completed result.
+  Use per-test runner and outer command timeouts for device gates; a hanging run with no completed XML is not a pass.
+- Dispose composition and cancel/join owned state scopes before closing Room. Teardown timeouts fail rather than being swallowed. Isolated interaction tests may preload
   state; actual app flows must verify normal factories without preload, using the internal repository override and
   no-op timer hardware. Inspect unmerged semantics/logcat before guessing at loading failures.
 - Preservation oracles belong after any deliberately allowed capture/admission and before the operation under test.
@@ -248,8 +251,9 @@ stays in the linked reviews; consult only when assessing coverage freshness or i
 
 | Layer | Latest relevant recorded evidence | Limitation |
 |---|---|---|
-| Offline JVM/compilation | [R09g review](archive/remaining-work/R09g-review.md): fresh full offline JVM and both test-layer compilation/KSP | Inert same-account recovery, not two-store HTTP convergence or activation |
-| Debug assembly/lint/APK | [R09g review](archive/remaining-work/R09g-review.md): unsuppressed frozen-source main/unit/device lint, debug assembly, asset/schema/APK marker/backup checks | One existing newer-version warning; not release/security or actual OEM/cloud-transfer audit |
+| Offline JVM/compilation | [R12a review](archive/remaining-work/R12a-review.md): fresh full offline JVM and Kotlin/KSP/test-layer compilation | Real edit/timer seam, not canonical-impact integration, two-store HTTP convergence or activation |
+| Debug assembly/lint/APK | [R12a review](archive/remaining-work/R12a-review.md): unsuppressed frozen-source main/unit/device lint, assembled debug APK and asset/schema/test-marker preservation checks | One existing newer-version warning; unchanged backup/configuration, not release/security or OEM/cloud-transfer audit |
+| Focused app/edit/timer flows | [R12a review](archive/remaining-work/R12a-review.md): separate API37 leaf-refusal, root shared-admission/disposal and existing AppFlow classes | Scoped device evidence, not fresh full unfiltered instrumentation or activated private-scope/remote timer flows |
 | Settled reauthentication and affected Room/session | [R09e review](archive/remaining-work/R09e-review.md): individual API37 real authority/Keystore/reopen/retained-intent and affected Room/preparation classes | No fresh unfiltered instrumentation, API24, two-store HTTP convergence, activation or live OEM/cloud transfer |
 | Private completion and affected engine/publication | [R09d review](archive/remaining-work/R09d-review.md): individual API37 completion/recovery/fence and affected private-engine/projection/baseline/shared-driver classes | Historical scoped evidence, not freshly rerun by R09e or permission to activate |
 | Real service | [R08c review](archive/remaining-work/R08c-review.md): fresh full isolated real-backend HTTP/auth package | Local interoperability, not deployed TLS/Google or real Room-backed engine convergence; legacy replay unresolved |

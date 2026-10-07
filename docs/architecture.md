@@ -167,8 +167,9 @@ owners and unchanged domain/cache/intent remain mandatory. See
   and exact vault promotion/gap recovery under those fences. R09e/f add inert settled occupied replacement and its exact
   established ACTIVE pending-refresh replay prerequisite. R09g adds retained-account signed-out/missing-vault and
   uncertain/interrupted-transition recovery; see [session boundaries](sync/implementation.md#inert-retained-account-recovery-and-superseded-evidence).
-  App-facing publication, real edit/timer barriers, convergence and activation remain outstanding; repositories never
-  follow private preparation.
+  App-facing publication, canonical timer-impact integration, convergence and activation remain outstanding; repositories
+  never follow private preparation. The real app-owned edit/timer admission seam is described below; it activates none
+  of these inert sync components.
   The [shared driver](sync/implementation.md#shared-push-before-pull-and-valid-tail),
   [push](sync/implementation.md#bounded-push-delivery), [checkpoint](sync/implementation.md#incremental-checkpoint-transactions)
   and [pull](sync/implementation.md#bounded-incremental-pull) references own details.
@@ -179,35 +180,64 @@ owners and unchanged domain/cache/intent remain mandatory. See
   writer separately applies complete revisioned observations under account/session/cache-epoch fences, without changing
   visible domain data or outbox/cursor state. The inert protected publisher requires an injected pause/drain lease,
   protects the entire account graph while any account outbox row remains, and publishes a validated complete baseline
-  atomically with generation preservation and a checked account epoch signal. No live barrier, account UI or production
-  publication activation exists. See [capture boundaries](sync/implementation.md#room-and-local-capture),
+  atomically with generation preservation and a checked account epoch signal. A real app-owned barrier now exists,
+  but no account UI or production publication activation is wired. See [capture boundaries](sync/implementation.md#room-and-local-capture),
   [canonical batches](sync/implementation.md#fenced-canonical-batches) and [protected publication](sync/implementation.md#protected-publication).
-- `ActiveWorkoutState.awaitPendingEdits()` tracks finite accepted edits with retained failures, rather than joining the
-  endless elapsed-time ticker. The screen registers its workout/owner-specific drain with `GymAppState`; finish request
-  and confirmation both wait, and disposal detaches only the matching registration.
+- `ActiveWorkoutState.awaitPendingEdits()` delegates to the shared finite-edit coordinator, never the endless elapsed-time
+  ticker. The screen retains its workout/owner-specific finish-drain registration; disposal detaches only the matching
+  registration, not accepted edits or their failures. Finish request drains all features and fences its captured active
+  root after suspension; confirmation also reserves exclusive admission before the destructive repository call.
 - Completion starts a timer only after a fenced incomplete-to-complete transition, with no superseding edit, and after
   reload still shows the visible set completed in the active parent. The checkbox re-keys on persisted completion;
   draft text remains keyed on row ID.
 - `GymAppState` discovers the newest active workout at startup. Starting empty/again/from-routine replaces the old active
   in one repository transaction. Navigation/new-active state publish only after success; failure keeps the old active,
   dialog, navigation and timer intact.
-- Navigation, filters/list restoration, dialogs and countdown are in memory. General cross-feature edit barriers, remote
-  Room observation, and session-bound UI reconstruction are not implemented; [R12](remaining-work-roadmap.md#r12--feature-and-app-reconciliation)
-  owns that integration.
+- Navigation, filters/list restoration, dialogs and countdown are in memory. Remote Room observation, canonical timer-impact
+  decisions and session-bound UI reconstruction remain [R12b/c](remaining-work-roadmap.md#r12--feature-and-app-reconciliation).
+
+### Finite-edit admission and publication leases
+
+`GymAppState` owns one `FiniteEditCoordinator`, provided through `GymApp` to every mutating feature factory. Standalone
+screens retain scope-bound fallbacks; the app never constructs a separate feature coordinator when one is provided.
+Accepted mutation inputs are snapshotted and registered synchronously before optimistic state changes. Paused, disposed
+or cancelled-scope callbacks cannot accept edits or alter autosave drafts. The app-owned write scope survives feature
+composition disposal; loads, observers and countdown tickers remain outside the finite drain.
+
+Normal mutations and terminal rest claims share acceptance-ordered actual writes. Exclusive finish/discard/active-replacement
+markers stay outside that predecessor chain: they reserve admission, drain preceding writes, and exclude only their own
+registration when draining again. External drains still observe those transitions. Local replacement/discard cancels a
+running timer only after repository success. Failure/cancellation evidence is retained by originating acceptance order;
+only a successful same-identity retry/superseding mutation settles nonterminal evidence. Unrelated edits, screen disposal
+and drain observation do not erase it. Terminal evidence is never automatically retried or cleared.
+
+Public pause/drain returns an owner-specific live publication lease; synchronous thread-safe checks/close work on Room
+threads. Pre-grant work is drained before atomic issuance; post-grant terminal admission invalidates the lease before
+persistence, holding admission until close. Failed/cancelled acquisition and lost result dispatch release the pause.
+`GymAppState.publicationBarrier` binds one exact account/generation/cache-epoch request and requires an explicit canonical
+impact callback. Acquisition and timer claims run on the app-state owner dispatcher without adopting its Job, preserving
+caller cancellation. This seam does not supply account authority or a canonical graph reader: R12c must provide that
+fenced impact decision, and the existing publisher still rechecks Room/outbox protection. No production publisher/engine
+is constructed at startup.
 
 ## Rest-timer lifecycle
 
-`ActiveRestTimer` identifies the completed set, selected duration, and monotonic elapsed-realtime start. The countdown
+`ActiveRestTimer` snapshots session, workout, entry, completed set, unique timer instance, selected duration and monotonic
+elapsed-realtime start. The countdown
 updates every 100 ms, cues two/one seconds and expiry, and holds a bounded partial wake lock. Production uses alarm-usage
 vibration; wall/monotonic clocks, repository, and hardware have narrow injectable boundaries for deterministic tests.
 
 Skip, expiry, replacement, or finish snapshots elapsed whole seconds and claims persistence at most once per timer.
-Claimed terminal writes run in a serial queue in claim order while new countdowns can start immediately. Finish waits
-for that queue; timer ownership rejects stale callbacks and prevents duplicate writes or releasing another timer's lock.
+Claimed terminal writes run in acceptance order with ordinary finite edits, while replacement countdowns start immediately.
+Finish waits for terminal success; timer ownership rejects stale callbacks and prevents duplicate writes or releasing
+another timer's lock.
 Unchecking stops only the matching timer without recording rest. Once a terminal write starts it is detached from
 countdown cancellation. A failed local rest write is terminal, not automatically retried. Disposal cancels owned work
 without cancelling the parent scope and releases held hardware resources.
 
-Failure-aware cross-feature transition/publication handling is still planned: joining the current terminal queue alone
-is not proof of successful persistence. Preserve these at-most-once and hardware semantics when implementing the
+Terminal success/failure is visible to every later transition/publication drain, even after the running timer is gone;
+a failed rest write is never retried as an edit to immutable history. The explicit publication-impact callback retains a
+valid unchanged timer (including rename/reference-only replacement) or claims/drains old-set rest before lease issuance.
+Newly captured rest remains local intent: the publisher's outbox recheck postpones projection. Actual canonical-impact
+selection and scoped remote app/timer reconciliation remain R12c under the
 [publication/timer design](sync/integration-design.md#7-autosave-timer-and-ui-publication-prerequisites).

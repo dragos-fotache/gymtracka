@@ -68,12 +68,12 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun WorkoutExerciseCard(
     exercise: WorkoutExerciseDetails,
-    onNotesChanged: (String, String) -> Unit,
-    onRestDurationChanged: (String, Int) -> Unit,
+    onNotesChanged: (String, String) -> Boolean,
+    onRestDurationChanged: (String, Int) -> Boolean,
     onSetAdded: () -> Unit,
-    onSetChanged: (WorkoutSetEntity, (() -> Unit)?) -> Unit,
-    onSetDeleted: (WorkoutSetEntity) -> Unit,
-    onExerciseDeleted: () -> Unit,
+    onSetChanged: (WorkoutSetEntity, (() -> Unit)?) -> Boolean,
+    onSetDeleted: (WorkoutSetEntity) -> Boolean,
+    onExerciseDeleted: () -> Boolean,
     onExerciseReplacementRequested: (String) -> Unit,
     onRestStarted: (WorkoutSetEntity, Int) -> Unit,
     onRestCancelled: (String) -> Unit,
@@ -143,8 +143,9 @@ internal fun WorkoutExerciseCard(
             BasicTextField(
                 value = notes,
                 onValueChange = {
-                    notes = it
-                    onNotesChanged(exercise.workoutExercise.id, it)
+                    // The local draft follows only accepted edits; refused input while paused
+                    // never alters domain-like drafts.
+                    if (onNotesChanged(exercise.workoutExercise.id, it)) notes = it
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -206,8 +207,7 @@ internal fun WorkoutExerciseCard(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        showDeleteDialog = false
-                        onExerciseDeleted()
+                        if (onExerciseDeleted()) showDeleteDialog = false
                     },
                 ) {
                     Text("Delete", color = MaterialTheme.colorScheme.error)
@@ -224,9 +224,10 @@ internal fun WorkoutExerciseCard(
             initialRestSeconds = restSeconds,
             onDismiss = { showRestDurationDialog = false },
             onDone = {
-                restSeconds = it
-                onRestDurationChanged(exercise.workoutExercise.id, it)
-                showRestDurationDialog = false
+                if (onRestDurationChanged(exercise.workoutExercise.id, it)) {
+                    restSeconds = it
+                    showRestDurationDialog = false
+                }
             },
         )
     }
@@ -256,8 +257,8 @@ private fun SetTableHeader() {
 private fun WorkoutSetRow(
     workoutSet: WorkoutSetEntity,
     restDurationSeconds: Int,
-    onSetChanged: (WorkoutSetEntity, (() -> Unit)?) -> Unit,
-    onSetDeleted: (WorkoutSetEntity) -> Unit,
+    onSetChanged: (WorkoutSetEntity, (() -> Unit)?) -> Boolean,
+    onSetDeleted: (WorkoutSetEntity) -> Boolean,
     onRestStarted: (WorkoutSetEntity, Int) -> Unit,
     onRestCancelled: (String) -> Unit,
 ) {
@@ -337,11 +338,13 @@ private fun WorkoutSetRow(
                         onDragEnd = {
                             val shouldDelete = passedDeleteThreshold
                             scope.launch {
-                                swipeOffset.animateTo(
-                                    if (shouldDelete) -rowWidth.toFloat() else 0f,
-                                    spring(),
-                                )
-                                if (shouldDelete) onSetDeleted(workoutSet)
+                                // A refused deletion snaps the row back so paused admission can
+                                // never leave an existing set visually gone.
+                                if (shouldDelete && onSetDeleted(workoutSet)) {
+                                    swipeOffset.animateTo(-rowWidth.toFloat(), spring())
+                                } else {
+                                    swipeOffset.animateTo(0f, spring())
+                                }
                             }
                         },
                         onDragCancel = {
@@ -369,8 +372,11 @@ private fun WorkoutSetRow(
             CompactSetTextField(
                 value = weightText,
                 onValueChange = {
-                    weightText = it
-                    onSetChanged(editedSet(), null)
+                    val candidate = editedSet().copy(
+                        weightKg = parseKilograms(it),
+                        repetitions = repetitionsText.toIntOrNull(),
+                    )
+                    if (onSetChanged(candidate, null)) weightText = it
                 },
                 modifier = Modifier.weight(1f).testTag("workout-set-weight-${workoutSet.id}"),
                 showBorder = !completed,
@@ -380,8 +386,11 @@ private fun WorkoutSetRow(
             CompactSetTextField(
                 value = repetitionsText,
                 onValueChange = {
-                    repetitionsText = it
-                    onSetChanged(editedSet(), null)
+                    val candidate = editedSet().copy(
+                        weightKg = parseKilograms(weightText),
+                        repetitions = it.toIntOrNull(),
+                    )
+                    if (onSetChanged(candidate, null)) repetitionsText = it
                 },
                 modifier = Modifier.weight(1f).testTag("workout-set-reps-${workoutSet.id}"),
                 showBorder = !completed,
@@ -405,22 +414,26 @@ private fun WorkoutSetRow(
                         onClick = {
                             focusManager.clearFocus()
                             val isNowCompleted = !completed
-                            completed = isNowCompleted
                             val updatedSet = editedSet(isNowCompleted)
-                            if (!isNowCompleted) {
-                                // Unchecking ends only the matching running
-                                // timer; the uncheck write already cleared
-                                // recorded rest, so nothing is persisted here.
-                                onRestCancelled(workoutSet.id)
+                            // The local checked flag follows only accepted edits; refused
+                            // completion changes neither the draft nor the timer.
+                            if (onSetChanged(
+                                    updatedSet,
+                                    if (isNowCompleted && restDurationSeconds > 0) {
+                                        { onRestStarted(updatedSet, restDurationSeconds) }
+                                    } else {
+                                        null
+                                    },
+                                )
+                            ) {
+                                if (!isNowCompleted) {
+                                    // Unchecking ends only the matching running
+                                    // timer; the uncheck write already cleared
+                                    // recorded rest, so nothing is persisted here.
+                                    onRestCancelled(workoutSet.id)
+                                }
+                                completed = isNowCompleted
                             }
-                            onSetChanged(
-                                updatedSet,
-                                if (isNowCompleted && restDurationSeconds > 0) {
-                                    { onRestStarted(updatedSet, restDurationSeconds) }
-                                } else {
-                                    null
-                                },
-                            )
                         },
                     ),
                 contentAlignment = Alignment.Center,

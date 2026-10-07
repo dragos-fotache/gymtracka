@@ -60,6 +60,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.dragosfotache.gymtracka.data.gym.RoutineDetails
 import com.dragosfotache.gymtracka.data.gym.RoutineStateRepository
+import com.dragosfotache.gymtracka.ui.FiniteEditCoordinator
+import com.dragosfotache.gymtracka.ui.rememberFiniteEditCoordinator
 import com.dragosfotache.gymtracka.ui.rememberGymRepository
 import com.dragosfotache.gymtracka.data.gym.RoutineExerciseDetails
 import com.dragosfotache.gymtracka.data.gym.RoutineSetEntity
@@ -75,6 +77,7 @@ import kotlinx.coroutines.launch
 internal class RoutineListState(
     private val repository: RoutineStateRepository,
     private val scope: CoroutineScope,
+    private val edits: FiniteEditCoordinator = FiniteEditCoordinator(scope),
 ) {
     var routines by mutableStateOf<List<RoutineDetails>?>(null)
         private set
@@ -93,10 +96,11 @@ internal class RoutineListState(
         routineToDelete = null
     }
 
-    fun confirmDelete() {
-        val routine = routineToDelete ?: return
-        scope.launch {
-            repository.deleteRoutine(routine.routine.id)
+    fun confirmDelete(): Job? {
+        val routine = routineToDelete ?: return null
+        val routineId = routine.routine.id
+        return edits.launchEdit("routine-delete:$routineId") {
+            repository.deleteRoutine(routineId)
             routineToDelete = null
             load()
         }
@@ -111,6 +115,7 @@ internal class RoutineEditorState(
     private val routineId: String,
     private val repository: RoutineStateRepository,
     private val scope: CoroutineScope,
+    private val edits: FiniteEditCoordinator = FiniteEditCoordinator(scope),
 ) {
     var details by mutableStateOf<RoutineDetails?>(null)
         private set
@@ -139,22 +144,26 @@ internal class RoutineEditorState(
         }
     }
 
-    fun updateName(value: String) {
-        name = value
+    fun updateName(value: String): Job? {
         val previousSave = nameSaveJob
-        nameSaveJob = scope.launch {
+        val job = edits.launchEdit(
+            key = "routine:$routineId:name",
+            onAccepted = { name = value },
+        ) {
             previousSave?.join()
             repository.updateRoutineName(routineId, value)
         }
+        if (job != null) nameSaveJob = job
+        return job
     }
 
-    fun requestSave(onSaved: () -> Unit) {
+    fun requestSave(onSaved: () -> Unit): Job? {
         val trimmedName = name.trim()
         if (trimmedName.isEmpty()) {
             showNameRequiredDialog = true
-            return
+            return null
         }
-        scope.launch {
+        return edits.launchEdit("routine:$routineId:save") {
             repository.saveRoutine(routineId, trimmedName)
             onSaved()
         }
@@ -164,53 +173,67 @@ internal class RoutineEditorState(
         showNameRequiredDialog = false
     }
 
-    fun updateRestDuration(routineExerciseId: String, seconds: Int) {
-        details = details?.let { current ->
-            current.copy(
-                exercises = current.exercises.map { exercise ->
-                    if (exercise.routineExercise.id == routineExerciseId) {
-                        exercise.copy(
-                            routineExercise = exercise.routineExercise.copy(restDurationSeconds = seconds),
-                        )
-                    } else {
-                        exercise
-                    }
-                },
-            )
+    fun updateRestDuration(routineExerciseId: String, seconds: Int): Job? =
+        edits.launchEdit(
+            key = "routine-rest:$routineExerciseId",
+            onAccepted = {
+                details = details?.let { current ->
+                    current.copy(
+                        exercises = current.exercises.map { exercise ->
+                            if (exercise.routineExercise.id == routineExerciseId) {
+                                exercise.copy(
+                                    routineExercise = exercise.routineExercise.copy(
+                                        restDurationSeconds = seconds,
+                                    ),
+                                )
+                            } else {
+                                exercise
+                            }
+                        },
+                    )
+                }
+            },
+        ) {
+            repository.updateRoutineExerciseRestDuration(routineExerciseId, seconds)
         }
-        scope.launch { repository.updateRoutineExerciseRestDuration(routineExerciseId, seconds) }
-    }
 
-    fun addSet(exercise: RoutineExerciseDetails) {
+    fun addSet(exercise: RoutineExerciseDetails): Job? {
+        val routineExerciseId = exercise.routineExercise.id
+        val position = exercise.sets.size
         val previousSet = exercise.sets.lastOrNull()
-        scope.launch {
+        val previousRepetitions = previousSet?.repetitions
+        val previousWeightKg = previousSet?.weightKg
+        return edits.launchEdit("routine-sets:$routineExerciseId") {
             repository.addSetToRoutineExercise(
-                routineExerciseId = exercise.routineExercise.id,
-                position = exercise.sets.size,
-                repetitions = previousSet?.repetitions,
-                weightKg = previousSet?.weightKg,
+                routineExerciseId = routineExerciseId,
+                position = position,
+                repetitions = previousRepetitions,
+                weightKg = previousWeightKg,
             )
             refresh()
         }
     }
 
-    fun updateSet(set: RoutineSetEntity) {
-        scope.launch {
-            repository.updateRoutineSet(set)
+    fun updateSet(set: RoutineSetEntity): Job? {
+        val snapshot = set
+        return edits.launchEdit("routine-set:${snapshot.id}") {
+            repository.updateRoutineSet(snapshot)
             refresh()
         }
     }
 
-    fun deleteSet(set: RoutineSetEntity) {
-        scope.launch {
-            repository.deleteRoutineSet(set)
+    fun deleteSet(set: RoutineSetEntity): Job? {
+        val snapshot = set
+        return edits.launchEdit("routine-set:${snapshot.id}") {
+            repository.deleteRoutineSet(snapshot)
             refresh()
         }
     }
 
-    fun deleteExercise(exercise: RoutineExerciseDetails) {
-        scope.launch {
-            repository.deleteRoutineExercise(exercise.routineExercise.id, routineId)
+    fun deleteExercise(exercise: RoutineExerciseDetails): Job? {
+        val routineExerciseId = exercise.routineExercise.id
+        return edits.launchEdit("routine-entry:$routineExerciseId") {
+            repository.deleteRoutineExercise(routineExerciseId, routineId)
             refresh()
         }
     }
@@ -233,14 +256,18 @@ internal class RoutineDetailState(
 private fun rememberRoutineListState(): RoutineListState {
     val repository = rememberGymRepository()
     val scope = rememberCoroutineScope()
-    return remember(repository, scope) { RoutineListState(repository, scope) }
+    val edits = rememberFiniteEditCoordinator()
+    return remember(repository, scope, edits) { RoutineListState(repository, scope, edits) }
 }
 
 @Composable
 private fun rememberRoutineEditorState(routineId: String): RoutineEditorState {
     val repository = rememberGymRepository()
     val scope = rememberCoroutineScope()
-    return remember(routineId, repository, scope) { RoutineEditorState(routineId, repository, scope) }
+    val edits = rememberFiniteEditCoordinator()
+    return remember(routineId, repository, scope, edits) {
+        RoutineEditorState(routineId, repository, scope, edits)
+    }
 }
 
 @Composable
@@ -495,14 +522,19 @@ internal fun RoutineEditorScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                RoutineNameField(name = state.name, onNameChanged = state::updateName)
+                RoutineNameField(
+                    name = state.name,
+                    onNameChanged = { state.updateName(it) != null },
+                )
             }
             items(details.exercises, key = { it.routineExercise.id }) { exercise ->
                 RoutineExerciseCard(
                     exercise = exercise,
-                    onRestDurationChanged = state::updateRestDuration,
+                    onRestDurationChanged = { id, seconds ->
+                        state.updateRestDuration(id, seconds) != null
+                    },
                     onSetAdded = { state.addSet(exercise) },
-                    onSetChanged = state::updateSet,
+                    onSetChanged = { set -> state.updateSet(set) != null },
                     onSetDeleted = state::deleteSet,
                     onExerciseDeleted = { state.deleteExercise(exercise) },
                 )
@@ -537,10 +569,12 @@ internal fun RoutineEditorScreen(
 }
 
 @Composable
-private fun RoutineNameField(name: String, onNameChanged: (String) -> Unit) {
+private fun RoutineNameField(name: String, onNameChanged: (String) -> Boolean) {
     BasicTextField(
         value = name,
-        onValueChange = onNameChanged,
+        // The field value is driven by accepted state; refused input while paused leaves it
+        // unchanged without altering the draft.
+        onValueChange = { onNameChanged(it) },
         modifier = Modifier.fillMaxWidth().testTag("routine-name-input"),
         singleLine = true,
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
@@ -566,9 +600,9 @@ private fun RoutineNameField(name: String, onNameChanged: (String) -> Unit) {
 @Composable
 private fun RoutineExerciseCard(
     exercise: RoutineExerciseDetails,
-    onRestDurationChanged: (String, Int) -> Unit,
+    onRestDurationChanged: (String, Int) -> Boolean,
     onSetAdded: () -> Unit,
-    onSetChanged: (RoutineSetEntity) -> Unit,
+    onSetChanged: (RoutineSetEntity) -> Boolean,
     onSetDeleted: (RoutineSetEntity) -> Unit,
     onExerciseDeleted: () -> Unit,
 ) {
@@ -633,9 +667,10 @@ private fun RoutineExerciseCard(
             initialRestSeconds = restSeconds,
             onDismiss = { restDialogVisible = false },
             onDone = { seconds ->
-                restSeconds = seconds
-                onRestDurationChanged(exercise.routineExercise.id, seconds)
-                restDialogVisible = false
+                if (onRestDurationChanged(exercise.routineExercise.id, seconds)) {
+                    restSeconds = seconds
+                    restDialogVisible = false
+                }
             },
         )
     }
@@ -657,7 +692,7 @@ private fun RoutineSetTableHeader() {
 @Composable
 private fun RoutineSetRow(
     set: RoutineSetEntity,
-    onSetChanged: (RoutineSetEntity) -> Unit,
+    onSetChanged: (RoutineSetEntity) -> Boolean,
     onSetDeleted: (RoutineSetEntity) -> Unit,
 ) {
     var weightText by remember(set.id) { mutableStateOf(set.weightKg?.let(::formatKilograms).orEmpty()) }
@@ -678,14 +713,26 @@ private fun RoutineSetRow(
         Spacer(Modifier.width(8.dp))
         RoutineSetTextField(
             value = weightText,
-            onValueChange = { weightText = it; onSetChanged(editedSet()) },
+            onValueChange = {
+                val candidate = set.copy(
+                    weightKg = parseKilograms(it),
+                    repetitions = repetitionsText.toIntOrNull(),
+                )
+                if (onSetChanged(candidate)) weightText = it
+            },
             modifier = Modifier.weight(1f).testTag("routine-set-weight-${set.id}"),
             keyboardType = KeyboardType.Decimal,
         )
         Spacer(Modifier.width(8.dp))
         RoutineSetTextField(
             value = repetitionsText,
-            onValueChange = { repetitionsText = it; onSetChanged(editedSet()) },
+            onValueChange = {
+                val candidate = set.copy(
+                    weightKg = parseKilograms(weightText),
+                    repetitions = it.toIntOrNull(),
+                )
+                if (onSetChanged(candidate)) repetitionsText = it
+            },
             modifier = Modifier.weight(1f).testTag("routine-set-reps-${set.id}"),
             keyboardType = KeyboardType.Number,
         )

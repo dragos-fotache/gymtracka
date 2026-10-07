@@ -24,14 +24,16 @@ snapshot publication. Accepted personal slices never imply completion of their d
 
 ## Status and dependencies
 
-Accepted delivery is through [R09g](archive/remaining-work/R09g-review.md): complete inert retained-account recovery under
+Accepted session recovery is through [R09g](archive/remaining-work/R09g-review.md): complete inert retained-account recovery under
 [P17 preserve-and-supersede](../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions). Fresh
 same-account credentials install atomically with exact encrypted uncertain evidence retention/fencing, including signed-out
 and interrupted older-generation gaps. Cached data/intent remain unchanged; no app activation or automatic cleanup.
 The finite [R09 plan](#remaining-r09-plan) remains **R09g (accepted), R09h, then reduced personal R09 closure**.
-**R09h is blocked on R12a real edit/timer barriers and core R10 convergence before production activation.**
-The owner selected **R12 next, beginning with R12a**, and paused execution at prepared handoff: no successor launch or
-implementation until owner resumption and verified release. Core R10 remains required; do not bypass gates or add R09 slices.
+**[R12a real edit/timer barriers](archive/remaining-work/R12a-review.md) are accepted; R09h remains blocked on core R10
+and its app-facing activation/integration gates.** The finite [R12 plan](#r12--feature-and-app-reconciliation) is settled.
+The owner's explicit R12a request is complete and stops after scoped commit, handoff preparation and owner report:
+no successor launch or later implementation under this request. R12b is the next package outcome, pending fresh owner
+release. Core R10 remains required; do not bypass gates or add R09 slices.
 “Pending” requires eligibility under explicit/standing authority and a bounded pickup spec, not another approval for each
 eligible next slice. “Deferred” remains required for its later
 milestone and is not automatically brought forward. Historical M-series assignments are not a second execution plan.
@@ -49,7 +51,7 @@ milestone and is not automatically brought forward. Historical M-series assignme
 | R09 single-account activation/recovery | a private authority/journal, b prepared coordination/recovery, c private engine/bootstrap, d completion/promotion and e settled occupied ACTIVE reauthentication and f exact ACTIVE pending-refresh replay accepted; g complete inert same-account recovery accepted under P17; h app-facing activation/offline recovery blocked on R12a/core R10, then closure; legacy-data disposition unresolved; general transitions/import-replace UI deferred public | R04, R08; production activation also needs R12a/core R10 |
 | R10 engine convergence/recovery | Core a pending; expanded b before public release | R03b/c, R06–R09 |
 | R11 Google identity/proofs | Personal sign-in/reauthentication pending; sign-out UI and lifecycle proofs deferred public | Relevant R02, R04 |
-| R12 feature/app reconciliation | Owner-selected next package, beginning with a real edit/publication/timer barriers; pickup paused; b observation and c app/timer rebinding pending finite whole-package planning on fresh pickup | R05/R07/R09 integration; barriers can be developed earlier |
+| R12 feature/app reconciliation | Finite three-slice plan; a real edit/publication/timer barriers accepted; b observation and c app/timer rebinding pending | R05/R07/R09 integration; barriers can be developed earlier |
 | R13 account UI/foreground sync | Pending | R09, core R10, personal R11, R12 |
 | R14 cloud JSON export | Deferred public | R02e, R03d export, R11 proofs, R13 |
 | R15 deletion/status recovery | Deferred public | R02e, R03d delete/status, R09, R11 proofs, R13, R14 |
@@ -197,7 +199,7 @@ plan. Detailed APIs, independent assignments and risk-selected gates are specifi
 | Slice | Outcome and completion boundary | Dependencies / blockers | Non-goals |
 |---|---|---|---|
 | **R09g — complete same-account recovery (accepted)** | [Review](archive/remaining-work/R09g-review.md): signed-out/missing-vault and uncertain/interrupted recovery with exact encrypted evidence retention/fencing and fresh same-account grants; strictly older evidence never supplies authority. Preserves all cached data/intent; stops at inert preparation eligibility. | R09a–f delivered. P17 disposition implemented without schema expansion. Unreadable/foreign/unknown-provenance or incompatible same/newer states remain preserved/private; legacy choice unresolved. | No Google adapter/account UI, fresh uncertain retry key, expiry rounding, implicit evidence retirement/cleanup, account switching/sign-out UI, legacy import/deletion, production activation or convergence work. |
-| **R09h — app-facing activation and offline recovery** | Compose delivered preparation/bootstrap/completion/recovery into the app-facing session-authority boundary. Support established-account offline startup/use without login every launch, stale-session fencing and safe reconnect. Complete reduced personal R09's activation/recovery obligations without duplicating adjacent packages. | R09g; **R12a real edit/timer barriers and core R10 convergence before production activation**, plus applicable app-facing integration gates confirmed at pickup. Missing prerequisites are blockers, not permission for no-op barriers or premature activation. | Google sign-in remains R11; account UI/foreground triggers remain R13. No general switching/sign-out/import-replace UI, legacy-data disposition, scheduler, deferred public lifecycle scope, deployment or live account/device actions. |
+| **R09h — app-facing activation and offline recovery** | Compose delivered preparation/bootstrap/completion/recovery into the app-facing session-authority boundary. Support established-account offline startup/use without login every launch, stale-session fencing and safe reconnect. Complete reduced personal R09's activation/recovery obligations without duplicating adjacent packages. | R09g; **R12a accepted; core R10 convergence still required before production activation**, plus applicable app-facing integration gates confirmed at pickup. Missing prerequisites are blockers, not permission for no-op barriers or premature activation. | Google sign-in remains R11; account UI/foreground triggers remain R13. No general switching/sign-out/import-replace UI, legacy-data disposition, scheduler, deferred public lifecycle scope, deployment or live account/device actions. |
 
 R09g implements P17 without implicit retirement/discard of uncertain evidence; new unresolved disposition/blockers still
 require user escalation. R09h cannot bypass its external package dependencies; if
@@ -227,11 +229,19 @@ at pickup, not from old planning versions. Deterministic adapter tests and actua
 
 ### R12 — Feature and app reconciliation
 
-**Owner-selected next package, beginning with R12a; prepared pickup is paused until owner resumption/release.**
-The first fresh R12 coordinator must settle a finite whole-package plan (count, outcomes, dependencies and completion
-boundary) before implementation under the [major-task slicing rule](coordinator-workflow.md#major-task-slicing--owner-rule).
-The a/b/c outline remains the outcome inventory, not an already settled contributor specification. Later outcomes must
-respect actual prerequisites; selecting R12 does not authorize activation or bypass core R10.
+**Finite plan: three slices, R12a–c, then close R12 after its package gates.** Owner resumption and verified ownership
+release authorize planning and R12a only in the current request. Stop after accepted R12a and report to the owner;
+no later implementation or automatic successor launch under this request. Additional splitting requires user escalation.
+
+| Slice | Outcome / completion boundary | Dependencies | Non-goals |
+|---|---|---|---|
+| **R12a — real finite-edit and timer barriers (accepted)** | [Review](archive/remaining-work/R12a-review.md). One app-owned admission/drain boundary covers every feature mutation and survives screen disposal. Failed/cancelled accepted writes remain visible to drains; paused callbacks cannot optimistically accept edits. Short request-bound publication leases exclude new edits; serial terminal rest writes expose failures and preserve at-most-once claims. Explicit timer-impact decision composes with the real barrier before any future publisher. Prove state races and actual Compose wiring. | Existing R05 publication contract, R09 inert coordination and current feature/repository seams; no R10 dependency for inert barrier delivery. | No engine/publisher construction at startup, account activation, epoch observation, remote navigation reconstruction, new schema, timer process-death redesign or legacy-data choice. |
+| **R12b — projection observation and feature refresh (pending)** | Observe complete publication epochs through narrow scoped repository seams. Refresh same-ID fields and every custom-reference label, including unchanged parent revisions, preserving accepted drafts/focus and rejecting stale loads. Cover selected routine, picker, history and active feature states. | R12a; existing Room publication epochs. May remain inert/local-scoped until app-facing account authority is delivered. | No account visibility grant, engine activation, Google/account UI or timer redesign. |
+| **R12c — scoped app and timer reconciliation / package closure (pending)** | Compose delivered scoped authority and epoch observation with repository/state rebinding, app navigation/active pill and canonical timer-impact decisions. Remote finish/delete/replacement/completion invalidation drains rest while the old set exists, rechecks local-intent protection and preserves valid unchanged timers. Complete private-scope and real Compose/app-flow package gates. | R12a/b; delivered app-facing R09h authority and core R10 convergence for production account integration. Coordinate with R09h rather than create a circular requirement: R09h needs R12a, not whole R12. Missing authority/convergence blocks this integration, not permission to expose private scopes. | No R11 identity adapter, R13 account UI/triggers, framework migration, cloud cleanup/import or live deployment. |
+
+R12 completion means all three outcomes and full package instrumentation/assembly/lint gates are accepted, including
+scope privacy and actual app/timer reconciliation. It does not close R09/R10/R11/R13 or authorize live accounts.
+Detailed APIs/tests belong to each slice specification; selecting R12 never bypasses core R10 or activation gates.
 
 Implement a failure-aware finite-edit/admission/publication barrier across routines, pickers, history, app shell and active
 workout; then observe Room epochs and rebind scoped repositories/states. Refresh same-ID fields and custom-reference names

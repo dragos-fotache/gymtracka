@@ -19,15 +19,19 @@ import androidx.compose.ui.platform.LocalContext
 import com.dragosfotache.gymtracka.data.gym.GymAppStateRepository
 import com.dragosfotache.gymtracka.data.gym.WorkoutEntity
 import com.dragosfotache.gymtracka.data.gym.WorkoutSetEntity
+import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationBarrier
+import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationLease
+import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationRequest
+import com.dragosfotache.gymtracka.data.sync.store.RepositorySession
 import com.dragosfotache.gymtracka.ui.util.totalVolumeKg
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.milliseconds
 
 internal enum class Destination {
@@ -57,6 +61,9 @@ internal data class ActiveRestTimer(
     val durationSeconds: Int,
     val startedAtElapsedMillis: Long,
     val timerId: Long,
+    val workoutId: String? = null,
+    val workoutExerciseId: String? = null,
+    val session: RepositorySession = RepositorySession.SIGNED_OUT,
 )
 
 internal interface GymAppClock {
@@ -80,6 +87,8 @@ internal class GymAppState(
     private val scope: CoroutineScope,
     private val clock: GymAppClock = SystemGymAppClock,
     private val timerHardware: RestTimerHardware = NoopRestTimerHardware,
+    val edits: FiniteEditCoordinator = FiniteEditCoordinator(scope),
+    private val session: RepositorySession = RepositorySession.SIGNED_OUT,
 ) {
     var destination by mutableStateOf(Destination.Workout)
         private set
@@ -130,8 +139,6 @@ internal class GymAppState(
     private var nextTimerId = 0L
     private var wakeLockTimerId: Long? = null
     private val endingTimerIdsPendingPersistence = mutableSetOf<Long>()
-    private val terminalWriteQueue = Mutex()
-    private val terminalWriteJobs = mutableListOf<Job>()
     private var finishDrainWorkoutId: String? = null
     private var finishDrainOwner: Any? = null
     private var finishDrain: (suspend () -> Unit)? = null
@@ -187,12 +194,11 @@ internal class GymAppState(
         destination = Destination.Exercises
     }
 
-    fun deleteCustomExercise(exerciseId: String) {
-        scope.launch {
+    fun deleteCustomExercise(exerciseId: String): Job? =
+        edits.launchEdit("exercise-delete:$exerciseId") {
             repository.deleteCustomExercise(exerciseId)
             closeExerciseDetails()
         }
-    }
 
     fun updateExerciseListPosition(index: Int, scrollOffset: Int) {
         exerciseListFirstVisibleItemIndex = index
@@ -217,12 +223,11 @@ internal class GymAppState(
         destination = Destination.History
     }
 
-    fun requestNewRoutine() {
-        scope.launch {
+    fun requestNewRoutine(): Job? =
+        edits.launchEdit("routine:create-draft") {
             editingRoutineId = repository.createRoutineDraft().id
             destination = Destination.Routine
         }
-    }
 
     fun editRoutine(routineId: String) {
         editingRoutineId = routineId
@@ -247,10 +252,15 @@ internal class GymAppState(
         destination = Destination.Routine
     }
 
-    fun cancelRoutine(isDraft: Boolean) {
-        val routineId = editingRoutineId ?: return
-        scope.launch {
-            if (isDraft) repository.deleteRoutine(routineId)
+    fun cancelRoutine(isDraft: Boolean): Job? {
+        val routineId = editingRoutineId ?: return null
+        if (!isDraft) {
+            editingRoutineId = null
+            destination = Destination.Workout
+            return null
+        }
+        return edits.launchEdit("routine-delete:$routineId") {
+            repository.deleteRoutine(routineId)
             editingRoutineId = null
             destination = Destination.Workout
         }
@@ -321,32 +331,34 @@ internal class GymAppState(
         routineToStartId = null
     }
 
-    fun confirmStartNewWorkout() {
-        scope.launch {
-            val startedAtMillis = clock.wallTimeMillis()
+    fun confirmStartNewWorkout(): Job? {
+        val current = activeWorkout ?: return null
+        // Acceptance snapshots: source choices and start time are captured here, never re-read
+        // later from mutable state.
+        val startedAtMillis = clock.wallTimeMillis()
+        val performAgainId = workoutToPerformAgainId
+        val fromRoutineId = routineToStartId
+        // Active replacement runs exclusively so accepted autosaves and terminal rest writes drain
+        // before the destructive Room call. The running timer is cancelled only after repository
+        // success; failure keeps the timer, dialog, and active workout intact.
+        return edits.launchExclusiveEdit("transition:replace-active:${current.id}") {
             // Repository starts atomically replace the previous active aggregate,
             // so there is no separate discard and no compensating delete here.
             // Only an invalid source falls back to a fresh empty workout.
-            val nextWorkout: WorkoutEntity = try {
-                when {
-                    workoutToPerformAgainId != null -> {
-                        repository.performWorkoutAgain(
-                            workoutToPerformAgainId.orEmpty(),
-                            startedAtMillis,
-                        ) ?: repository.startEmptyWorkout(startedAtMillis)
-                    }
-                    routineToStartId != null -> {
-                        repository.startWorkoutFromRoutine(
-                            routineToStartId.orEmpty(),
-                            startedAtMillis,
-                        ) ?: repository.startEmptyWorkout(startedAtMillis)
-                    }
-                    else -> repository.startEmptyWorkout(startedAtMillis)
+            val nextWorkout: WorkoutEntity = when {
+                performAgainId != null -> {
+                    repository.performWorkoutAgain(
+                        performAgainId,
+                        startedAtMillis,
+                    ) ?: repository.startEmptyWorkout(startedAtMillis)
                 }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                return@launch
+                fromRoutineId != null -> {
+                    repository.startWorkoutFromRoutine(
+                        fromRoutineId,
+                        startedAtMillis,
+                    ) ?: repository.startEmptyWorkout(startedAtMillis)
+                }
+                else -> repository.startEmptyWorkout(startedAtMillis)
             }
             cancelTimer()
             activeWorkout = nextWorkout
@@ -357,40 +369,28 @@ internal class GymAppState(
         }
     }
 
-    private fun startWorkout() {
-        scope.launch {
-            try {
-                activeWorkout = repository.startEmptyWorkout(clock.wallTimeMillis())
-                destination = Destination.ActiveWorkout
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {}
+    private fun startWorkout(): Job? =
+        edits.launchExclusiveEdit("transition:start-active") {
+            activeWorkout = repository.startEmptyWorkout(clock.wallTimeMillis())
+            destination = Destination.ActiveWorkout
         }
-    }
 
-    private fun performAgain(workoutId: String) {
-        scope.launch {
-            try {
-                activeWorkout = repository.performWorkoutAgain(workoutId, clock.wallTimeMillis())
-                activeWorkout?.let { destination = Destination.ActiveWorkout }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {}
+    private fun performAgain(workoutId: String): Job? =
+        edits.launchExclusiveEdit("transition:start-active") {
+            activeWorkout = repository.performWorkoutAgain(workoutId, clock.wallTimeMillis())
+            activeWorkout?.let { destination = Destination.ActiveWorkout }
         }
-    }
 
-    private fun startRoutine(routineId: String) {
-        scope.launch {
-            try {
-                activeWorkout = repository.startWorkoutFromRoutine(routineId, clock.wallTimeMillis())
-                activeWorkout?.let { destination = Destination.ActiveWorkout }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {}
+    private fun startRoutine(routineId: String): Job? =
+        edits.launchExclusiveEdit("transition:start-active") {
+            activeWorkout = repository.startWorkoutFromRoutine(routineId, clock.wallTimeMillis())
+            activeWorkout?.let { destination = Destination.ActiveWorkout }
         }
-    }
 
     fun updateActiveWorkoutName(name: String) {
+        // Optimistic app-shell name callbacks from new user acceptance must not mutate while the
+        // coordinator refuses admission (paused, disposed, or parent scope already cancelling).
+        if (edits.isPaused || edits.isAdmissionClosed()) return
         activeWorkout = activeWorkout?.copy(name = name)
     }
 
@@ -402,16 +402,13 @@ internal class GymAppState(
         showDiscardDialog = false
     }
 
-    fun confirmDiscardWorkout() {
-        val workout = activeWorkout ?: return
-        scope.launch {
-            try {
-                repository.discardWorkout(workout.id)
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                return@launch
-            }
+    fun confirmDiscardWorkout(): Job? {
+        val workout = activeWorkout ?: return null
+        // Exclusive discard drains accepted feature writes and terminal rest before the destructive
+        // Room call. The running timer is cancelled only after repository success (explicit local
+        // discard semantics); failure keeps that timer, the dialog, and the active workout intact.
+        return edits.launchExclusiveEdit("transition:discard:${workout.id}") {
+            repository.discardWorkout(workout.id)
             cancelTimer()
             activeWorkout = null
             destination = Destination.Workout
@@ -421,10 +418,22 @@ internal class GymAppState(
 
     fun requestFinishWorkout() {
         val workout = activeWorkout ?: return
+        val workoutId = workout.id
         scope.launch {
             try {
-                drainRegisteredFeatureEdits(workout.id)
-                if (repository.hasCompletedSets(workout.id)) {
+                // Global cross-feature barrier first: collapsed routine/picker/history accepted
+                // work must not be missed before the eligibility dialog, even when no active
+                // feature drain is registered. The request stays read-only and swallows failure.
+                edits.awaitPendingEdits()
+                drainRegisteredFeatureEdits(workoutId)
+                // Local stale-callback fence: a concurrently accepted exclusive finish may have
+                // settled while this read-only request was draining; never reopen a dialog for
+                // a root that is no longer active.
+                if (activeWorkout?.id != workoutId) return@launch
+                val hasCompleted = repository.hasCompletedSets(workoutId)
+                // Re-fence after the suspending read for the same reason.
+                if (activeWorkout?.id != workoutId) return@launch
+                if (hasCompleted) {
                     showFinishDialog = true
                 } else {
                     showNoCompletedSetsDialog = true
@@ -447,14 +456,18 @@ internal class GymAppState(
         finishedWorkoutSummary = null
     }
 
-    fun confirmFinishWorkout() {
-        val workout = activeWorkout ?: return
-        scope.launch {
+    fun confirmFinishWorkout(): Job? {
+        val workout = activeWorkout ?: return null
+        // Exclusive finish drains all accepted feature writes and terminal writes before the
+        // destructive Room call, and claims the current timer before capture. A failed terminal
+        // write blocks the finish; immutable history is never a retry target.
+        return edits.launchExclusiveEdit("transition:finish:${workout.id}") {
             try {
-                // A late accepted edit must not be overtaken: drain again after
-                // the initial request drain before committing the finish.
+                // A late accepted edit must not be overtaken: recheck under exclusive admission
+                // after the initial request drain. The exclusive transition itself is not part of
+                // the drained sets, so this recheck cannot self-join.
                 drainRegisteredFeatureEdits(workout.id)
-                terminateCurrentTimerAndAwaitTerminalWrites()
+                claimCurrentTimerAndAwaitTerminalWrites()
                 val finishedAtMillis = clock.wallTimeMillis()
                 if (repository.finishWorkout(workout.id, finishedAtMillis)) {
                     val details = repository.workoutDetails(workout.id)
@@ -471,8 +484,11 @@ internal class GymAppState(
                 showFinishDialog = false
             } catch (error: CancellationException) {
                 throw error
-            } catch (_: Exception) {
+            } catch (error: Exception) {
+                // Safe UI cleanup preserves the failure dialog state, then the origin is
+                // rethrown so the coordinator retains it instead of reporting false success.
                 showFinishDialog = true
+                throw error
             }
         }
     }
@@ -503,8 +519,156 @@ internal class GymAppState(
         }
     }
 
-    fun startRestTimer(workoutSet: WorkoutSetEntity, durationSeconds: Int) {
+    /**
+     * Request-bound adapter to the existing publisher interface. The factory binds one exact valid
+     * account/nonnegative-epoch/positive-generation request; acquire rejects any request mismatch.
+     * The caller must already hold the engine/session authority and supplies the canonical-graph
+     * impact decision ([preservesTimer]) for this fenced request; this adapter grants no such
+     * authority and invents no canonical reader. It performs no Room work: outbox protection is
+     * rechecked by the existing publisher after acquisition.
+     *
+     * Acquire pauses and drains accepted edits first, then evaluates impact for the resulting
+     * current timer (an already accepted set-completion callback may have started its timer during
+     * the pre-lease drain and is included). A timer whose session differs from the requested
+     * account/generation fails closed, rechecked after the drain. Impact true retains
+     * identity/countdown/hardware; impact false claims terminal rest while the old set exists
+     * (a no-op when it is gone) and drains it exactly once before the lease is granted. Existing
+     * terminal jobs and failures are drained even when no running timer remains. Origin failures
+     * and impact-callback failure/cancellation release the pause and propagate; a failed rest
+     * write blocks publication and stays observable to later drains. False never drops rest: the
+     * newly captured write postpones projection via the publisher's outbox recheck.
+     *
+     * The acquire body runs on the app-state owner dispatcher without adopting its Job: the
+     * caller (e.g. a future engine on another coroutine) keeps its own Job and cancellation, so
+     * racing false-impact and expiry claims serialize on the same dispatcher that owns every
+     * other timer claim and can never both observe an active timer. Lease checks and close stay
+     * thread-safe for Room threads, with no UI access from Room.
+     */
+    fun publicationBarrier(
+        expectedRequest: ProjectionPublicationRequest,
+        preservesTimer: suspend (ActiveRestTimer) -> Boolean,
+    ): ProjectionPublicationBarrier {
+        require(expectedRequest.accountId.isNotBlank()) {
+            "Publication barrier requires a nonblank account"
+        }
+        require(expectedRequest.expectedCacheEpoch >= 0) {
+            "Publication barrier requires a nonnegative epoch"
+        }
+        require(expectedRequest.sessionGeneration > 0) {
+            "Publication barrier requires a positive session generation"
+        }
+        return ProjectionPublicationBarrier { request ->
+            if (request != expectedRequest) {
+                throw IllegalArgumentException("Publication request mismatch")
+            }
+            // The acquired lease is held outside withContext: prompt cancellation during result
+            // dispatch would otherwise bypass the inner handlers and leak a live lease. Outer
+            // close is idempotent; origin and parent Job are preserved.
+            var acquired: ProjectionPublicationLease? = null
+            try {
+                withContext<ProjectionPublicationLease>(scope.coroutineContext.minusKey(Job)) {
+                    // Marshal onto the owner dispatcher without adopting its Job: caller
+                    // cancellation is preserved and the caller Job is untouched, while timer
+                    // session/impact/claim work serializes with every other timer claim.
+                    scope.ensureActive()
+                    // Initial timer ownership is read on the owner dispatcher too, so the
+                    // session check observes the same serialized state as the later drain.
+                    activeRestTimer?.let { checkTimerSession(it, request) }
+                    val lease: ProjectionPublicationLease = try {
+                        edits.pauseAndDrainHeld()
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        throw error
+                    }
+                    acquired = lease
+                    try {
+                        val current = activeRestTimer
+                        // Repeat the session check: an accepted completion may have started a
+                        // timer during the drain.
+                        current?.let { checkTimerSession(it, request) }
+                        val keep = if (current == null) {
+                            true
+                        } else {
+                            preservesTimer(current)
+                        }
+                        // Re-drain terminals that raced the impact evaluation; a failed terminal
+                        // blocks the grant instead of slipping into publication.
+                        edits.awaitTerminalWrites()
+                        if (current != null && !keep) {
+                            claimAndQueueTerminalWrite(
+                                current,
+                                clock.elapsedRealtimeMillis() - current.startedAtElapsedMillis,
+                            )
+                            edits.awaitTerminalWrites()
+                        }
+                        // Atomic grant: a terminal registered just before grant cannot slip past
+                        // the last drain. Racers are drained and the grant retried; expiry sources
+                        // are one-shot so this terminates instead of deadlocking.
+                        grantHeldLease(lease)
+                    } catch (error: CancellationException) {
+                        lease.close()
+                        throw error
+                    } catch (error: Exception) {
+                        lease.close()
+                        throw error
+                    }
+                }
+            } catch (error: CancellationException) {
+                acquired?.close()
+                throw error
+            } catch (error: Exception) {
+                acquired?.close()
+                throw error
+            }
+        }
+    }
+
+    /**
+     * Drains racing terminals and atomically grants a held lease. Repeats while new terminal
+     * work appears; fails closed when the lease is no longer grantable.
+     */
+    private suspend fun grantHeldLease(lease: ProjectionPublicationLease): ProjectionPublicationLease {
+        while (true) {
+            edits.awaitTerminalWrites()
+            when (edits.grantOrTerminalPending(lease)) {
+                GrantOutcome.GRANTED -> return lease
+                GrantOutcome.TERMINAL_PENDING -> continue
+                GrantOutcome.INVALID -> {
+                    lease.close()
+                    throw IllegalStateException("Publication lease is no longer grantable")
+                }
+            }
+        }
+    }
+
+    private fun checkTimerSession(timer: ActiveRestTimer, request: ProjectionPublicationRequest) {
+        if (timer.session.accountId != request.accountId ||
+            timer.session.sessionGeneration != request.sessionGeneration
+        ) {
+            throw IllegalStateException(
+                "Active timer session differs from publication request; failing closed",
+            )
+        }
+    }
+
+    fun startRestTimer(
+        workoutSet: WorkoutSetEntity,
+        durationSeconds: Int,
+        acceptedEdit: Boolean = false,
+    ) {
         if (durationSeconds <= 0) return
+        if (edits.isAdmissionClosed()) return
+        if (edits.grantedLeaseActive()) {
+            // A late untracked timer must never race publication: invalidate the granted lease
+            // and refuse to start.
+            edits.invalidateLiveLease()
+            return
+        }
+        // Timer starts from new user acceptance must not mutate while paused; only an already
+        // accepted set-completion callback may start its timer during the pre-lease drain so the
+        // impact assessment can include it.
+        if (edits.isPaused && !acceptedEdit) return
         activeRestTimer?.let { previousTimer ->
             val elapsedMillis = clock.elapsedRealtimeMillis() - previousTimer.startedAtElapsedMillis
             endingTimerIdsPendingPersistence += previousTimer.timerId
@@ -515,6 +679,9 @@ internal class GymAppState(
             durationSeconds = durationSeconds,
             startedAtElapsedMillis = clock.elapsedRealtimeMillis(),
             timerId = ++nextTimerId,
+            workoutId = activeWorkout?.id,
+            workoutExerciseId = workoutSet.workoutExerciseId,
+            session = session,
         )
         activeRestTimer = timer
         restTimerRemainingSeconds = durationSeconds
@@ -522,6 +689,7 @@ internal class GymAppState(
     }
 
     fun skipRestTimer(timer: ActiveRestTimer) {
+        if (edits.isPaused) return
         if (activeRestTimer?.timerId != timer.timerId) return
         timerJob?.cancel()
         claimAndQueueTerminalWrite(
@@ -537,6 +705,7 @@ internal class GymAppState(
      * pending terminal queue.
      */
     fun cancelRestTimerForSet(workoutSetId: String) {
+        if (edits.isPaused) return
         val timer = activeRestTimer ?: return
         if (timer.workoutSetId != workoutSetId) return
         timerJob?.cancel()
@@ -547,6 +716,7 @@ internal class GymAppState(
     }
 
     fun adjustRestTimer(timer: ActiveRestTimer, adjustmentSeconds: Int) {
+        if (edits.isPaused) return
         if (activeRestTimer?.timerId != timer.timerId) return
         val adjustedTimer = timer.copy(
             durationSeconds = (timer.durationSeconds + adjustmentSeconds).coerceAtLeast(0),
@@ -585,7 +755,11 @@ internal class GymAppState(
         }
     }
 
-    private suspend fun terminateCurrentTimerAndAwaitTerminalWrites() {
+    /**
+     * Claims the current timer and awaits terminal success before capture. A failed terminal
+     * write throws its origin and blocks the enclosing transition.
+     */
+    private suspend fun claimCurrentTimerAndAwaitTerminalWrites() {
         val timer = activeRestTimer
         if (timer != null) {
             timerJob?.cancel()
@@ -594,16 +768,17 @@ internal class GymAppState(
                 clock.elapsedRealtimeMillis() - timer.startedAtElapsedMillis,
             )
         }
-        awaitTerminalWrites()
+        edits.awaitTerminalWrites()
     }
 
     /**
-     * Claims one timer's terminal transition exactly once, clears its
-     * presentation synchronously, and queues only the DAO write on a serial
-     * queue: replacement countdowns start immediately, repeated writes to the
-     * same set commit in claim order, and the write survives countdown
-     * cancellation. The completion key increments only after a successful
-     * commit; a failed write stays terminal and is never retried.
+     * Claims one timer's terminal transition exactly once, clears its presentation synchronously,
+     * and persists only the DAO write through the coordinator's serial terminal queue: replacement
+     * countdowns start immediately, repeated writes to the same set commit in claim order, and the
+     * write survives countdown cancellation. The completion key increments only after a successful
+     * commit; a failed write stays terminal, is never retried, and remains observable to every
+     * later transition and publication drain under its unique timer-instance key. Claiming while a
+     * publication lease is granted invalidates that lease before the write.
      */
     private fun claimAndQueueTerminalWrite(timer: ActiveRestTimer, elapsedMillis: Long) {
         val wasActive = activeRestTimer?.timerId == timer.timerId
@@ -616,36 +791,20 @@ internal class GymAppState(
         }
         if (wasActive) releaseRestTimerWakeLock()
         val elapsedSeconds = (elapsedMillis.coerceAtLeast(0L) / 1_000L).toInt()
-        val job = scope.launch {
-            terminalWriteQueue.withLock {
-                try {
-                    repository.updateWorkoutSetRestSeconds(
-                        workoutSetId = timer.workoutSetId,
-                        elapsedSeconds = elapsedSeconds,
-                    )
-                    restTimerCompletionKey++
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (_: Exception) {
-                    // The timer is terminal even if the local rest write fails; never retry it twice.
-                } finally {
-                    if (activeRestTimer?.timerId == timer.timerId) {
-                        activeRestTimer = null
-                        restTimerRemainingSeconds = 0
-                    }
-                    if (wasActive) releaseRestTimerWakeLock(timer.timerId)
+        edits.launchTerminalEdit("rest:${timer.timerId}") {
+            try {
+                repository.updateWorkoutSetRestSeconds(
+                    workoutSetId = timer.workoutSetId,
+                    elapsedSeconds = elapsedSeconds,
+                )
+                restTimerCompletionKey++
+            } finally {
+                if (activeRestTimer?.timerId == timer.timerId) {
+                    activeRestTimer = null
+                    restTimerRemainingSeconds = 0
                 }
+                if (wasActive) releaseRestTimerWakeLock(timer.timerId)
             }
-        }
-        terminalWriteJobs += job
-        job.invokeOnCompletion { terminalWriteJobs -= job }
-    }
-
-    private suspend fun awaitTerminalWrites() {
-        while (true) {
-            val snapshot = terminalWriteJobs.toList()
-            if (snapshot.isEmpty()) return
-            snapshot.forEach { it.join() }
         }
     }
 
@@ -681,9 +840,9 @@ internal class GymAppState(
     fun dispose() {
         timerJob?.cancel()
         timerJob = null
-        // Owned terminal writes end with the composition; the parent scope
+        // Owned finite and terminal writes end with the composition; the parent scope
         // itself is never cancelled here. Gated writes never commit later.
-        terminalWriteJobs.toList().forEach { it.cancel() }
+        edits.dispose()
         activeRestTimer = null
         restTimerRemainingSeconds = 0
         endingTimerIdsPendingPersistence.clear()

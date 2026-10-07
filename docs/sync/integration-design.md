@@ -23,8 +23,9 @@ R09d adds inert [completed preparation/exact vault promotion](implementation.md#
 R09e/f add inert [settled occupied replacement](implementation.md#inert-settled-occupied-credential-reauthentication) and
 its [exact established ACTIVE pending-replay prerequisite](implementation.md#inert-exact-pending-refresh-reconciliation).
 R09g adds inert [retained-account recovery and superseded evidence](implementation.md#inert-retained-account-recovery-and-superseded-evidence).
-Production bootstrap/projection activation, convergence and cross-feature publication barriers
-remain planned. Broader account transitions are deferred public scope. Stored vault phases and
+R12a supplies the [real app-owned finite-edit/timer barrier seam](../architecture.md#finite-edit-admission-and-publication-leases).
+Production bootstrap/projection activation, convergence, authoritative canonical timer-impact selection and scoped UI
+observation/reconciliation remain planned. Broader account transitions are deferred public scope. Stored vault phases and
 explicit refresh leases alone never authorize activation. Preserve the unresolved
 [legacy auth replay limitation](implementation.md#legacy-auth-replay-limitation) in all recovery work.
 

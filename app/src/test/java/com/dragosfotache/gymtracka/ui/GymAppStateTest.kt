@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -16,6 +17,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
@@ -648,18 +650,29 @@ class GymAppStateTest {
 
             state.requestFinishWorkout()
             runCurrent()
-            assertTrue(state.showFinishDialog)
+            // Normative request drain waits for accepted terminal writes.
+            assertFalse(state.showFinishDialog)
+            assertTrue(repository.finished.isEmpty())
+            assertEquals(expectedAttempts, repository.restUpdates)
+            assertTrue(repository.committedRestUpdates.isEmpty())
+
             advanceTimeBy(1.seconds)
-            state.confirmFinishWorkout()
+            val confirm = state.confirmFinishWorkout()
+            assertNotNull(confirm)
             runCurrent()
             assertTrue(repository.finished.isEmpty())
-            assertTrue(state.showFinishDialog)
+            assertEquals(expectedAttempts, repository.restUpdates)
+            assertTrue(repository.committedRestUpdates.isEmpty())
+            assertFalse(state.showFinishDialog)
 
             writeGate.complete(Unit)
+            runCurrent()
+            confirm?.join()
             runCurrent()
             assertEquals(expectedCommits, repository.committedRestUpdates)
             assertEquals(1, repository.finished.size)
             assertNull(state.activeWorkout)
+            assertFalse(state.showFinishDialog)
         }
     }
 
@@ -684,9 +697,17 @@ class GymAppStateTest {
         assertTrue(repository.committedRestUpdates.isEmpty())
         assertNull(state.activeRestTimer)
 
-        // The parent scope stays alive: new countdowns still start.
+        // R12a disposed admission must refuse: no new timer and no rest write.
         state.startRestTimer(WorkoutSetEntity("fresh-set", "entry", 2), 30)
-        assertEquals("fresh-set", state.activeRestTimer?.workoutSetId)
+        runCurrent()
+        assertNull(state.activeRestTimer)
+        assertTrue(repository.restUpdates.none { it.first == "fresh-set" })
+
+        // Dispose must not cancel the injected parent scope.
+        val parentProbe = CompletableDeferred<Unit>()
+        backgroundScope.launch { parentProbe.complete(Unit) }
+        runCurrent()
+        assertTrue(parentProbe.isCompleted)
     }
 
     @Test

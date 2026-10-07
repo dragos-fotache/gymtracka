@@ -71,9 +71,12 @@ import com.dragosfotache.gymtracka.data.gym.ExerciseSummary
 import com.dragosfotache.gymtracka.data.gym.ExerciseDetails
 import com.dragosfotache.gymtracka.data.gym.EquipmentEntity
 import com.dragosfotache.gymtracka.data.gym.ExerciseStateRepository
+import com.dragosfotache.gymtracka.ui.FiniteEditCoordinator
+import com.dragosfotache.gymtracka.ui.rememberFiniteEditCoordinator
 import com.dragosfotache.gymtracka.ui.rememberGymRepository
 import com.dragosfotache.gymtracka.data.gym.MuscleGroupEntity
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 internal class ExerciseCatalogueState(
@@ -82,6 +85,7 @@ internal class ExerciseCatalogueState(
     initialSearchQuery: String = "",
     initialEquipmentIds: Set<String> = emptySet(),
     initialMuscleGroupIds: Set<String> = emptySet(),
+    private val edits: FiniteEditCoordinator = FiniteEditCoordinator(scope),
 ) {
     var summaries by mutableStateOf<List<ExerciseSummary>?>(null)
         private set
@@ -130,39 +134,43 @@ internal class ExerciseCatalogueState(
         selectedExerciseIds = setOf(exerciseId)
     }
 
-    fun addSelectedExercises(workoutId: String, onAdded: () -> Unit) {
-        if (selectedExerciseIds.isEmpty()) return
-        scope.launch {
-            repository.addExercisesToWorkout(workoutId, selectedExerciseIds)
+    fun addSelectedExercises(workoutId: String, onAdded: () -> Unit): Job? {
+        // The selection snapshot is captured at acceptance; later selection changes never leak
+        // into the tracked commit. Selection clearing and navigation run only on success inside
+        // tracked work, so refusal alters neither selection-success nor navigation state.
+        val selected = selectedExerciseIds
+        if (selected.isEmpty()) return null
+        return edits.launchEdit("workout:$workoutId:add-exercises") {
+            repository.addExercisesToWorkout(workoutId, selected)
             selectedExerciseIds = emptySet()
             onAdded()
         }
     }
 
-    fun addSelectedExercisesToRoutine(routineId: String, onAdded: () -> Unit) {
-        if (selectedExerciseIds.isEmpty()) return
-        scope.launch {
-            repository.addExercisesToRoutine(routineId, selectedExerciseIds)
+    fun addSelectedExercisesToRoutine(routineId: String, onAdded: () -> Unit): Job? {
+        val selected = selectedExerciseIds
+        if (selected.isEmpty()) return null
+        return edits.launchEdit("routine:$routineId:add-exercises") {
+            repository.addExercisesToRoutine(routineId, selected)
             selectedExerciseIds = emptySet()
             onAdded()
         }
     }
 
-    fun replaceSelectedExercise(workoutExerciseId: String, onReplaced: () -> Unit) {
-        val exerciseId = selectedExerciseIds.singleOrNull() ?: return
-        scope.launch {
+    fun replaceSelectedExercise(workoutExerciseId: String, onReplaced: () -> Unit): Job? {
+        val exerciseId = selectedExerciseIds.singleOrNull() ?: return null
+        return edits.launchEdit("entry:$workoutExerciseId:replace") {
             repository.replaceWorkoutExercise(workoutExerciseId, exerciseId)
             selectedExerciseIds = emptySet()
             onReplaced()
         }
     }
 
-    fun deleteCustomExercise(exerciseId: String) {
-        scope.launch {
+    fun deleteCustomExercise(exerciseId: String): Job? =
+        edits.launchEdit("exercise-delete:$exerciseId") {
             repository.deleteCustomExercise(exerciseId)
             summaries = repository.exerciseSummaries()
         }
-    }
 }
 
 internal class ExerciseDetailState(
@@ -182,6 +190,7 @@ internal class ExerciseCreationState(
     private val exerciseId: String?,
     private val repository: ExerciseStateRepository,
     private val scope: CoroutineScope,
+    private val edits: FiniteEditCoordinator = FiniteEditCoordinator(scope),
 ) {
     var name by mutableStateOf("")
         private set
@@ -272,30 +281,40 @@ internal class ExerciseCreationState(
         isDirty = true
     }
 
-    fun requestSave(onSaved: () -> Unit) {
-        if (name.trim().isEmpty()) {
+    fun requestSave(onSaved: () -> Unit): Job? {
+        // Pure presentation typing is not persistence acceptance; only this save is gated. Every
+        // custom-editor input is snapshotted here at acceptance, never re-read later.
+        val trimmedName = name.trim()
+        if (trimmedName.isEmpty()) {
             showNameRequiredDialog = true
-            return
+            return null
         }
-        scope.launch {
-            if (exerciseId == null) {
+        val targetExerciseId = exerciseId
+        val snapshotPrimary = primaryMuscleGroupId
+        val snapshotSecondary = secondaryMuscleGroupIds.toSet()
+        val snapshotEquipment = equipmentId
+        val snapshotCategory = category
+        val snapshotInstructions = instructions
+        val key = if (targetExerciseId == null) "exercise:create" else "exercise-update:$targetExerciseId"
+        return edits.launchEdit(key) {
+            if (targetExerciseId == null) {
                 repository.createCustomExercise(
-                    name = name.trim(),
-                    primaryMuscleGroupId = primaryMuscleGroupId,
-                    secondaryMuscleGroupIds = secondaryMuscleGroupIds,
-                    equipmentId = equipmentId,
-                    category = category,
-                    instructions = instructions,
+                    name = trimmedName,
+                    primaryMuscleGroupId = snapshotPrimary,
+                    secondaryMuscleGroupIds = snapshotSecondary,
+                    equipmentId = snapshotEquipment,
+                    category = snapshotCategory,
+                    instructions = snapshotInstructions,
                 )
             } else {
                 repository.updateCustomExercise(
-                    exerciseId = exerciseId,
-                    name = name.trim(),
-                    primaryMuscleGroupId = primaryMuscleGroupId,
-                    secondaryMuscleGroupIds = secondaryMuscleGroupIds,
-                    equipmentId = equipmentId,
-                    category = category,
-                    instructions = instructions,
+                    exerciseId = targetExerciseId,
+                    name = trimmedName,
+                    primaryMuscleGroupId = snapshotPrimary,
+                    secondaryMuscleGroupIds = snapshotSecondary,
+                    equipmentId = snapshotEquipment,
+                    category = snapshotCategory,
+                    instructions = snapshotInstructions,
                 )
             }
             onSaved()
@@ -315,13 +334,15 @@ private fun rememberExerciseCatalogueState(
 ): ExerciseCatalogueState {
     val repository = rememberGymRepository()
     val scope = rememberCoroutineScope()
-    return remember(repository, scope, initialSearchQuery, initialEquipmentIds, initialMuscleGroupIds) {
+    val edits = rememberFiniteEditCoordinator()
+    return remember(repository, scope, initialSearchQuery, initialEquipmentIds, initialMuscleGroupIds, edits) {
         ExerciseCatalogueState(
             repository = repository,
             scope = scope,
             initialSearchQuery = initialSearchQuery,
             initialEquipmentIds = initialEquipmentIds,
             initialMuscleGroupIds = initialMuscleGroupIds,
+            edits = edits,
         )
     }
 }
@@ -339,8 +360,9 @@ private fun rememberExerciseDetailState(exerciseId: String): ExerciseDetailState
 private fun rememberExerciseCreationState(exerciseId: String?): ExerciseCreationState {
     val repository = rememberGymRepository()
     val scope = rememberCoroutineScope()
-    return remember(exerciseId, repository, scope) {
-        ExerciseCreationState(exerciseId, repository, scope)
+    val edits = rememberFiniteEditCoordinator()
+    return remember(exerciseId, repository, scope, edits) {
+        ExerciseCreationState(exerciseId, repository, scope, edits)
     }
 }
 

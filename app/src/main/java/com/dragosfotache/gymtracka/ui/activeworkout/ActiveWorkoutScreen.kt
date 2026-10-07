@@ -47,6 +47,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dragosfotache.gymtracka.data.gym.ActiveWorkoutStateRepository
+import com.dragosfotache.gymtracka.ui.FiniteEditCoordinator
+import com.dragosfotache.gymtracka.ui.rememberFiniteEditCoordinator
 import com.dragosfotache.gymtracka.ui.rememberGymRepository
 import com.dragosfotache.gymtracka.data.gym.WorkoutDetails
 import com.dragosfotache.gymtracka.data.gym.WorkoutEntity
@@ -56,13 +58,11 @@ import com.dragosfotache.gymtracka.ui.ActiveRestTimer
 import com.dragosfotache.gymtracka.ui.util.formatCountdown
 import com.dragosfotache.gymtracka.ui.util.formatElapsedTime
 import com.dragosfotache.gymtracka.ui.util.totalVolumeKg
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
@@ -71,6 +71,7 @@ internal class ActiveWorkoutState(
     private val workoutStartMillis: Long,
     private val repository: ActiveWorkoutStateRepository,
     private val scope: CoroutineScope,
+    private val edits: FiniteEditCoordinator = FiniteEditCoordinator(scope),
 ) {
     var details by mutableStateOf<WorkoutDetails?>(null)
         private set
@@ -82,9 +83,6 @@ internal class ActiveWorkoutState(
     private var nameSaveJob: Job? = null
     private var setEditSequence = 0L
     private val latestAcceptedSetEdit = mutableMapOf<String, Long>()
-    private val pendingEditSignals = mutableListOf<CompletableDeferred<Unit>>()
-    private data class RetainedEditFailure(val key: String, val error: Exception)
-    private val retainedEditFailures = mutableListOf<RetainedEditFailure>()
 
     init {
         refresh()
@@ -105,137 +103,100 @@ internal class ActiveWorkoutState(
     }
 
     /**
-     * Tracks one accepted finite mutation so finish can drain it. Failures are
-     * recorded on the drain signal (a plain join would hide them) and retained
-     * under the edit's identity key until an explicit retry or a superseding
-     * edit for the same key succeeds — observing the failure does not resolve
-     * the unsaved edit. Cancellation propagates. A job that never runs still
-     * settles its signal so a drain cannot hang on it. The endless
-     * elapsed-time ticker is never tracked.
+     * Suspends until every accepted edit has committed. Delegates to the shared app coordinator so
+     * finish never overtakes an accepted edit from any feature; throws on drained or retained
+     * failures and detects scope cancellation. The endless elapsed-time ticker is never tracked.
      */
-    private fun launchEdit(key: String, block: suspend () -> Unit): Job {
-        val signal = CompletableDeferred<Unit>()
-        pendingEditSignals += signal
-        val job = scope.launch {
-            try {
-                block()
-                signal.complete(Unit)
-                pendingEditSignals -= signal
-                retainedEditFailures.removeAll { it.key == key }
-            } catch (error: CancellationException) {
-                signal.cancel(error)
-                pendingEditSignals -= signal
-                throw error
-            } catch (error: Exception) {
-                signal.completeExceptionally(error)
-                pendingEditSignals -= signal
-                retainedEditFailures.removeAll { it.key == key }
-                retainedEditFailures += RetainedEditFailure(key, error)
-            }
-        }
-        job.invokeOnCompletion { error ->
-            if (error != null && !signal.isCompleted) {
-                signal.cancel(
-                    error as? CancellationException
-                        ?: CancellationException("Edit did not run", error),
-                )
-                pendingEditSignals -= signal
-            }
-        }
-        return job
+    suspend fun awaitPendingEdits() {
+        edits.awaitPendingEdits()
     }
 
     /**
-     * Suspends until every accepted edit has committed. Throws when any drained
-     * edit failed, when an unresolved retained failure exists, or when the
-     * scope was cancelled, so finish never overtakes an accepted edit and
-     * never runs while an accepted edit remains unsaved.
+     * Accepts one finite mutation through the shared coordinator. Returns the tracking job, or
+     * null when refused (paused/disposed): refused edits change neither optimistic state (applied
+     * in [onAccepted]) nor the set-sequence guard, and never reach the repository.
      */
-    suspend fun awaitPendingEdits() {
-        while (true) {
-            val snapshot = pendingEditSignals.toList()
-            if (snapshot.isEmpty()) {
-                // A cancelled feature scope must fail the drain instead of
-                // silently succeeding with no tracked edits left.
-                scope.ensureActive()
-                retainedEditFailures.firstOrNull()?.let { throw it.error }
-                return
-            }
-            for (signal in snapshot) {
-                try {
-                    signal.await()
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (error: Exception) {
-                    throw error
-                }
-            }
-        }
-    }
-
-    fun updateWorkoutName(name: String) {
-        details = details?.let { current ->
-            current.copy(workout = current.workout.copy(name = name))
-        }
+    fun updateWorkoutName(name: String): Job? {
         val previousSave = nameSaveJob
-        nameSaveJob = launchEdit("workout:name") {
+        val job = edits.launchEdit(
+            key = "workout:$workoutId:name",
+            onAccepted = {
+                details = details?.let { current ->
+                    current.copy(workout = current.workout.copy(name = name))
+                }
+            },
+        ) {
             previousSave?.join()
             repository.updateWorkoutName(workoutId, name)
         }
+        if (job != null) nameSaveJob = job
+        return job
     }
 
-    fun updateNotes(workoutExerciseId: String, notes: String) {
-        launchEdit("notes:$workoutExerciseId") {
+    fun updateNotes(workoutExerciseId: String, notes: String): Job? =
+        edits.launchEdit("notes:$workoutExerciseId") {
             repository.updateWorkoutExerciseNotes(workoutExerciseId, notes)
         }
-    }
 
-    fun updateRestDuration(workoutExerciseId: String, restDurationSeconds: Int) {
-        details = details?.let { current ->
-            current.copy(
-                exercises = current.exercises.map { exercise ->
-                    if (exercise.workoutExercise.id == workoutExerciseId) {
-                        exercise.copy(
-                            workoutExercise = exercise.workoutExercise.copy(
-                                restDurationSeconds = restDurationSeconds,
-                            ),
-                        )
-                    } else {
-                        exercise
-                    }
-                },
-            )
-        }
-        launchEdit("rest:$workoutExerciseId") {
+    fun updateRestDuration(workoutExerciseId: String, restDurationSeconds: Int): Job? =
+        edits.launchEdit(
+            key = "rest:$workoutExerciseId",
+            onAccepted = {
+                details = details?.let { current ->
+                    current.copy(
+                        exercises = current.exercises.map { exercise ->
+                            if (exercise.workoutExercise.id == workoutExerciseId) {
+                                exercise.copy(
+                                    workoutExercise = exercise.workoutExercise.copy(
+                                        restDurationSeconds = restDurationSeconds,
+                                    ),
+                                )
+                            } else {
+                                exercise
+                            }
+                        },
+                    )
+                }
+            },
+        ) {
             repository.updateWorkoutExerciseRestDuration(workoutExerciseId, restDurationSeconds)
         }
-    }
 
-    fun addSet(exercise: WorkoutExerciseDetails) {
+    fun addSet(exercise: WorkoutExerciseDetails): Job? {
+        val workoutExerciseId = exercise.workoutExercise.id
+        val position = exercise.sets.size
         val previousSet = exercise.sets.lastOrNull()
-        launchEdit("sets:${exercise.workoutExercise.id}") {
+        val previousRepetitions = previousSet?.repetitions
+        val previousWeightKg = previousSet?.weightKg
+        return edits.launchEdit("sets:$workoutExerciseId") {
             repository.addSetToWorkoutExercise(
-                workoutExerciseId = exercise.workoutExercise.id,
-                position = exercise.sets.size,
-                repetitions = previousSet?.repetitions,
-                weightKg = previousSet?.weightKg,
+                workoutExerciseId = workoutExerciseId,
+                position = position,
+                repetitions = previousRepetitions,
+                weightKg = previousWeightKg,
             )
             details = repository.workoutDetails(workoutId)
         }
     }
 
-    fun updateSet(workoutSet: WorkoutSetEntity, afterUpdate: (() -> Unit)? = null) {
-        // Newer accepted edits supersede older callbacks for the same set: an
-        // older completion must not start a timer after a newer edit already
-        // unchecked or invalidated that set.
-        val sequence = ++setEditSequence
-        latestAcceptedSetEdit[workoutSet.id] = sequence
-        launchEdit("set:${workoutSet.id}") {
+    fun updateSet(workoutSet: WorkoutSetEntity, afterUpdate: (() -> Unit)? = null): Job? {
+        val snapshot = workoutSet
+        var sequence = 0L
+        return edits.launchEdit(
+            key = "set:${snapshot.id}",
+            onAccepted = {
+                // Newer accepted edits supersede older callbacks for the same set: an
+                // older completion must not start a timer after a newer edit already
+                // unchecked or invalidated that set. Refused edits never touch this guard.
+                sequence = ++setEditSequence
+                latestAcceptedSetEdit[snapshot.id] = sequence
+            },
+        ) {
             // The fenced result reports a real incomplete-to-complete
             // transition; no-ops, guards, invalidations, and already-completed
             // edits never start a timer, even when the stored row reads
             // completed (finished roots, wrong parents, stale entities).
-            val transitioned = repository.updateWorkoutSet(workoutSet)
+            val transitioned = repository.updateWorkoutSet(snapshot)
             val loaded = try {
                 repository.workoutDetails(workoutId)
             } catch (error: CancellationException) {
@@ -245,29 +206,32 @@ internal class ActiveWorkoutState(
             }
             if (loaded != null) details = loaded
             if (!transitioned) return@launchEdit
-            if (latestAcceptedSetEdit[workoutSet.id] != sequence) return@launchEdit
+            if (latestAcceptedSetEdit[snapshot.id] != sequence) return@launchEdit
             val storedExercise = loaded?.exercises?.singleOrNull {
-                it.workoutExercise.id == workoutSet.workoutExerciseId
+                it.workoutExercise.id == snapshot.workoutExerciseId
             }
-            val stored = storedExercise?.sets?.singleOrNull { it.id == workoutSet.id }
+            val stored = storedExercise?.sets?.singleOrNull { it.id == snapshot.id }
             if (loaded?.workout?.status == "active" && stored?.isCompleted == true) {
                 afterUpdate?.invoke()
             }
         }
     }
 
-    fun deleteSet(workoutSet: WorkoutSetEntity) {
-        launchEdit("set:${workoutSet.id}") {
-            repository.deleteWorkoutSet(workoutSet)
+    fun deleteSet(workoutSet: WorkoutSetEntity): Job? {
+        val snapshot = workoutSet
+        return edits.launchEdit("set:${snapshot.id}") {
+            repository.deleteWorkoutSet(snapshot)
             details = repository.workoutDetails(workoutId)
         }
     }
 
-    fun deleteExercise(exercise: WorkoutExerciseDetails) {
-        launchEdit("entry:${exercise.workoutExercise.id}") {
+    fun deleteExercise(exercise: WorkoutExerciseDetails): Job? {
+        val workoutExerciseId = exercise.workoutExercise.id
+        val parentWorkoutId = exercise.workoutExercise.workoutId
+        return edits.launchEdit("entry:$workoutExerciseId") {
             repository.deleteExerciseFromWorkout(
-                workoutExerciseId = exercise.workoutExercise.id,
-                workoutId = exercise.workoutExercise.workoutId,
+                workoutExerciseId = workoutExerciseId,
+                workoutId = parentWorkoutId,
             )
             details = repository.workoutDetails(workoutId)
         }
@@ -281,8 +245,9 @@ private fun rememberActiveWorkoutState(
 ): ActiveWorkoutState {
     val repository = rememberGymRepository()
     val scope = rememberCoroutineScope()
-    return remember(workoutId, workoutStartMillis, repository, scope) {
-        ActiveWorkoutState(workoutId, workoutStartMillis, repository, scope)
+    val edits = rememberFiniteEditCoordinator()
+    return remember(workoutId, workoutStartMillis, repository, scope, edits) {
+        ActiveWorkoutState(workoutId, workoutStartMillis, repository, scope, edits)
     }
 }
 
@@ -352,8 +317,14 @@ internal fun ActiveWorkoutScreen(
                         workoutId = workout.id,
                         initialName = workout.name,
                         onNameChanged = { name ->
-                            state.updateWorkoutName(name)
-                            onWorkoutNameChanged(name)
+                            // The app-shell name callback runs only for accepted edits; refused
+                            // edits change neither the local draft nor the pill state.
+                            if (state.updateWorkoutName(name) != null) {
+                                onWorkoutNameChanged(name)
+                                true
+                            } else {
+                                false
+                            }
                         },
                     )
                 }
@@ -362,12 +333,16 @@ internal fun ActiveWorkoutScreen(
                 items(exercises, key = { it.workoutExercise.id }) { exercise ->
                     WorkoutExerciseCard(
                         exercise = exercise,
-                        onNotesChanged = state::updateNotes,
-                        onRestDurationChanged = state::updateRestDuration,
+                        onNotesChanged = { id, notes -> state.updateNotes(id, notes) != null },
+                        onRestDurationChanged = { id, seconds ->
+                            state.updateRestDuration(id, seconds) != null
+                        },
                         onSetAdded = { state.addSet(exercise) },
-                        onSetChanged = state::updateSet,
-                        onSetDeleted = state::deleteSet,
-                        onExerciseDeleted = { state.deleteExercise(exercise) },
+                        onSetChanged = { set, afterUpdate ->
+                            state.updateSet(set, afterUpdate) != null
+                        },
+                        onSetDeleted = { set -> state.deleteSet(set) != null },
+                        onExerciseDeleted = { state.deleteExercise(exercise) != null },
                         onExerciseReplacementRequested = onExerciseReplacementRequested,
                         onRestStarted = onRestTimerStarted,
                         onRestCancelled = onRestTimerCancelled,
@@ -401,14 +376,15 @@ internal fun ActiveWorkoutScreen(
 private fun WorkoutNameField(
     workoutId: String,
     initialName: String,
-    onNameChanged: (String) -> Unit,
+    onNameChanged: (String) -> Boolean,
 ) {
     var name by remember(workoutId) { mutableStateOf(initialName) }
     BasicTextField(
         value = name,
         onValueChange = {
-            name = it
-            onNameChanged(it)
+            // The local draft follows only accepted edits; refused keystrokes while paused
+            // never alter domain-like drafts.
+            if (onNameChanged(it)) name = it
         },
         singleLine = true,
         textStyle = MaterialTheme.typography.titleLarge.copy(

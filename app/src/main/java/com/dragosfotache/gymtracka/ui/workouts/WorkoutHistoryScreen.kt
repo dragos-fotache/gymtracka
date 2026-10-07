@@ -48,6 +48,8 @@ import androidx.compose.ui.unit.dp
 import com.dragosfotache.gymtracka.data.gym.WorkoutEntity
 import com.dragosfotache.gymtracka.data.gym.WorkoutHistorySummary
 import com.dragosfotache.gymtracka.data.gym.WorkoutHistoryStateRepository
+import com.dragosfotache.gymtracka.ui.FiniteEditCoordinator
+import com.dragosfotache.gymtracka.ui.rememberFiniteEditCoordinator
 import com.dragosfotache.gymtracka.ui.rememberGymRepository
 import com.dragosfotache.gymtracka.ui.util.bestSetText
 import com.dragosfotache.gymtracka.ui.util.formatWorkoutDuration
@@ -57,11 +59,13 @@ import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 internal class WorkoutHistoryState(
     private val repository: WorkoutHistoryStateRepository,
     private val scope: CoroutineScope,
+    private val edits: FiniteEditCoordinator = FiniteEditCoordinator(scope),
 ) {
     var workouts by mutableStateOf<List<WorkoutHistorySummary>?>(null)
         private set
@@ -90,10 +94,11 @@ internal class WorkoutHistoryState(
         workoutToDelete = null
     }
 
-    fun confirmDelete() {
-        val workout = workoutToDelete ?: return
-        scope.launch {
-            repository.deleteWorkout(workout.id)
+    fun confirmDelete(): Job? {
+        val workout = workoutToDelete ?: return null
+        val workoutId = workout.id
+        return edits.launchEdit("history-delete:$workoutId") {
+            repository.deleteWorkout(workoutId)
             workoutToDelete = null
             workouts = repository.finishedWorkoutSummaries()
         }
@@ -118,16 +123,23 @@ internal class WorkoutHistoryState(
         saveRoutineError = null
     }
 
-    fun confirmSaveAsRoutine() {
-        if (isSavingRoutine) return
-        val workout = workoutToSaveAsRoutine ?: return
+    fun confirmSaveAsRoutine(): Job? {
+        if (isSavingRoutine) return null
+        val workout = workoutToSaveAsRoutine ?: return null
         val name = routineName.trim()
-        if (name.isEmpty()) return
-        isSavingRoutine = true
-        saveRoutineError = null
-        scope.launch {
+        if (name.isEmpty()) return null
+        val workoutId = workout.id
+        return edits.launchEdit(
+            key = "history-save-routine:$workoutId",
+            onAccepted = {
+                // Success/error UI cleanup runs only for accepted edits, so a refused callback
+                // can never leave isSavingRoutine stuck.
+                isSavingRoutine = true
+                saveRoutineError = null
+            },
+        ) {
             try {
-                val savedRoutine = repository.saveWorkoutAsRoutine(workout.id, name)
+                val savedRoutine = repository.saveWorkoutAsRoutine(workoutId, name)
                 if (savedRoutine == null) {
                     saveRoutineError = "This workout is no longer available to save."
                 } else {
@@ -137,8 +149,11 @@ internal class WorkoutHistoryState(
                 }
             } catch (error: CancellationException) {
                 throw error
-            } catch (_: Exception) {
+            } catch (error: Exception) {
+                // Safe error UI first, then rethrow the origin so the coordinator retains it
+                // instead of reporting false success.
                 saveRoutineError = "Couldn't save the routine. Try again."
+                throw error
             } finally {
                 isSavingRoutine = false
             }
@@ -158,7 +173,8 @@ internal class WorkoutHistoryState(
 private fun rememberWorkoutHistoryState(): WorkoutHistoryState {
     val repository = rememberGymRepository()
     val scope = rememberCoroutineScope()
-    return remember(repository, scope) { WorkoutHistoryState(repository, scope) }
+    val edits = rememberFiniteEditCoordinator()
+    return remember(repository, scope, edits) { WorkoutHistoryState(repository, scope, edits) }
 }
 
 @Composable
