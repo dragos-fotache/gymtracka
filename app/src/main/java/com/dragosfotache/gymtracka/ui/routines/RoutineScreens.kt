@@ -43,7 +43,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,6 +62,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.dragosfotache.gymtracka.data.gym.RoutineDetails
 import com.dragosfotache.gymtracka.data.gym.RoutineStateRepository
+import com.dragosfotache.gymtracka.data.sync.store.StaleSessionException
+import com.dragosfotache.gymtracka.ui.util.reconcileRepetitionsText
+import com.dragosfotache.gymtracka.ui.util.reconcileWeightText
+import kotlinx.coroutines.CancellationException
 import com.dragosfotache.gymtracka.ui.FiniteEditCoordinator
 import com.dragosfotache.gymtracka.ui.rememberFiniteEditCoordinator
 import com.dragosfotache.gymtracka.ui.rememberGymRepository
@@ -72,6 +78,7 @@ import com.dragosfotache.gymtracka.ui.util.parseKilograms
 import com.dragosfotache.gymtracka.ui.util.formatRestDuration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 internal class RoutineListState(
@@ -83,9 +90,31 @@ internal class RoutineListState(
         private set
     var routineToDelete by mutableStateOf<RoutineDetails?>(null)
         private set
+    var refreshFailed by mutableStateOf(false)
+        private set
+    private var loadGeneration = 0
 
     init {
-        load()
+        scope.launch {
+            try {
+                repository.observeProjectionEpoch().collect { loadRoutines() }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (stale: StaleSessionException) {
+                if (!scope.isActive) return@launch
+                loadGeneration++
+                routines = null
+                routineToDelete = null
+                refreshFailed = true
+            } catch (_: Exception) {
+                // Ordinary stream failures invalidate outstanding loads first so
+                // an in-flight success can neither install old data nor erase
+                // the newest failure diagnostic.
+                if (!scope.isActive) return@launch
+                loadGeneration++
+                refreshFailed = true
+            }
+        }
     }
 
     fun requestDelete(routine: RoutineDetails) {
@@ -99,15 +128,63 @@ internal class RoutineListState(
     fun confirmDelete(): Job? {
         val routine = routineToDelete ?: return null
         val routineId = routine.routine.id
-        return edits.launchEdit("routine-delete:$routineId") {
+        val job = edits.launchEdit(
+            "routine-delete:$routineId",
+            onAccepted = { loadGeneration++ },
+        ) {
             repository.deleteRoutine(routineId)
             routineToDelete = null
-            load()
         }
+        if (job != null) {
+            // Fresh guarded read after the owned write: join only the owned job
+            // so the refresh observes the commit without waiting for unrelated
+            // finite work. The load is unregistered, so this is not self-join.
+            // This keeps local-only (single-emission) observers from missing
+            // their own post-write refresh.
+            scope.launch {
+                try {
+                    job.join()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    return@launch
+                }
+                if (!scope.isActive) return@launch
+                loadRoutines()
+            }
+        }
+        return job
     }
 
-    private fun load() {
-        scope.launch { routines = repository.savedRoutineDetails() }
+    /**
+     * Observer/explicit/post-edit reload: guarded pure scoped read without
+     * global drains. List models carry no autosaved field drafts and dialog
+     * drafts live outside the loaded model, so initial and list reads stay
+     * usable while unrelated finite writes are pending. Generation and scope
+     * guards prevent stale/closed-scope installs.
+     */
+    private fun loadRoutines() {
+        val generation = ++loadGeneration
+        scope.launch {
+            if (generation != loadGeneration || !scope.isActive) return@launch
+            try {
+                val loaded = repository.savedRoutineDetails()
+                if (generation != loadGeneration || !scope.isActive) return@launch
+                routines = loaded
+                refreshFailed = false
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (stale: StaleSessionException) {
+                if (generation != loadGeneration || !scope.isActive) return@launch
+                loadGeneration++
+                routines = null
+                routineToDelete = null
+                refreshFailed = true
+            } catch (_: Exception) {
+                if (generation != loadGeneration || !scope.isActive) return@launch
+                refreshFailed = true
+            }
+        }
     }
 }
 
@@ -123,23 +200,76 @@ internal class RoutineEditorState(
         private set
     var showNameRequiredDialog by mutableStateOf(false)
         private set
-    private var nameInitialized = false
+    var refreshFailed by mutableStateOf(false)
+        private set
     private var refreshGeneration = 0
     private var nameSaveJob: Job? = null
 
     init {
-        refresh()
+        // Single observation-driven load path; the initial epoch triggers the
+        // first load. Observer/load jobs stay outside finite edit registrations.
+        scope.launch {
+            try {
+                repository.observeProjectionEpoch().collect { refresh() }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (stale: StaleSessionException) {
+                if (!scope.isActive) return@launch
+                refreshGeneration++
+                details = null
+                name = ""
+                refreshFailed = true
+            } catch (_: Exception) {
+                // Ordinary stream failures invalidate outstanding loads first so
+                // an in-flight success can neither install old data nor erase
+                // the newest failure diagnostic.
+                if (!scope.isActive) return@launch
+                refreshGeneration++
+                refreshFailed = true
+            }
+        }
     }
 
+    /**
+     * Observer/explicit/post-edit reload: waits for accepted finite work outside
+     * tracked edits before reading, then rechecks generation and scope liveness.
+     * Scheduled after an accepted write returns, the own write is already
+     * registered, so the drain joins it without self-join; loads are
+     * unregistered. A load started before a newer refresh or accepted edit never
+     * installs afterward, including a cancellation-ignoring fake and never after
+     * disposal. The accepted name draft survives because acceptances invalidate
+     * older loads synchronously and loads drain first; a normal new publication
+     * then replaces the persisted values, including the editor name.
+     */
     fun refresh() {
         val generation = ++refreshGeneration
         scope.launch {
-            val loaded = repository.routineDetails(routineId)
-            if (generation != refreshGeneration) return@launch
-            details = loaded
-            if (!nameInitialized) {
-                name = details?.routine?.name.orEmpty()
-                nameInitialized = true
+            try {
+                edits.awaitPendingEdits()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (generation == refreshGeneration && scope.isActive) refreshFailed = true
+                return@launch
+            }
+            if (generation != refreshGeneration || !scope.isActive) return@launch
+            try {
+                val loaded = repository.routineDetails(routineId)
+                if (generation != refreshGeneration || !scope.isActive) return@launch
+                details = loaded
+                name = loaded?.routine?.name.orEmpty()
+                refreshFailed = false
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (stale: StaleSessionException) {
+                if (generation != refreshGeneration || !scope.isActive) return@launch
+                refreshGeneration++
+                details = null
+                name = ""
+                refreshFailed = true
+            } catch (_: Exception) {
+                if (generation != refreshGeneration || !scope.isActive) return@launch
+                refreshFailed = true
             }
         }
     }
@@ -148,12 +278,24 @@ internal class RoutineEditorState(
         val previousSave = nameSaveJob
         val job = edits.launchEdit(
             key = "routine:$routineId:name",
-            onAccepted = { name = value },
+            onAccepted = {
+                // Invalidate outstanding loads synchronously; the accepted draft
+                // is applied here so an old read can never roll it back. Refusal
+                // invalidates nothing and leaves the draft unchanged.
+                refreshGeneration++
+                name = value
+            },
         ) {
             previousSave?.join()
             repository.updateRoutineName(routineId, value)
         }
-        if (job != null) nameSaveJob = job
+        if (job != null) {
+            nameSaveJob = job
+            // Successful writes schedule a guarded refresh too: onAccepted may
+            // have invalidated an in-flight epoch load carrying unrelated
+            // publication labels, which must still be reloaded.
+            refresh()
+        }
         return job
     }
 
@@ -163,20 +305,26 @@ internal class RoutineEditorState(
             showNameRequiredDialog = true
             return null
         }
-        return edits.launchEdit("routine:$routineId:save") {
+        val job = edits.launchEdit(
+            "routine:$routineId:save",
+            onAccepted = { refreshGeneration++ },
+        ) {
             repository.saveRoutine(routineId, trimmedName)
             onSaved()
         }
+        if (job != null) refresh()
+        return job
     }
 
     fun dismissNameRequiredDialog() {
         showNameRequiredDialog = false
     }
 
-    fun updateRestDuration(routineExerciseId: String, seconds: Int): Job? =
-        edits.launchEdit(
+    fun updateRestDuration(routineExerciseId: String, seconds: Int): Job? {
+        val job = edits.launchEdit(
             key = "routine-rest:$routineExerciseId",
             onAccepted = {
+                refreshGeneration++
                 details = details?.let { current ->
                     current.copy(
                         exercises = current.exercises.map { exercise ->
@@ -196,6 +344,9 @@ internal class RoutineEditorState(
         ) {
             repository.updateRoutineExerciseRestDuration(routineExerciseId, seconds)
         }
+        if (job != null) refresh()
+        return job
+    }
 
     fun addSet(exercise: RoutineExerciseDetails): Job? {
         val routineExerciseId = exercise.routineExercise.id
@@ -203,39 +354,55 @@ internal class RoutineEditorState(
         val previousSet = exercise.sets.lastOrNull()
         val previousRepetitions = previousSet?.repetitions
         val previousWeightKg = previousSet?.weightKg
-        return edits.launchEdit("routine-sets:$routineExerciseId") {
+        val job = edits.launchEdit(
+            "routine-sets:$routineExerciseId",
+            onAccepted = { refreshGeneration++ },
+        ) {
             repository.addSetToRoutineExercise(
                 routineExerciseId = routineExerciseId,
                 position = position,
                 repetitions = previousRepetitions,
                 weightKg = previousWeightKg,
             )
-            refresh()
         }
+        if (job != null) refresh()
+        return job
     }
 
     fun updateSet(set: RoutineSetEntity): Job? {
         val snapshot = set
-        return edits.launchEdit("routine-set:${snapshot.id}") {
+        val job = edits.launchEdit(
+            "routine-set:${snapshot.id}",
+            onAccepted = { refreshGeneration++ },
+        ) {
             repository.updateRoutineSet(snapshot)
-            refresh()
         }
+        if (job != null) refresh()
+        return job
     }
 
     fun deleteSet(set: RoutineSetEntity): Job? {
         val snapshot = set
-        return edits.launchEdit("routine-set:${snapshot.id}") {
+        val job = edits.launchEdit(
+            "routine-set:${snapshot.id}",
+            onAccepted = { refreshGeneration++ },
+        ) {
             repository.deleteRoutineSet(snapshot)
-            refresh()
         }
+        if (job != null) refresh()
+        return job
     }
 
     fun deleteExercise(exercise: RoutineExerciseDetails): Job? {
         val routineExerciseId = exercise.routineExercise.id
-        return edits.launchEdit("routine-entry:$routineExerciseId") {
+        val job = edits.launchEdit(
+            "routine-entry:$routineExerciseId",
+            onAccepted = { refreshGeneration++ },
+        ) {
             repository.deleteRoutineExercise(routineExerciseId, routineId)
-            refresh()
         }
+        if (job != null) refresh()
+        return job
     }
 }
 
@@ -246,9 +413,53 @@ internal class RoutineDetailState(
 ) {
     var details by mutableStateOf<RoutineDetails?>(null)
         private set
+    var refreshFailed by mutableStateOf(false)
+        private set
+    private var loadGeneration = 0
 
     init {
-        scope.launch { details = repository.routineDetails(routineId) }
+        // Pure read-only state: no finite drain is needed. Each epoch
+        // synchronously advances the generation and launches a guarded load
+        // outside the collector, so a blocked old load never stalls newer
+        // epochs or revocation, and a cancellation-ignoring old load is
+        // rejected by the generation check.
+        scope.launch {
+            try {
+                repository.observeProjectionEpoch().collect {
+                    val generation = ++loadGeneration
+                    scope.launch {
+                        if (generation != loadGeneration || !scope.isActive) return@launch
+                        try {
+                            val loaded = repository.routineDetails(routineId)
+                            if (generation != loadGeneration || !scope.isActive) return@launch
+                            details = loaded
+                            refreshFailed = false
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (stale: StaleSessionException) {
+                            if (generation != loadGeneration || !scope.isActive) return@launch
+                            loadGeneration++
+                            details = null
+                            refreshFailed = true
+                        } catch (_: Exception) {
+                            if (generation != loadGeneration || !scope.isActive) return@launch
+                            refreshFailed = true
+                        }
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (stale: StaleSessionException) {
+                if (!scope.isActive) return@launch
+                loadGeneration++
+                details = null
+                refreshFailed = true
+            } catch (_: Exception) {
+                if (!scope.isActive) return@launch
+                loadGeneration++
+                refreshFailed = true
+            }
+        }
     }
 }
 
@@ -611,6 +822,11 @@ private fun RoutineExerciseCard(
     var restSeconds by remember(exercise.routineExercise.id) {
         mutableIntStateOf(exercise.routineExercise.restDurationSeconds)
     }
+    // Same-ID projection refresh adopts the latest committed rest without
+    // recreating focus nodes or resetting menu/dialog state.
+    LaunchedEffect(exercise.routineExercise.id, exercise.routineExercise.restDurationSeconds) {
+        restSeconds = exercise.routineExercise.restDurationSeconds
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -645,7 +861,13 @@ private fun RoutineExerciseCard(
             RestDurationRow(restSeconds = restSeconds, onClick = { restDialogVisible = true })
             RoutineSetTableHeader()
             exercise.sets.forEach { set ->
-                RoutineSetRow(set, onSetChanged, onSetDeleted)
+                // Stable row identity by set ID: an earlier remote insert/remove
+                // reshuffles positional slots, so without this the focused set's
+                // focus and raw draft state could move or drop even when its ID
+                // survives. Never keyed by epoch.
+                key(set.id) {
+                    RoutineSetRow(set, onSetChanged, onSetDeleted)
+                }
             }
             TextButton(
                 onClick = onSetAdded,
@@ -663,8 +885,12 @@ private fun RoutineExerciseCard(
     }
 
     if (restDialogVisible) {
+        // Snapshot the dialog entry value while open: a same-ID publication
+        // refresh must not rewrite the unconfirmed dialog draft. The snapshot
+        // resets only on dialog close/reopen or true entry replacement.
+        val dialogInitialRest = remember(exercise.routineExercise.id) { restSeconds }
         RestDurationDialog(
-            initialRestSeconds = restSeconds,
+            initialRestSeconds = dialogInitialRest,
             onDismiss = { restDialogVisible = false },
             onDone = { seconds ->
                 if (onRestDurationChanged(exercise.routineExercise.id, seconds)) {
@@ -697,6 +923,15 @@ private fun RoutineSetRow(
 ) {
     var weightText by remember(set.id) { mutableStateOf(set.weightKg?.let(::formatKilograms).orEmpty()) }
     var repetitionsText by remember(set.id) { mutableStateOf(set.repetitions?.toString().orEmpty()) }
+    // Same-ID projection refresh: retain accepted raw numeric text when the
+    // incoming value sanitizes equal (for example `12.00`), replace genuinely
+    // different persisted values without clearing focus.
+    LaunchedEffect(set.id, set.weightKg) {
+        weightText = reconcileWeightText(weightText, set.weightKg)
+    }
+    LaunchedEffect(set.id, set.repetitions) {
+        repetitionsText = reconcileRepetitionsText(repetitionsText, set.repetitions)
+    }
     fun editedSet() = set.copy(
         weightKg = parseKilograms(weightText),
         repetitions = repetitionsText.toIntOrNull(),

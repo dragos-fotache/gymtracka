@@ -12,9 +12,13 @@ import com.dragosfotache.gymtracka.data.sync.model.MutationKind
 import com.dragosfotache.gymtracka.data.sync.model.MutationPayload
 import com.dragosfotache.gymtracka.data.sync.model.SyncModelException
 import com.dragosfotache.gymtracka.data.sync.store.ExtraAffectedRoot
+import com.dragosfotache.gymtracka.data.sync.store.CanonicalStorageException
 import com.dragosfotache.gymtracka.data.sync.store.RepositorySession
 import com.dragosfotache.gymtracka.data.sync.store.SyncStore
 import com.dragosfotache.gymtracka.data.sync.store.SyncTransaction
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
 import java.util.UUID
 
 /**
@@ -1136,5 +1140,48 @@ internal class GymRepository(
             changed = true,
         ) { MutationPayload.WorkoutUpsert(details.toWorkoutInput()) }
     }
+
+    /**
+     * R12b selected-scope projection observation. Cold stream: the invalidation
+     * flow is registered first and its initial emission drives the first fenced
+     * `materialized_epoch` read (0 when absent), so a publication committing in
+     * the gap is delivered as a second emission rather than lost. Afterwards only
+     * distinct selected-scope epochs are emitted after committed Room
+     * invalidations. Canonical/baseline-only/dirty/outbox changes and
+     * other-account epochs never produce a new value (fenced reread plus
+     * distinct filtering). Device-state invalidation is also observed so a
+     * revoked session fails closed through the existing immutable session fence
+     * even when no selected cache row changes. Negative/out-of-range metadata
+     * fails closed via [CanonicalStorageException]; cache progress is never
+     * treated as visible publication. Signed-out emits only the initial fenced 0
+     * and exposes no retained account epochs. Cancellation detaches the observer
+     * with no writes/capture. No polling, singleton or global observer.
+     */
+    override fun observeProjectionEpoch(): Flow<Long> = flow {
+        val account = session.accountId
+        if (account == null) {
+            store.withFencedTransaction { }
+            emit(0L)
+            return@flow
+        }
+        database.invalidationTracker.createFlow(
+            "sync_account_cache",
+            "sync_device_state",
+        ).collect {
+            emit(readSelectedMaterializedEpoch(account))
+        }
+    }.distinctUntilChanged()
+
+    private suspend fun readSelectedMaterializedEpoch(account: String): Long =
+        store.withFencedTransaction {
+            val cache = database.syncCanonicalDao().getAccountCache(account)
+                ?: return@withFencedTransaction 0L
+            if (cache.cacheEpoch < 0 || cache.materializedEpoch < 0 ||
+                cache.materializedEpoch > cache.cacheEpoch
+            ) {
+                throw CanonicalStorageException()
+            }
+            cache.materializedEpoch
+        }
 
 }

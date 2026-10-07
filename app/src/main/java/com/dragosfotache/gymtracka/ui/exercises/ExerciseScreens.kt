@@ -71,12 +71,16 @@ import com.dragosfotache.gymtracka.data.gym.ExerciseSummary
 import com.dragosfotache.gymtracka.data.gym.ExerciseDetails
 import com.dragosfotache.gymtracka.data.gym.EquipmentEntity
 import com.dragosfotache.gymtracka.data.gym.ExerciseStateRepository
+import com.dragosfotache.gymtracka.data.sync.store.StaleSessionException
+import com.dragosfotache.gymtracka.ui.util.pruneMissingSelectedIds
+import kotlinx.coroutines.CancellationException
 import com.dragosfotache.gymtracka.ui.FiniteEditCoordinator
 import com.dragosfotache.gymtracka.ui.rememberFiniteEditCoordinator
 import com.dragosfotache.gymtracka.ui.rememberGymRepository
 import com.dragosfotache.gymtracka.data.gym.MuscleGroupEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 internal class ExerciseCatalogueState(
@@ -97,9 +101,72 @@ internal class ExerciseCatalogueState(
         private set
     var selectedExerciseIds by mutableStateOf(emptySet<String>())
         private set
+    var refreshFailed by mutableStateOf(false)
+        private set
+    private var loadGeneration = 0
 
     init {
-        scope.launch { summaries = repository.exerciseSummaries() }
+        // Single observation-driven load path: the initial epoch emission triggers
+        // the first load, so no separate uncontrolled startup load exists. The
+        // observer/collector job stays outside finite edit registrations.
+        scope.launch {
+            try {
+                repository.observeProjectionEpoch().collect { loadSummaries() }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (stale: StaleSessionException) {
+                if (!scope.isActive) return@launch
+                loadGeneration++
+                summaries = null
+                selectedExerciseIds = emptySet()
+                refreshFailed = true
+            } catch (_: Exception) {
+                // Ordinary stream failures invalidate outstanding loads first so
+                // an in-flight success can neither install old data nor erase
+                // the newest failure diagnostic.
+                if (!scope.isActive) return@launch
+                loadGeneration++
+                refreshFailed = true
+            }
+        }
+    }
+
+    /**
+     * Guarded scoped catalogue read outside global drains. Catalogue summaries
+     * carry no autosaved domain text drafts, so initial and picker reads stay
+     * usable while unrelated finite writes are pending; opening a picker never
+     * waits for an unrelated autosave. Accepted catalogue mutations invalidate
+     * synchronously via onAccepted, and a fresh guarded read is scheduled after
+     * successful catalogue-owned writes. Generation and scope guards prevent
+     * stale/closed-scope installs; selection is pruned only on proven absence,
+     * never reset on rename.
+     */
+    private fun loadSummaries() {
+        val generation = ++loadGeneration
+        scope.launch {
+            if (generation != loadGeneration || !scope.isActive) return@launch
+            try {
+                val loaded = repository.exerciseSummaries()
+                if (generation != loadGeneration || !scope.isActive) return@launch
+                selectedExerciseIds = pruneMissingSelectedIds(
+                    selectedExerciseIds,
+                    loaded.map { it.exercise.id }.toSet(),
+                )
+                summaries = loaded
+                refreshFailed = false
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (stale: StaleSessionException) {
+                if (generation != loadGeneration || !scope.isActive) return@launch
+                loadGeneration++
+                summaries = null
+                selectedExerciseIds = emptySet()
+                refreshFailed = true
+            } catch (_: Exception) {
+                if (generation != loadGeneration || !scope.isActive) return@launch
+                refreshFailed = true
+            }
+        }
     }
 
     val filteredExercises: List<ExerciseSummary>
@@ -140,37 +207,74 @@ internal class ExerciseCatalogueState(
         // tracked work, so refusal alters neither selection-success nor navigation state.
         val selected = selectedExerciseIds
         if (selected.isEmpty()) return null
-        return edits.launchEdit("workout:$workoutId:add-exercises") {
+        val job = edits.launchEdit(
+            "workout:$workoutId:add-exercises",
+            onAccepted = { loadGeneration++ },
+        ) {
             repository.addExercisesToWorkout(workoutId, selected)
             selectedExerciseIds = emptySet()
             onAdded()
         }
+        if (job != null) loadSummaries()
+        return job
     }
 
     fun addSelectedExercisesToRoutine(routineId: String, onAdded: () -> Unit): Job? {
         val selected = selectedExerciseIds
         if (selected.isEmpty()) return null
-        return edits.launchEdit("routine:$routineId:add-exercises") {
+        val job = edits.launchEdit(
+            "routine:$routineId:add-exercises",
+            onAccepted = { loadGeneration++ },
+        ) {
             repository.addExercisesToRoutine(routineId, selected)
             selectedExerciseIds = emptySet()
             onAdded()
         }
+        if (job != null) loadSummaries()
+        return job
     }
 
     fun replaceSelectedExercise(workoutExerciseId: String, onReplaced: () -> Unit): Job? {
         val exerciseId = selectedExerciseIds.singleOrNull() ?: return null
-        return edits.launchEdit("entry:$workoutExerciseId:replace") {
+        val job = edits.launchEdit(
+            "entry:$workoutExerciseId:replace",
+            onAccepted = { loadGeneration++ },
+        ) {
             repository.replaceWorkoutExercise(workoutExerciseId, exerciseId)
             selectedExerciseIds = emptySet()
             onReplaced()
         }
+        if (job != null) loadSummaries()
+        return job
     }
 
-    fun deleteCustomExercise(exerciseId: String): Job? =
-        edits.launchEdit("exercise-delete:$exerciseId") {
+    fun deleteCustomExercise(exerciseId: String): Job? {
+        val job = edits.launchEdit(
+            "exercise-delete:$exerciseId",
+            onAccepted = { loadGeneration++ },
+        ) {
             repository.deleteCustomExercise(exerciseId)
-            summaries = repository.exerciseSummaries()
         }
+        if (job != null) {
+            // Fresh guarded read after the owned write: join only the owned job
+            // so the refresh observes the commit without waiting for unrelated
+            // finite work. The load is unregistered, so this is not self-join.
+            // This keeps local-only (single-emission) observers from missing
+            // their own post-write refresh.
+            scope.launch {
+                try {
+                    job.join()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    return@launch
+                }
+                if (!scope.isActive) return@launch
+                loadSummaries()
+            }
+        }
+        return job
+    }
 }
 
 internal class ExerciseDetailState(
@@ -180,9 +284,54 @@ internal class ExerciseDetailState(
 ) {
     var details by mutableStateOf<ExerciseDetails?>(null)
         private set
+    var refreshFailed by mutableStateOf(false)
+        private set
+    private var loadGeneration = 0
 
     init {
-        scope.launch { details = repository.exerciseDetails(exerciseId) }
+        // Pure read-only state: no finite drain is needed. Each epoch
+        // synchronously advances the generation and launches a guarded load
+        // outside the collector, so a blocked old load never stalls newer
+        // epochs or revocation, and a cancellation-ignoring old load is
+        // rejected by the generation check. Deleting the selected root yields
+        // null details, never a fabricated object or navigation change.
+        scope.launch {
+            try {
+                repository.observeProjectionEpoch().collect {
+                    val generation = ++loadGeneration
+                    scope.launch {
+                        if (generation != loadGeneration || !scope.isActive) return@launch
+                        try {
+                            val loaded = repository.exerciseDetails(exerciseId)
+                            if (generation != loadGeneration || !scope.isActive) return@launch
+                            details = loaded
+                            refreshFailed = false
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (stale: StaleSessionException) {
+                            if (generation != loadGeneration || !scope.isActive) return@launch
+                            loadGeneration++
+                            details = null
+                            refreshFailed = true
+                        } catch (_: Exception) {
+                            if (generation != loadGeneration || !scope.isActive) return@launch
+                            refreshFailed = true
+                        }
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (stale: StaleSessionException) {
+                if (!scope.isActive) return@launch
+                loadGeneration++
+                details = null
+                refreshFailed = true
+            } catch (_: Exception) {
+                if (!scope.isActive) return@launch
+                loadGeneration++
+                refreshFailed = true
+            }
+        }
     }
 }
 

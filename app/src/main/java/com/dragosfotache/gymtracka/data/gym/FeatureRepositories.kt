@@ -1,5 +1,19 @@
 package com.dragosfotache.gymtracka.data.gym
 
+/**
+ * Narrow projection-observation contract for R12b feature refresh.
+ *
+ * The cold stream emits the current selected-scope `materialized_epoch` initially
+ * (0 when absent) then distinct selected-scope epochs only, after committed Room
+ * invalidations. Canonical/baseline-only/dirty/outbox changes and other-account
+ * epochs never produce a new value. The compatibility default makes old
+ * hand-written fakes inert; production GymRepository MUST override it.
+ */
+internal interface ProjectionObservationRepository {
+    fun observeProjectionEpoch(): kotlinx.coroutines.flow.Flow<Long> =
+        kotlinx.coroutines.flow.flowOf(0L)
+}
+
 /** Narrow app-shell persistence boundary used by GymAppState and its JVM fake. */
 internal interface GymAppStateRepository {
     suspend fun activeWorkout(): WorkoutEntity?
@@ -26,7 +40,7 @@ internal interface GymAppStateRepository {
 }
 
 /** Narrow persistence contract used by exercise state holders and their JVM fakes. */
-internal interface ExerciseStateRepository {
+internal interface ExerciseStateRepository : ProjectionObservationRepository {
     suspend fun muscleGroups(): List<MuscleGroupEntity>
     suspend fun equipment(): List<EquipmentEntity>
     suspend fun exerciseCategories(): List<String>
@@ -56,7 +70,7 @@ internal interface ExerciseStateRepository {
 }
 
 /** Narrow persistence contract used by the active-workout feature. */
-internal interface ActiveWorkoutStateRepository {
+internal interface ActiveWorkoutStateRepository : ProjectionObservationRepository {
     suspend fun workoutDetails(workoutId: String): WorkoutDetails?
     suspend fun updateWorkoutName(workoutId: String, name: String)
     suspend fun updateWorkoutExerciseNotes(workoutExerciseId: String, notes: String)
@@ -76,7 +90,7 @@ internal interface ActiveWorkoutStateRepository {
 }
 
 /** Narrow persistence contract used by routine list/detail/editor state holders. */
-internal interface RoutineStateRepository {
+internal interface RoutineStateRepository : ProjectionObservationRepository {
     suspend fun savedRoutineDetails(): List<RoutineDetails>
     suspend fun routineDetails(routineId: String): RoutineDetails?
     suspend fun saveRoutine(routineId: String, name: String)
@@ -95,7 +109,7 @@ internal interface RoutineStateRepository {
 }
 
 /** Narrow persistence contract used by workout-history state holders. */
-internal interface WorkoutHistoryStateRepository {
+internal interface WorkoutHistoryStateRepository : ProjectionObservationRepository {
     suspend fun finishedWorkoutSummaries(): List<WorkoutHistorySummary>
     suspend fun workoutDetails(workoutId: String): WorkoutDetails?
     suspend fun deleteWorkout(workoutId: String)

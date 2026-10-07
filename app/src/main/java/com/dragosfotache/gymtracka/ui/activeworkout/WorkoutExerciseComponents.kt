@@ -38,7 +38,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +65,9 @@ import com.dragosfotache.gymtracka.data.gym.WorkoutExerciseDetails
 import com.dragosfotache.gymtracka.data.gym.WorkoutSetEntity
 import com.dragosfotache.gymtracka.ui.util.formatKilograms
 import com.dragosfotache.gymtracka.ui.util.parseKilograms
+import com.dragosfotache.gymtracka.ui.util.reconcileRepetitionsText
+import com.dragosfotache.gymtracka.ui.util.reconcileStringField
+import com.dragosfotache.gymtracka.ui.util.reconcileWeightText
 import kotlinx.coroutines.launch
 
 @Composable
@@ -86,6 +91,16 @@ internal fun WorkoutExerciseCard(
     }
     var restSeconds by remember(exercise.workoutExercise.id) {
         mutableIntStateOf(exercise.workoutExercise.restDurationSeconds)
+    }
+    // Same-ID projection refresh adopts the latest persisted notes/rest without
+    // recreating focus nodes or resetting menu/dialog/swipe state. The accepted
+    // local draft is preserved while its write is outstanding because the owning
+    // state invalidates older loads synchronously and drains before reading.
+    LaunchedEffect(exercise.workoutExercise.id, exercise.workoutExercise.notes) {
+        notes = reconcileStringField(notes, exercise.workoutExercise.notes)
+    }
+    LaunchedEffect(exercise.workoutExercise.id, exercise.workoutExercise.restDurationSeconds) {
+        restSeconds = exercise.workoutExercise.restDurationSeconds
     }
 
     Card(
@@ -173,14 +188,20 @@ internal fun WorkoutExerciseCard(
             RestDurationRow(restSeconds = restSeconds, onClick = { showRestDurationDialog = true })
             SetTableHeader()
             exercise.sets.forEach { workoutSet ->
-                WorkoutSetRow(
-                    workoutSet = workoutSet,
-                    restDurationSeconds = restSeconds,
-                    onSetChanged = onSetChanged,
-                    onSetDeleted = onSetDeleted,
-                    onRestStarted = onRestStarted,
-                    onRestCancelled = onRestCancelled,
-                )
+                // Stable row identity by set ID: an earlier remote insert/remove
+                // reshuffles positional slots, so without this the focused set's
+                // focus, swipe and raw draft state could move or drop even when
+                // its ID survives. Never keyed by epoch.
+                key(workoutSet.id) {
+                    WorkoutSetRow(
+                        workoutSet = workoutSet,
+                        restDurationSeconds = restSeconds,
+                        onSetChanged = onSetChanged,
+                        onSetDeleted = onSetDeleted,
+                        onRestStarted = onRestStarted,
+                        onRestCancelled = onRestCancelled,
+                    )
+                }
             }
             TextButton(
                 onClick = onSetAdded,
@@ -220,8 +241,12 @@ internal fun WorkoutExerciseCard(
     }
 
     if (showRestDurationDialog) {
+        // Snapshot the dialog entry value while open: a same-ID publication
+        // refresh must not rewrite the unconfirmed dialog draft. The snapshot
+        // resets only on dialog close/reopen or true entry replacement.
+        val dialogInitialRest = remember(exercise.workoutExercise.id) { restSeconds }
         RestDurationDialog(
-            initialRestSeconds = restSeconds,
+            initialRestSeconds = dialogInitialRest,
             onDismiss = { showRestDurationDialog = false },
             onDone = {
                 if (onRestDurationChanged(exercise.workoutExercise.id, it)) {
@@ -270,6 +295,17 @@ private fun WorkoutSetRow(
     }
     var repetitionsText by remember(workoutSet.id) {
         mutableStateOf(workoutSet.repetitions?.toString().orEmpty())
+    }
+    // Same-ID projection refresh retains accepted raw numeric text when the
+    // incoming value sanitizes equal (for example `12.00` or incomplete input
+    // storing null, including accepted negative/nonfinite drafts whose persisted
+    // value is null) and replaces genuinely different persisted values without
+    // clearing focus.
+    LaunchedEffect(workoutSet.id, workoutSet.weightKg) {
+        weightText = reconcileWeightText(weightText, workoutSet.weightKg)
+    }
+    LaunchedEffect(workoutSet.id, workoutSet.repetitions) {
+        repetitionsText = reconcileRepetitionsText(repetitionsText, workoutSet.repetitions)
     }
     // Presentation follows the persisted result: re-key on the stored flag so a
     // refresh that forced incomplete (invalid inputs, newer uncheck) cannot

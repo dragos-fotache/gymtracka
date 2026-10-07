@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import com.dragosfotache.gymtracka.data.gym.WorkoutDetails
 import com.dragosfotache.gymtracka.data.gym.WorkoutExerciseDetails
 import com.dragosfotache.gymtracka.data.gym.WorkoutHistoryStateRepository
+import com.dragosfotache.gymtracka.data.sync.store.StaleSessionException
+import kotlinx.coroutines.CancellationException
 import com.dragosfotache.gymtracka.ui.rememberGymRepository
 import com.dragosfotache.gymtracka.ui.util.formatRecordedRestDuration
 import com.dragosfotache.gymtracka.ui.util.formatWorkoutDuration
@@ -49,6 +51,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 internal class WorkoutHistoryDetailState(
@@ -58,9 +61,54 @@ internal class WorkoutHistoryDetailState(
 ) {
     var details by mutableStateOf<WorkoutDetails?>(null)
         private set
+    var refreshFailed by mutableStateOf(false)
+        private set
+    private var loadGeneration = 0
 
     init {
-        scope.launch { details = repository.workoutDetails(workoutId) }
+        // Pure read-only state: no finite drain is needed. Lists and selected
+        // details refresh independently; deleting the selected root yields null
+        // details, never a fabricated object or navigation change. Each epoch
+        // synchronously advances the generation and launches a guarded load
+        // outside the collector, so a blocked old load never stalls newer
+        // epochs or revocation.
+        scope.launch {
+            try {
+                repository.observeProjectionEpoch().collect {
+                    val generation = ++loadGeneration
+                    scope.launch {
+                        if (generation != loadGeneration || !scope.isActive) return@launch
+                        try {
+                            val loaded = repository.workoutDetails(workoutId)
+                            if (generation != loadGeneration || !scope.isActive) return@launch
+                            details = loaded
+                            refreshFailed = false
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (stale: StaleSessionException) {
+                            if (generation != loadGeneration || !scope.isActive) return@launch
+                            loadGeneration++
+                            details = null
+                            refreshFailed = true
+                        } catch (_: Exception) {
+                            if (generation != loadGeneration || !scope.isActive) return@launch
+                            refreshFailed = true
+                        }
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (stale: StaleSessionException) {
+                if (!scope.isActive) return@launch
+                loadGeneration++
+                details = null
+                refreshFailed = true
+            } catch (_: Exception) {
+                if (!scope.isActive) return@launch
+                loadGeneration++
+                refreshFailed = true
+            }
+        }
     }
 }
 

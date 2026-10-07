@@ -40,13 +40,15 @@ class RoutineStateTest {
     fun nameAutosaves_arePersistedInCallOrder() = runTest {
         val firstStarted = CompletableDeferred<Unit>()
         val releaseFirst = CompletableDeferred<Unit>()
+        var storedName = "Routine"
         val repository = FakeRoutineRepository().apply {
-            detailsProvider = { routineDetailsFixture() }
+            detailsProvider = { routineDetailsFixture(name = storedName) }
             nameUpdater = { _, name ->
                 if (name == "First") {
                     firstStarted.complete(Unit)
                     releaseFirst.await()
                 }
+                storedName = name
             }
         }
         val state = RoutineEditorState("routine", repository, this)

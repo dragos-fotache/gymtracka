@@ -24,8 +24,9 @@ R09e/f add inert [settled occupied replacement](implementation.md#inert-settled-
 its [exact established ACTIVE pending-replay prerequisite](implementation.md#inert-exact-pending-refresh-reconciliation).
 R09g adds inert [retained-account recovery and superseded evidence](implementation.md#inert-retained-account-recovery-and-superseded-evidence).
 R12a supplies the [real app-owned finite-edit/timer barrier seam](../architecture.md#finite-edit-admission-and-publication-leases).
-Production bootstrap/projection activation, convergence, authoritative canonical timer-impact selection and scoped UI
-observation/reconciliation remain planned. Broader account transitions are deferred public scope. Stored vault phases and
+R12b supplies [narrow projection observation and selected-feature refresh](../architecture.md#projection-observation-and-feature-refresh).
+Production bootstrap/projection activation, convergence, authoritative canonical timer-impact selection and scoped app
+reconstruction/reconciliation remain planned. Broader account transitions are deferred public scope. Stored vault phases and
 explicit refresh leases alone never authorize activation. Preserve the unresolved
 [legacy auth replay limitation](implementation.md#legacy-auth-replay-limitation) in all recovery work.
 
@@ -132,7 +133,8 @@ snapshot absence does not turn that unsent creation into an invented server dele
   v10 counters: each actual complete graph publication increments `cache_epoch`, sets `materialized_epoch` to that new
   value, and clears dirty atomically. Blocked/clean-no-op/error paths never advance it; checked overflow fails closed.
   Older canonical row epochs remain valid. This deliberately fences prior-epoch callbacks; future engine callers must
-  continue with the returned epoch. R12 still owns observation/rebinding and the real finite-edit/timer lease.
+  continue with the returned epoch. R12a/b supply finite-edit/observation seams; R12c still owns scoped app rebinding and
+  authoritative canonical timer-impact integration.
 
 ### Global Room PK collisions
 

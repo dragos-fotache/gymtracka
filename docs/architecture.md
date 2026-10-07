@@ -193,8 +193,9 @@ owners and unchanged domain/cache/intent remain mandatory. See
 - `GymAppState` discovers the newest active workout at startup. Starting empty/again/from-routine replaces the old active
   in one repository transaction. Navigation/new-active state publish only after success; failure keeps the old active,
   dialog, navigation and timer intact.
-- Navigation, filters/list restoration, dialogs and countdown are in memory. Remote Room observation, canonical timer-impact
-  decisions and session-bound UI reconstruction remain [R12b/c](remaining-work-roadmap.md#r12--feature-and-app-reconciliation).
+- Navigation, filters/list restoration, dialogs and countdown are in memory. Narrow projection-epoch observation and
+  selected-feature refresh are described below. Canonical timer-impact decisions, app navigation/pill reconciliation
+  and session-bound UI reconstruction remain [R12c](remaining-work-roadmap.md#r12--feature-and-app-reconciliation).
 
 ### Finite-edit admission and publication leases
 
@@ -219,6 +220,47 @@ impact callback. Acquisition and timer claims run on the app-state owner dispatc
 caller cancellation. This seam does not supply account authority or a canonical graph reader: R12c must provide that
 fenced impact decision, and the existing publisher still rechecks Room/outbox protection. No production publisher/engine
 is constructed at startup.
+
+## Projection observation and feature refresh
+
+`ProjectionObservationRepository` is inherited by the four feature repository interfaces. Its compatibility default is
+an inert initial `0` for hand-written fakes; `GymRepository` overrides it. An account-bound cold stream registers Room
+invalidation for `sync_account_cache` and `sync_device_state` before its first fenced metadata read, then emits distinct
+selected-account `materialized_epoch` values. Cache/baseline progress, dirty/outbox state and foreign-account epochs are
+not publication signals. Missing metadata yields `0`; negative counters or materialized epoch beyond cache epoch fail
+closed. Every reread checks the immutable repository session before distinct filtering; revocation terminates the old
+stream, never follows a new account. Cancellation detaches observation without writes/capture or schema changes.
+
+Production still constructs only a signed-out repository: its stream emits one fenced `0`, never retained private
+metadata. Local mutations use explicit refresh; this stream is not a universal local-change log or visibility grant.
+No engine/publisher/account authority is activated by observation.
+
+Catalogue/pickers/exercise detail, routine list/detail/editor, history list/detail and active-workout feature states
+collect in their composition scope. Each signal advances a latest-load generation and launches the selected-model load
+outside the collector. Accepted edits invalidate loads synchronously; newer requests, stream failures and disposal fence
+late results, including cancellation-ignoring loads. Observer/ticker/load jobs never enter finite drains. Autosaved field
+loads drain accepted finite work outside tracked writes; their post-edit refresh is scheduled after registration and
+waits for commit without self-joining. Required in-write set-completion reads retain acceptance-captured validity and
+never mint a new generation over a later accepted draft. Pure catalogue and routine/history action-list reads do not
+drain unrelated app writes/failures, so persisted lists and pickers remain usable during queued autosaves. List-changing
+deletes follow only their own registered job with a guarded reload; reads never clear finite failure evidence.
+
+Loads reuse current scoped joined models, so custom-reference labels refresh across routine, history, picker and active
+states even when parent revisions are unchanged. Search/filters, dialog drafts and surviving picker selection remain;
+missing IDs are pruned only from a latest complete catalogue read. Each state exposes `refreshFailed` without raw error
+UI. Ordinary failure retains valid models/accepted drafts; stale-session failure clears selected models (and routine
+editor name) without rebinding or navigating. A terminated observer is not automatically retried or account authority.
+The explicit-save custom editor's unsaved draft is not reconstructed.
+
+Editable set rows have stable composition keys by set ID, not epoch/position. Same-ID name/notes/rest/set values reconcile
+without replacing focus nodes. Numeric text preserves its accepted raw spelling when its sanitized parsed value equals
+the incoming persisted value, including trailing zeros and null-valued invalid/incomplete drafts; genuinely changed
+values replace stale text. Rest-dialog initial input is snapshotted per opening, so a publication does not reset an
+unconfirmed draft. The configured-rest wheel settles through one stable, sequential idle observer with a misalignment
+check, not an animation keyed by its own scrolling flag; opening and dismissal quiesce without a self-triggered snap
+loop. Observation/rename never invokes completion or starts/ends a timer. Actual remote finish/delete,
+app-pill/navigation reconstruction and authoritative timer-impact selection remain R12c and its authority/convergence
+dependencies.
 
 ## Rest-timer lifecycle
 

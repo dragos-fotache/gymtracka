@@ -1,16 +1,17 @@
 # Active task specifications
 
 **No implementation specification is open.**
-[R12a real finite-edit admission and timer barriers](../archive/remaining-work/R12a-review.md) is accepted and archived.
-The [finite three-slice R12 plan](../remaining-work-roadmap.md#r12--feature-and-app-reconciliation) is settled; b/c remain
-outstanding. The owner has resumed the process and authorized fresh-coordinator R12b pickup/implementation after
-verified ownership transfer. Stop after accepted R12b's scoped local commit, prepared handoff and owner report:
-no further successor launch or R12c implementation under this request.
+[R12b projection observation and feature refresh](../archive/remaining-work/R12b-review.md) is accepted and archived;
+[R12a real finite-edit admission and timer barriers](../archive/remaining-work/R12a-review.md) remains accepted.
+The [finite three-slice R12 plan](../remaining-work-roadmap.md#r12--feature-and-app-reconciliation) is settled: a/b complete,
+c outstanding. The current owner request ends with accepted R12b's scoped local commit, prepared handoff and owner
+report. **No further successor launch or R12c implementation under this request.**
 
 [R09g inert same-account recovery](../archive/remaining-work/R09g-review.md) remains accepted. The finite
 [R09 plan](../remaining-work-roadmap.md#remaining-r09-plan) remains R09g (accepted), R09h, then reduced personal closure.
-R12a's real seam is delivered; R09h still requires core R10 and its app-facing activation gates. No no-op timer-impact
-callback, app visibility grant or production publisher/engine activation is inferred from this acceptance.
+R09h still requires core R10 and its app-facing activation gates; R12c needs delivered R09h authority/core R10, while
+R09h needs R12a, not whole R12. Observation is not visibility authority or permission for a no-op timer-impact callback
+or production publisher/engine activation.
 
 Initial sign-in and established-account offline use remain the personal milestone. Legacy local-only disposition is
 unresolved; no import/delete/reassignment is authorized. Production still uses signed-out/local-only repositories.

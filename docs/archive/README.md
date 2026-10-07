@@ -52,6 +52,7 @@ Enduring Android design is maintained in [the active integration design](../sync
 | R09f inert exact-pending-refresh reconciliation | [Spec](remaining-work/R09f-task.md) | [Review](remaining-work/R09f-review.md) |
 | R09g inert complete same-account recovery/superseded evidence | [Spec](remaining-work/R09g-task.md) | [Review](remaining-work/R09g-review.md) |
 | R12a real finite-edit admission and timer barriers | [Spec](remaining-work/R12a-task.md) | [Review](remaining-work/R12a-review.md) |
+| R12b projection observation and feature refresh | [Spec](remaining-work/R12b-task.md) | [Review](remaining-work/R12b-review.md) |
 
 [R03 split](remaining-work/R03-task.md) and [R04 split](remaining-work/R04-task.md) are historical planning records;
 outstanding lifecycle and durable account-integration requirements remain in the active roadmap. The

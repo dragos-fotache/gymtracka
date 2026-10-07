@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -140,11 +141,24 @@ private fun RestDurationPickerColumn(
             }
         }
     }
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (!listState.isScrollInProgress) {
-            listState.centeredItemIndex()?.let { index ->
+    // Stable listState-keyed idle snap: sequential collection (never
+    // collectLatest, which would cancel its own animation) coalesces our own
+    // true/false while settling. On idle the centered index is found, the
+    // current callback is notified, and animate runs only when actually
+    // misaligned — so the dialog quiesces on opening and after settling
+    // instead of repeatedly scheduling/cancelling no-op snap work.
+    val currentOnValueSelected by rememberUpdatedState(onValueSelected)
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
+            if (scrolling) return@collect
+            val index = listState.centeredItemIndex() ?: return@collect
+            if (index != centeredIndex) {
                 centeredIndex = index
-                onValueSelected(values[index])
+                currentOnValueSelected(values[index])
+            }
+            if (listState.firstVisibleItemIndex != index ||
+                listState.firstVisibleItemScrollOffset != 0
+            ) {
                 listState.animateScrollToItem(index)
             }
         }

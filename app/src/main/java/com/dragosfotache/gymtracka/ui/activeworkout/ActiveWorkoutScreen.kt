@@ -47,6 +47,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dragosfotache.gymtracka.data.gym.ActiveWorkoutStateRepository
+import com.dragosfotache.gymtracka.data.sync.store.StaleSessionException
+import com.dragosfotache.gymtracka.ui.util.reconcileStringField
 import com.dragosfotache.gymtracka.ui.FiniteEditCoordinator
 import com.dragosfotache.gymtracka.ui.rememberFiniteEditCoordinator
 import com.dragosfotache.gymtracka.ui.rememberGymRepository
@@ -63,6 +65,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.seconds
 
@@ -75,6 +78,8 @@ internal class ActiveWorkoutState(
 ) {
     var details by mutableStateOf<WorkoutDetails?>(null)
         private set
+    var refreshFailed by mutableStateOf(false)
+        private set
     var elapsedSeconds by mutableLongStateOf(
         (System.currentTimeMillis() - workoutStartMillis).coerceAtLeast(0L) / 1_000,
     )
@@ -85,7 +90,28 @@ internal class ActiveWorkoutState(
     private val latestAcceptedSetEdit = mutableMapOf<String, Long>()
 
     init {
-        refresh()
+        // Single observation-driven load path; the initial epoch triggers the
+        // first load. The observer and the endless elapsed-time ticker stay
+        // outside finite edit registrations and are never drained.
+        scope.launch {
+            try {
+                repository.observeProjectionEpoch().collect { refresh() }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (stale: StaleSessionException) {
+                if (!scope.isActive) return@launch
+                refreshGeneration++
+                details = null
+                refreshFailed = true
+            } catch (_: Exception) {
+                // Ordinary stream failures invalidate outstanding loads first so
+                // an in-flight success can neither install old data nor erase
+                // the newest failure diagnostic.
+                if (!scope.isActive) return@launch
+                refreshGeneration++
+                refreshFailed = true
+            }
+        }
         scope.launch {
             while (true) {
                 elapsedSeconds = (System.currentTimeMillis() - workoutStartMillis) / 1_000
@@ -94,11 +120,47 @@ internal class ActiveWorkoutState(
         }
     }
 
+    /**
+     * Observer/explicit/post-edit reload: waits for accepted finite work outside
+     * tracked edits before reading, then rechecks generation and scope liveness.
+     * Scheduled after an accepted write returns, the own write is already
+     * registered, so the drain joins it without self-join; loads are
+     * unregistered. A load started before a newer refresh or accepted edit never
+     * installs afterward, including a cancellation-ignoring fake and never after
+     * disposal. Accepted app-owned writes still survive disposal. Accepted
+     * name/rest drafts survive because acceptances invalidate older loads
+     * synchronously and loads drain first; a normal new publication then
+     * replaces the persisted values. Never starts/ends timers or invokes
+     * completion callbacks.
+     */
     fun refresh() {
         val generation = ++refreshGeneration
         scope.launch {
-            val loaded = repository.workoutDetails(workoutId)
-            if (generation == refreshGeneration) details = loaded
+            try {
+                edits.awaitPendingEdits()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (generation == refreshGeneration && scope.isActive) refreshFailed = true
+                return@launch
+            }
+            if (generation != refreshGeneration || !scope.isActive) return@launch
+            try {
+                val loaded = repository.workoutDetails(workoutId)
+                if (generation != refreshGeneration || !scope.isActive) return@launch
+                details = loaded
+                refreshFailed = false
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (stale: StaleSessionException) {
+                if (generation != refreshGeneration || !scope.isActive) return@launch
+                refreshGeneration++
+                details = null
+                refreshFailed = true
+            } catch (_: Exception) {
+                if (generation != refreshGeneration || !scope.isActive) return@launch
+                refreshFailed = true
+            }
         }
     }
 
@@ -121,6 +183,9 @@ internal class ActiveWorkoutState(
         val job = edits.launchEdit(
             key = "workout:$workoutId:name",
             onAccepted = {
+                // Invalidate outstanding loads synchronously so an old read can
+                // never roll back the accepted draft. Refusal changes nothing.
+                refreshGeneration++
                 details = details?.let { current ->
                     current.copy(workout = current.workout.copy(name = name))
                 }
@@ -129,19 +194,33 @@ internal class ActiveWorkoutState(
             previousSave?.join()
             repository.updateWorkoutName(workoutId, name)
         }
-        if (job != null) nameSaveJob = job
+        if (job != null) {
+            nameSaveJob = job
+            // Successful writes schedule a guarded refresh too: onAccepted may
+            // have invalidated an in-flight epoch load carrying unrelated
+            // publication labels, which must still be reloaded. The drain joins
+            // only after this tracked write returns; loads are unregistered.
+            refresh()
+        }
         return job
     }
 
-    fun updateNotes(workoutExerciseId: String, notes: String): Job? =
-        edits.launchEdit("notes:$workoutExerciseId") {
+    fun updateNotes(workoutExerciseId: String, notes: String): Job? {
+        val job = edits.launchEdit(
+            "notes:$workoutExerciseId",
+            onAccepted = { refreshGeneration++ },
+        ) {
             repository.updateWorkoutExerciseNotes(workoutExerciseId, notes)
         }
+        if (job != null) refresh()
+        return job
+    }
 
-    fun updateRestDuration(workoutExerciseId: String, restDurationSeconds: Int): Job? =
-        edits.launchEdit(
+    fun updateRestDuration(workoutExerciseId: String, restDurationSeconds: Int): Job? {
+        val job = edits.launchEdit(
             key = "rest:$workoutExerciseId",
             onAccepted = {
+                refreshGeneration++
                 details = details?.let { current ->
                     current.copy(
                         exercises = current.exercises.map { exercise ->
@@ -161,6 +240,9 @@ internal class ActiveWorkoutState(
         ) {
             repository.updateWorkoutExerciseRestDuration(workoutExerciseId, restDurationSeconds)
         }
+        if (job != null) refresh()
+        return job
+    }
 
     fun addSet(exercise: WorkoutExerciseDetails): Job? {
         val workoutExerciseId = exercise.workoutExercise.id
@@ -168,26 +250,37 @@ internal class ActiveWorkoutState(
         val previousSet = exercise.sets.lastOrNull()
         val previousRepetitions = previousSet?.repetitions
         val previousWeightKg = previousSet?.weightKg
-        return edits.launchEdit("sets:$workoutExerciseId") {
+        val job = edits.launchEdit(
+            "sets:$workoutExerciseId",
+            onAccepted = { refreshGeneration++ },
+        ) {
             repository.addSetToWorkoutExercise(
                 workoutExerciseId = workoutExerciseId,
                 position = position,
                 repetitions = previousRepetitions,
                 weightKg = previousWeightKg,
             )
-            details = repository.workoutDetails(workoutId)
         }
+        if (job != null) refresh()
+        return job
     }
 
     fun updateSet(workoutSet: WorkoutSetEntity, afterUpdate: (() -> Unit)? = null): Job? {
         val snapshot = workoutSet
         var sequence = 0L
-        return edits.launchEdit(
+        // Validity captured at acceptance: an older queued write must never mint
+        // a newest install over a newer accepted draft.
+        var acceptedGeneration = -1
+        val job = edits.launchEdit(
             key = "set:${snapshot.id}",
             onAccepted = {
                 // Newer accepted edits supersede older callbacks for the same set: an
                 // older completion must not start a timer after a newer edit already
                 // unchecked or invalidated that set. Refused edits never touch this guard.
+                // Outstanding loads are invalidated synchronously alongside, and the
+                // acceptance generation is captured for the in-write read below.
+                refreshGeneration++
+                acceptedGeneration = refreshGeneration
                 sequence = ++setEditSequence
                 latestAcceptedSetEdit[snapshot.id] = sequence
             },
@@ -197,14 +290,29 @@ internal class ActiveWorkoutState(
             // edits never start a timer, even when the stored row reads
             // completed (finished roots, wrong parents, stale entities).
             val transitioned = repository.updateWorkoutSet(snapshot)
+            // In-write read needed for the set-completion callback stays
+            // independent and installs only on the acceptance-captured validity:
+            // a newer accepted edit means this read predates its write and must
+            // not install. Scope liveness is verified before any install.
             val loaded = try {
                 repository.workoutDetails(workoutId)
             } catch (error: CancellationException) {
                 throw error
+            } catch (stale: StaleSessionException) {
+                if (acceptedGeneration == refreshGeneration && scope.isActive) {
+                    refreshGeneration++
+                    details = null
+                    refreshFailed = true
+                }
+                null
             } catch (_: Exception) {
+                if (acceptedGeneration == refreshGeneration && scope.isActive) refreshFailed = true
                 null
             }
-            if (loaded != null) details = loaded
+            if (loaded != null && acceptedGeneration == refreshGeneration && scope.isActive) {
+                details = loaded
+                refreshFailed = false
+            }
             if (!transitioned) return@launchEdit
             if (latestAcceptedSetEdit[snapshot.id] != sequence) return@launchEdit
             val storedExercise = loaded?.exercises?.singleOrNull {
@@ -215,26 +323,39 @@ internal class ActiveWorkoutState(
                 afterUpdate?.invoke()
             }
         }
+        // Successful post-edit refresh is an untracked draining load scheduled
+        // after the tracked write returns; loads are unregistered, so the drain
+        // joining the own write is not self-join.
+        if (job != null) refresh()
+        return job
     }
 
     fun deleteSet(workoutSet: WorkoutSetEntity): Job? {
         val snapshot = workoutSet
-        return edits.launchEdit("set:${snapshot.id}") {
+        val job = edits.launchEdit(
+            "set:${snapshot.id}",
+            onAccepted = { refreshGeneration++ },
+        ) {
             repository.deleteWorkoutSet(snapshot)
-            details = repository.workoutDetails(workoutId)
         }
+        if (job != null) refresh()
+        return job
     }
 
     fun deleteExercise(exercise: WorkoutExerciseDetails): Job? {
         val workoutExerciseId = exercise.workoutExercise.id
         val parentWorkoutId = exercise.workoutExercise.workoutId
-        return edits.launchEdit("entry:$workoutExerciseId") {
+        val job = edits.launchEdit(
+            "entry:$workoutExerciseId",
+            onAccepted = { refreshGeneration++ },
+        ) {
             repository.deleteExerciseFromWorkout(
                 workoutExerciseId = workoutExerciseId,
                 workoutId = parentWorkoutId,
             )
-            details = repository.workoutDetails(workoutId)
         }
+        if (job != null) refresh()
+        return job
     }
 }
 
@@ -379,6 +500,13 @@ private fun WorkoutNameField(
     onNameChanged: (String) -> Boolean,
 ) {
     var name by remember(workoutId) { mutableStateOf(initialName) }
+    // Same-ID projection refresh (for example a custom rename materialized at
+    // an unchanged parent revision) reconciles exactly without recreating focus
+    // nodes. Refused keystrokes never reach here; the draft only follows accepted
+    // edits and newer persisted values.
+    LaunchedEffect(workoutId, initialName) {
+        name = reconcileStringField(name, initialName)
+    }
     BasicTextField(
         value = name,
         onValueChange = {

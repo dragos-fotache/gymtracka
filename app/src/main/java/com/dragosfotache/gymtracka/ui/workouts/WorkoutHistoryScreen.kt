@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import com.dragosfotache.gymtracka.data.gym.WorkoutEntity
 import com.dragosfotache.gymtracka.data.gym.WorkoutHistorySummary
 import com.dragosfotache.gymtracka.data.gym.WorkoutHistoryStateRepository
+import com.dragosfotache.gymtracka.data.sync.store.StaleSessionException
 import com.dragosfotache.gymtracka.ui.FiniteEditCoordinator
 import com.dragosfotache.gymtracka.ui.rememberFiniteEditCoordinator
 import com.dragosfotache.gymtracka.ui.rememberGymRepository
@@ -60,6 +61,7 @@ import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 internal class WorkoutHistoryState(
@@ -81,9 +83,34 @@ internal class WorkoutHistoryState(
         private set
     var saveRoutineError by mutableStateOf<String?>(null)
         private set
+    var refreshFailed by mutableStateOf(false)
+        private set
+    private var loadGeneration = 0
 
     init {
-        load()
+        // Single observation-driven load path; the initial epoch triggers the
+        // first load. Observer/load jobs stay outside finite edit registrations.
+        scope.launch {
+            try {
+                repository.observeProjectionEpoch().collect { loadHistory() }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (stale: StaleSessionException) {
+                if (!scope.isActive) return@launch
+                loadGeneration++
+                workouts = null
+                workoutToDelete = null
+                workoutToSaveAsRoutine = null
+                refreshFailed = true
+            } catch (_: Exception) {
+                // Ordinary stream failures invalidate outstanding loads first so
+                // an in-flight success can neither install old data nor erase
+                // the newest failure diagnostic.
+                if (!scope.isActive) return@launch
+                loadGeneration++
+                refreshFailed = true
+            }
+        }
     }
 
     fun requestDelete(workout: WorkoutEntity) {
@@ -97,11 +124,32 @@ internal class WorkoutHistoryState(
     fun confirmDelete(): Job? {
         val workout = workoutToDelete ?: return null
         val workoutId = workout.id
-        return edits.launchEdit("history-delete:$workoutId") {
+        val job = edits.launchEdit(
+            "history-delete:$workoutId",
+            onAccepted = { loadGeneration++ },
+        ) {
             repository.deleteWorkout(workoutId)
             workoutToDelete = null
-            workouts = repository.finishedWorkoutSummaries()
         }
+        if (job != null) {
+            // Fresh guarded read after the owned write: join only the owned job
+            // so the refresh observes the commit without waiting for unrelated
+            // finite work. The load is unregistered, so this is not self-join.
+            // This keeps local-only (single-emission) observers from missing
+            // their own post-write refresh.
+            scope.launch {
+                try {
+                    job.join()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    return@launch
+                }
+                if (!scope.isActive) return@launch
+                loadHistory()
+            }
+        }
+        return job
     }
 
     fun requestSaveAsRoutine(workout: WorkoutEntity) {
@@ -129,11 +177,13 @@ internal class WorkoutHistoryState(
         val name = routineName.trim()
         if (name.isEmpty()) return null
         val workoutId = workout.id
-        return edits.launchEdit(
+        val job = edits.launchEdit(
             key = "history-save-routine:$workoutId",
             onAccepted = {
                 // Success/error UI cleanup runs only for accepted edits, so a refused callback
-                // can never leave isSavingRoutine stuck.
+                // can never leave isSavingRoutine stuck. Outstanding loads are
+                // invalidated synchronously; refusal changes nothing.
+                loadGeneration++
                 isSavingRoutine = true
                 saveRoutineError = null
             },
@@ -158,14 +208,41 @@ internal class WorkoutHistoryState(
                 isSavingRoutine = false
             }
         }
+        if (job != null) loadHistory()
+        return job
     }
 
     fun dismissSavedRoutineConfirmation() {
         savedRoutineName = null
     }
 
-    private fun load() {
-        scope.launch { workouts = repository.finishedWorkoutSummaries() }
+    private fun loadHistory() {
+        val generation = ++loadGeneration
+        scope.launch {
+            // Guarded pure scoped read without global drains: history models
+            // carry no autosaved field drafts and dialog drafts live outside
+            // the loaded model, so initial and list reads stay usable while
+            // unrelated finite writes are pending.
+            if (generation != loadGeneration || !scope.isActive) return@launch
+            try {
+                val loaded = repository.finishedWorkoutSummaries()
+                if (generation != loadGeneration || !scope.isActive) return@launch
+                workouts = loaded
+                refreshFailed = false
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (stale: StaleSessionException) {
+                if (generation != loadGeneration || !scope.isActive) return@launch
+                loadGeneration++
+                workouts = null
+                workoutToDelete = null
+                workoutToSaveAsRoutine = null
+                refreshFailed = true
+            } catch (_: Exception) {
+                if (generation != loadGeneration || !scope.isActive) return@launch
+                refreshFailed = true
+            }
+        }
     }
 }
 

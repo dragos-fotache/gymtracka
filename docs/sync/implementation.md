@@ -130,8 +130,10 @@ The app constructs no publisher.
 Current canonical/physical bindings are not account-lifetime removed-child reservation storage. R08c supplies inert
 [complete baseline/absence and coordinated recovery](#complete-snapshot-baseline-and-publication-recovery).
 Any selected durable snapshot stage blocks direct publication before writes, including downloaded/corrupt stages;
-foreign stages do not. R12a delivers the real finite-edit/timer seam; R09h/core R10 and R12c's authoritative timer-impact/
-scoped reconciliation remain separate integration gates. These components do not authorize live publication or activation.
+foreign stages do not. R12a delivers the real finite-edit/timer seam; R12b adds
+[narrow epoch observation and selected-feature refresh](../architecture.md#projection-observation-and-feature-refresh)
+without granting account visibility. R09h/core R10 and R12c's authoritative timer-impact/scoped app reconciliation remain
+separate integration gates. These components do not authorize live publication or activation.
 
 ## Durable head claiming and replay admission
 
