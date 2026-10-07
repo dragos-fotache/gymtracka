@@ -132,7 +132,7 @@ Current canonical/physical bindings are not account-lifetime removed-child reser
 Any selected durable snapshot stage blocks direct publication before writes, including downloaded/corrupt stages;
 foreign stages do not. R12a delivers the real finite-edit/timer seam; R12b adds
 [narrow epoch observation and selected-feature refresh](../architecture.md#projection-observation-and-feature-refresh)
-without granting account visibility. R09h/core R10 and R12c's authoritative timer-impact/scoped app reconciliation remain
+without granting account visibility. R09h and R12c's authoritative timer-impact/scoped app reconciliation remain
 separate integration gates. These components do not authorize live publication or activation.
 
 ## Durable head claiming and replay admission
@@ -270,7 +270,7 @@ This is bounded push orchestration, not a complete running sync engine or durabl
 [checkpoint transactions](#incremental-checkpoint-transactions) and [bounded pull driver](#bounded-incremental-pull)
 exist and the [shared driver](#shared-push-before-pull-and-valid-tail) composes them uninterrupted with valid-tail
 bookkeeping. R08c supplies inert complete-snapshot baseline/recovery; R09 owns the Room/session journal,
-R10 app-facing bootstrap/convergence and R12 live publication/UI reconciliation.
+R09h app-facing bootstrap/authority and R12 live publication/UI reconciliation.
 
 ## Incremental checkpoint transactions
 
@@ -716,7 +716,7 @@ repository, refresh, publication or account-visibility admission.
   or grant replacement. Such an orphan cannot authorize mismatched Room. No fake cross-store transaction is claimed.
 - No HTTP/clock/UUID generation or Google proof persistence; expired stored grants are evidence, not freshness or delivery
   permission. No ACTIVE/promotion, occupied-credential reauthentication, local import/deletion, UI or startup wiring.
-  The separate private engine below supplies fresh admission/bootstrap; R12a/core R10 and activation remain outstanding.
+  The separate private engine below supplies fresh admission/bootstrap; app-facing R09h authority/activation remains outstanding.
 
 [R09b review](../archive/remaining-work/R09b-review.md) owns fresh full JVM, focused actual Room/Keystore/file plus existing
 session regression, build/lint/APK and preservation evidence. It is not full instrumentation, engine convergence or live
@@ -925,5 +925,11 @@ retains/fences the original encrypted evidence instead; carry the unrepaired rep
 Use real in-memory Room for client persistence, narrow scripted doubles for client timing/errors, and isolated real HTTP
 for interoperability; do not maintain a second server implementation. `:app:testRealBackend` exercises production sync/auth
 adapters over test TLS to the disposable service. Guarded setup bypasses external Google only to create isolated test
-credentials, not service authorization. Legacy JVM JDK helpers remain test-only. Procedures and evidence are in
-[testing strategy](../testing-strategy.md); real HTTP alone does not prove Room/engine convergence or real Google sign-in.
+credentials, not service authorization. Legacy JVM JDK helpers remain test-only. The opt-in real Room/HTTP test layer
+now composes the delivered capture/push/pull/snapshot/publication seams across two independent file-backed stores.
+[Core R10a](../archive/remaining-work/R10a-review.md) accepts representative lost-outcome exact replay, offline/reopen,
+active replacement/delete, frozen/interrupted snapshot/absence and newer-intent convergence. The host relay remains
+JVM-only; it provisions synthetic credentials and may withhold a definitive response after real upstream success, never
+simulate successful domain outcomes. Procedures are in [testing strategy](../testing-strategy.md#opt-in-real-roomengine-convergence).
+Production construction/authority is unchanged; Core evidence is not app activation, real process death, all expanded
+R10b cases, service retention pruning or real Google sign-in.

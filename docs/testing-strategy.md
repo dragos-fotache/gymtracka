@@ -181,6 +181,47 @@ adapters use a test-only locally trusted TLS relay; JDK/JDBC/certificate/relay h
 external Google only for isolated credentials; it neither adds a service auth bypass nor verifies a successful real Google
 exchange. Local interoperability is not deployed TLS, phone behavior, or real Room-backed engine convergence.
 
+### Opt-in real Room/engine convergence
+
+Core R10 uses two independent file-backed Android Room stores through the delivered capture/push/pull/snapshot/
+publication drivers and production HTTP transport. The host JVM relay reuses the guarded fixture; its only opt-in
+controls provision disposable credentials and lose one token-specific response **after the real service answered**.
+No successful domain outcome is simulated. Host JDBC/config/key helpers remain outside both Android APKs.
+
+Run the isolated launcher above, then prepare the host launch classpath in a serialized build slot:
+
+```sh
+./gradlew :app:prepareRoomBackendRelay --console=plain
+# Run in a separately owned foreground terminal, outside Gradle's build slot:
+java -cp "$(< app/build/r10/relay-classpath.txt)" \
+  com.dragosfotache.gymtracka.data.sync.backend.RoomBackendRelayMain \
+  <explicit-isolated-config.json> <new-exclusive-relay-metadata.json>
+```
+
+Relay metadata contains only a public DER certificate (Base64) and loopback port. It is exclusively created mode600 and
+removed only if its file identity still matches. Stop the owned relay with Ctrl+C; never overwrite an occupied path.
+The certificate is trusted explicitly, with normal hostname verification. Setup tokens stay in memory; never record
+setup bodies, bearer values or backend config contents in reports. The host relay does not occupy a Gradle slot.
+
+On the specifically owned test emulator, `adb -s <serial> reverse tcp:<port> tcp:<port>`. Run the external package with
+`-Pgymtracka.roomBackend=true` and instrumentation arguments `roomBackendPort=<port>` and
+`roomBackendCertificate=<public-base64-DER>`, using the runner package
+`com.dragosfotache.gymtracka.data.sync.roombackend`. For example:
+
+```sh
+./gradlew :app:connectedDebugAndroidTest -Pgymtracka.roomBackend=true \
+  -Pandroid.testInstrumentationRunnerArguments.package=com.dragosfotache.gymtracka.data.sync.roombackend \
+  -Pandroid.testInstrumentationRunnerArguments.roomBackendPort=<port> \
+  -Pandroid.testInstrumentationRunnerArguments.roomBackendCertificate=<public-base64-DER> \
+  -Pandroid.testInstrumentationRunnerArguments.timeout_msec=120000 --rerun --console=plain
+```
+
+The flag adds `src/roomBackendTest/java` only to androidTest, not production. Default offline JVM/device tests do not
+include that external source set. An explicitly enabled gate fails on missing relay inputs; it must not skip. Inspect
+actual nonempty XML class/method execution and preserve full-device evidence separately before another filtered run
+replaces its outputs. Scripted offline/retention/middle-page faults and response gates prove client recovery, not real
+service retention pruning, device process death, Google identity or production activation.
+
 ## Catalogue verification
 
 The shared package owns seed details and tool instructions. Offline Android parity checks:
@@ -255,21 +296,23 @@ stays in the linked reviews; consult only when assessing coverage freshness or i
 
 | Layer | Latest relevant recorded evidence | Limitation |
 |---|---|---|
-| Offline JVM/compilation | [R12b review](archive/remaining-work/R12b-review.md): fresh full offline JVM and Kotlin/KSP/test-layer compilation | Projection/feature refresh and prior edit/timer regressions, not canonical-impact integration, convergence or activation |
-| Debug assembly/lint/APK | [R12a review](archive/remaining-work/R12a-review.md): unsuppressed frozen-source main/unit/device lint, assembled debug APK and asset/schema/test-marker preservation checks | One existing newer-version warning; unchanged backup/configuration, not release/security or OEM/cloud-transfer audit |
+| Offline JVM/compilation | [R10a review](archive/remaining-work/R10a-review.md): fresh full offline JVM and main/opt-in instrumentation Kotlin/KSP compilation | No app activation or real Google/phone claim |
+| Debug assembly/lint/APK | [R10a review](archive/remaining-work/R10a-review.md): unsuppressed frozen-source main/unit/device lint, debug assembly, opt-in/default helper separation and asset/schema preservation | One existing newer-version warning; unchanged backup/configuration, not release/OEM/cloud-transfer audit |
 | Focused projection/feature/edit flows | [R12b review](archive/remaining-work/R12b-review.md): individual API37 observation, actual-screen focus/dialog/shared-admission, root-disposal, leaf-refusal and focused controls classes | Scoped device evidence, not full unfiltered instrumentation, account activation or remote app/timer reconstruction |
 | Settled reauthentication and affected Room/session | [R09e review](archive/remaining-work/R09e-review.md): individual API37 real authority/Keystore/reopen/retained-intent and affected Room/preparation classes | No fresh unfiltered instrumentation, API24, two-store HTTP convergence, activation or live OEM/cloud transfer |
 | Private completion and affected engine/publication | [R09d review](archive/remaining-work/R09d-review.md): individual API37 completion/recovery/fence and affected private-engine/projection/baseline/shared-driver classes | Historical scoped evidence, not freshly rerun by R09e or permission to activate |
-| Real service | [R08c review](archive/remaining-work/R08c-review.md): fresh full isolated real-backend HTTP/auth package | Local interoperability, not deployed TLS/Google or real Room-backed engine convergence; legacy replay unresolved |
-| Full instrumentation | [R09g review](archive/remaining-work/R09g-review.md): fresh full unfiltered API37/Android17 16KB-page emulator regression, including migrations and persistence/sync/HTTP/session/Compose/app flows | No API24, live phone/Google, hosted CI, two-store HTTP convergence or activated-app publication evidence |
+| Real service | [R10a review](archive/remaining-work/R10a-review.md): fresh full isolated HTTP/auth/host-control suite | Local interoperability, not deployed TLS/Google; legacy replay unresolved |
+| Core Room/engine convergence | [R10a review](archive/remaining-work/R10a-review.md): two independent file-backed stores through delivered engine and actual isolated HTTP, independent complete outcomes and recovery gates | Representative core cases, not expanded R10b, actual process death, pruning or production activation |
+| Full instrumentation | [R10a review](archive/remaining-work/R10a-review.md): fresh full unfiltered default API37/Android17 16KB-page regression, including migrations and persistence/sync/HTTP/session/Compose/app flows | External convergence is a separate opt-in gate; no API24, live phone/Google, hosted CI or activated-app publication claim |
 | Focused private authority/migrations | [R09a review](archive/remaining-work/R09a-review.md): authority/session package plus separate populated11→12, all-supported/copied-asset, staging migration and foundation classes | Strict fixture correction retained; current-slice scoped evidence, not full unfiltered instrumentation or app activation |
 | Focused complete baseline/ownership Room | [R08c review](archive/remaining-work/R08c-review.md): separate baseline/fence class runs and final refined cancellation/corruption method reruns before the full gate | Repeated methods are not extra distinct tests; focused passes do not substitute for the separately executed full gate |
 | Focused snapshot download/ownership Room | [R08b review](archive/remaining-work/R08b-review.md): separate driver/fence and staging/pull/shared-driver filters | Historical scoped evidence; fresh full package execution is owned by the R08c review |
 | Focused staging/migrations | [R08a review](archive/remaining-work/R08a-review.md): separate staging/fence and populated10/all-start/copied-asset migration cases | Historical filtered evidence; unchanged migrations also execute in the R08c full gate |
 | Focused shared-driver/tail Room | [R07c review](archive/remaining-work/R07c-review.md): separately executed 3 new classes before the full package gate; R07a/b checkpoint/paging cases included in full regression | Filtered evidence remains scoped; full and packaging gate claims come only from their separate executions |
-| Launcher | [Retirement review](archive/fake-retirement-review.md): 11 Python launcher tests | Not freshly rerun by later session slices |
+| Launcher | [R10a review](archive/remaining-work/R10a-review.md): fresh Python launcher regression | Isolated launcher safeguards, not personal deployment/configuration |
 
-API 24 runtime, hosted CI, successful real Google identity, Room/engine convergence and owner phone/laptop journeys remain
-unverified by these records. Broader/public gates are tracked in [the roadmap](remaining-work-roadmap.md), not inferred
+API 24 runtime, hosted CI, successful real Google identity, expanded R10b and owner phone/laptop journeys remain
+unverified by these records. Core R10a Room/engine convergence is accepted, without application activation.
+Broader/public gates are tracked in [the roadmap](remaining-work-roadmap.md), not inferred
 from the most recent JVM total. The [legacy replay limitation](sync/implementation.md#legacy-auth-replay-limitation) remains
 an explicit recovery/release risk, not a repaired case.

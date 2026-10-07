@@ -39,6 +39,11 @@ android {
         getByName("androidTest").assets.directories.add(
             "$projectDir/schemas",
         )
+        // External Room/engine convergence is opt-in; ordinary device tests
+        // stay offline. Explicit enabled runs fail when relay inputs are absent.
+        if (providers.gradleProperty("gymtracka.roomBackend").orNull == "true") {
+            getByName("androidTest").kotlin.directories.add("$projectDir/src/roomBackendTest/java")
+        }
     }
 }
 
@@ -115,6 +120,23 @@ tasks.register<Test>("testRealBackend") {
     outputs.upToDateWhen { false }
     outputs.cacheIf { false }
     failOnNoDiscoveredTests = true
+}
+
+// Resolve a host-only launch classpath, then serve with ordinary java outside
+// Gradle: a long-lived relay must not hold the serialized build slot.
+tasks.register("prepareRoomBackendRelay") {
+    description = "Compiles the host-only Room backend relay and writes its launch classpath."
+    group = "verification"
+    val runtime = tasks.named<Test>("testDebugUnitTest").get().classpath
+    val destination = layout.buildDirectory.file("r10/relay-classpath.txt")
+    dependsOn("compileDebugUnitTestKotlin")
+    inputs.files(runtime)
+    outputs.file(destination)
+    doLast {
+        val file = destination.get().asFile
+        file.parentFile.mkdirs()
+        file.writeText(runtime.asPath)
+    }
 }
 
 tasks.withType<Test>().configureEach {

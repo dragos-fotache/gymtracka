@@ -6,69 +6,65 @@
 
 ## Current boundary and authority
 
-**R12b — projection observation and feature refresh is accepted.**
-[Review](archive/remaining-work/R12b-review.md) owns executed evidence;
-[archived specification](archive/remaining-work/R12b-task.md) records its contract. No implementation specification is open.
+**Core R10a — engine convergence and recovery is accepted.** Its
+[review](archive/remaining-work/R10a-review.md) owns actual executed evidence; the
+[archived specification](archive/remaining-work/R10a-task.md) owns the task-era contract. No implementation specification
+is open. The finite [two-slice R10 plan](remaining-work-roadmap.md#r10--engine-convergence-and-recovery) remains a accepted,
+b deferred public. Do not pull R10b forward or add hidden prerequisites.
 
-The owner has authorized a **fresh coordinator for Core R10 — engine convergence and recovery (R10a)**.
-Report bounded pickup readiness to outgoing live `gym-coordinator`, then wait for verified ownership release before
-specification, edits, delegation or builds. Acceptance evidence alone is not start or activation authority.
+**Next pickup under the standing continuation rule: R09h — app-facing activation and offline recovery**, with a fresh
+coordinator after verified ownership transfer. Report bounded readiness directly/asynchronously to outgoing live
+`gym-coordinator`, then wait for release before specification, edits, delegation or builds. Acceptance alone never
+supplies activation authority. Follow [workflow](coordinator-workflow.md) and the
+[finite R09 plan](remaining-work-roadmap.md#remaining-r09-plan); no R09i/sub-letter proliferation by default.
 
-After release, follow the [Core R10 outcome](remaining-work-roadmap.md#r10--engine-convergence-and-recovery): two
-independent real Room stores through the delivered engine and isolated HTTP, not DTO-only interoperability. The first
-R10 coordinator settles the finite whole-R10 outcome plan under the [major-task rule](coordinator-workflow.md#major-task-slicing--owner-rule),
-then creates the bounded Core R10 specification. Expanded R10b remains its public milestone; do not pull it forward or
-add hidden prerequisite slices. Core R10 does not authorize production activation, R12c implementation, real Google/
-phone journeys, personal configuration or deployment. Escalate missing inputs, unavailable gates and scope questions.
-
-The [finite R12 plan](remaining-work-roadmap.md#r12--feature-and-app-reconciliation) remains **three slices, R12a–c**.
-R12a/b are complete. R12c scoped app/timer reconstruction still needs delivered app-facing R09h authority and core R10
-convergence for production account integration. R09h needs R12a, not all R12; do not create a circular dependency or waive
-its activation gates. Any additional split/scope question goes to the owner.
+R09h's named R12a/Core R10 prerequisites are accepted. Confirm its applicable app-facing integration gates on pickup;
+missing safe authority/barrier/timer inputs block the affected integration, not permission to substitute a no-op.
+Coordinate delivered authority with R12c rather than inventing a circular requirement: R09h needs R12a, not all R12.
+Unresolved product, destructive/configuration, legacy-data or scope questions go to the owner before affected behavior.
+R11 Google identity, R13 account UI/triggers and R17 live deployment remain separate milestones.
 
 ## Implemented boundary and remaining dependencies
 
-The [real finite-edit/timer seam](architecture.md#finite-edit-admission-and-publication-leases) remains app-owned and
-failure-aware. [Projection observation/feature refresh](architecture.md#projection-observation-and-feature-refresh)
-now supplies narrow fenced materialized-epoch streams, same-ID/current-reference reloads, accepted-draft/stale-load
-protection, stable row focus and per-opening dialog drafts. Pure catalogue/action-list reads remain usable during
-unrelated writes/failures. These are read/feature seams, not account visibility authority.
+Production remains **signed-out/local-only**, one fenced initial0, with no publisher/engine constructed at startup.
+Core R10a changed only test/build infrastructure and documents. Two independent file-backed stores exercised the
+existing production capture/push/pull/snapshot/publication seams through verified local TLS and disposable real HTTP.
+Core acceptance is representative convergence/recovery, not real process death, service retention pruning, all R10b
+families/conflicts, account activation, deployed TLS, real Google/phone or personal data.
 
-Production remains **signed-out/local-only**, with one fenced initial0 and no publisher/engine constructed at startup.
-R12c still owns actual scoped repository/state rebinding, app navigation/active pill and authoritative canonical
-timer-impact decisions. Remote finish/delete/completion invalidation and valid-timer preservation are not delivered by
-R12b. No permissive/no-op impact callback may substitute for that integration while live screens/timers accept edits.
-
-R09a–g inert authority/preparation/bootstrap/completion/recovery remains accepted. [R09g recovery boundaries](sync/implementation.md#inert-retained-account-recovery-and-superseded-evidence)
-and [P16/P17](../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions) remain binding.
-The [finite R09 plan](remaining-work-roadmap.md#remaining-r09-plan) remains R09g (accepted), R09h, then reduced personal
-closure. **R09h remains blocked on core R10 and applicable app-facing activation gates.** R11 identity and R13 account
-UI/triggers are separate; accepted feature observation is not permission for production publication.
-
-Legacy local-only data disposition remains unresolved: no import, deletion or reassignment is authorized. Obtain owner
-choice before affected activation. Unknown/foreign/unreadable authority/vault state remains private/preserved; uncertain
-credential archives are evidence only, never old-token/data authority or implicit cleanup permission. The
+R09a–g inert authority/preparation/bootstrap/completion/recovery remains accepted. Preserve
+[R09g recovery boundaries](sync/implementation.md#inert-retained-account-recovery-and-superseded-evidence) and shared
+[P16/P17](../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions). The finite R09 plan remains
+a–g accepted, h outstanding, then reduced personal closure once its acceptance/prerequisite gates pass. Different-account,
+foreign/unreadable/unknown-provenance evidence remains private/preserved; uncertain encrypted archives never supply old
+credential/data authority or cleanup permission. The
 [legacy accepted auth-replay limitation](sync/implementation.md#legacy-auth-replay-limitation) remains unrepaired.
 
-## Core R10 pickup and verification
+Legacy local-only data disposition is **unresolved**: no import, deletion or reassignment is authorized. Obtain the
+owner's choice before activation that encounters it. Core synthetic empty-store tests do not decide it.
 
-Supplied AGENTS → README policy → this handoff → roadmap dependencies → workflow authority/transfer rules.
-Verify BOTH live trees/indexes/all untracked/HEADs, roles/models and resource ownership; preserve user changes. Do not
-specify, edit, delegate or build without applicable start/release authority. Read concrete task dependencies after release
-and the full [workflow](coordinator-workflow.md) before delegation. Escalate unresolved blockers/questions to the owner.
+R12a real finite-edit/timer barriers and R12b projection observation/selected-feature refresh remain accepted under the
+finite **three-slice R12a–c plan**. R12c still owns scoped repository/state rebinding, navigation/active pill and authoritative
+canonical timer-impact decisions. Remote finish/delete/completion invalidation and valid-timer preservation are not
+supplied by Core store tests. No permissive/no-op callback substitutes for that integration while real screens/timers edit.
+R12c's full package gates and production account integration remain outstanding; Core's full default instrumentation
+is regression evidence, not R12c acceptance.
+
+## Pickup and resource safeguards
+
+Supplied AGENTS → README policy → handoff → roadmap summary/dependencies → workflow authority/transfer rules.
+Verify BOTH live trees/indexes/all untracked/HEADs, roles/models and resource ownership; preserve user changes.
+Read concrete task dependencies after release and full workflow before delegation. Escalate unavailable required gates,
+missing inputs or unresolved scope/questions rather than silently substituting agents, skipping dependencies or splitting.
 
 Fresh native coordinator: `openai-codex/gpt-6.1-sol`/high. Fresh native Worker/QA:
-`meta/muse-spark-1.3-contributor`/high, disjoint production/test access. Completed conversations do not transfer. Reports
-are direct/asynchronous to live `gym-coordinator`, without `--wait`, agent wait or acknowledgment polling. Every Gradle
-requires an explicit serialized slot; lint freezes both roles' sources. No pushes, deployment, private configuration,
-real Google/account/device or personal-data actions without separate permission.
+`meta/muse-spark-1.3-contributor`/high, disjoint production/test source. Completed conversations do not transfer.
+Reports are direct/asynchronous to live `gym-coordinator`, without `--wait`, agent wait or acknowledgment polling.
+Every Gradle needs an explicit serialized slot; lint freezes both roles' sources. No pushes, deployment, private
+configuration, real Google/account/device or personal-data actions without separate permission.
 
-[R12b evidence](archive/remaining-work/R12b-review.md) is fresh full offline JVM plus scoped real Room/Compose/root/leaf
-execution, not full unfiltered instrumentation, fresh standalone assembly/lint or activated app/timer/account journeys.
-Those R12 package gates remain R12c closure; core R10, API24, hosted CI, Google/phone/deployment gates remain their own
-milestones. Secure laptop connectivity, OAuth audience/signing and authorized live data are external inputs. Backend
-access remains isolated operational build/start plus black-box HTTP only, never source/private-config review.
-
-All R12b task build/device slots and owned test resources are released; its test-owned emulators are stopped and
-isolated Android/AVD homes removed. No resource ownership or contributor conversation transfers. Rediscover live
-roles/processes before grants or default-resource use. Commit receipts belong in the short owner report, not here.
+Core R10a task resources/build slots are released before transfer; no service, relay, emulator, Android/AVD home or
+contributor conversation transfers. Rediscover live processes and ownership before grants/default-resource use.
+Use the [isolated launcher and opt-in Room procedure](testing-strategy.md#isolated-real-backend-procedure); backend access
+is operational build/start plus black-box HTTP only, never source/private-config review. Public certificate metadata is
+not a production service configuration. Required personal connectivity/OAuth/signing/account inputs remain external.

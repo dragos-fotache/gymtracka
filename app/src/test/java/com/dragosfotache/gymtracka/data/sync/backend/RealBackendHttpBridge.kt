@@ -10,6 +10,7 @@ import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import mockwebserver3.RecordedRequest
+import mockwebserver3.SocketEffect
 import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
@@ -28,7 +29,10 @@ import okio.BufferedSink
  * come from the real backend, never a simulated domain handler or auth bypass.
  * No certificate, config, credential, body or URL is logged or displayed.
  */
-internal class RealBackendHttpBridge(baseUrl: String) : AutoCloseable {
+internal class RealBackendHttpBridge(
+    baseUrl: String,
+    private val roomControls: RoomRelayControls? = null,
+) : AutoCloseable {
     private val upstreamOrigin = requireLoopbackOrigin(baseUrl)
     private val server = MockWebServer()
     private val upstreamClient = newServiceHttpClient()
@@ -36,12 +40,14 @@ internal class RealBackendHttpBridge(baseUrl: String) : AutoCloseable {
     private val transportClient: OkHttpClient
     val origin: ServiceOrigin
     val transport: ServiceHttpTransport
+    val certificateBase64: String
 
     init {
         val certificate = HeldCertificate.Builder()
             .commonName("localhost")
             .addSubjectAlternativeName("localhost")
             .build()
+        certificateBase64 = java.util.Base64.getEncoder().encodeToString(certificate.certificate.encoded)
         val serverTrust = HandshakeCertificates.Builder()
             .heldCertificate(certificate)
             .build()
@@ -67,6 +73,7 @@ internal class RealBackendHttpBridge(baseUrl: String) : AutoCloseable {
     }
 
     private fun forward(recorded: RecordedRequest): MockResponse {
+        roomControls?.dispatch(recorded)?.let { return it }
         val target = recorded.target
         val path = target.substringBefore('?')
         val method = recorded.method
@@ -102,6 +109,14 @@ internal class RealBackendHttpBridge(baseUrl: String) : AutoCloseable {
                     if (!RESPONSE_FRAMING_HEADERS.any { it.equals(name, ignoreCase = true) }) {
                         result.addHeader(name, response.headers.value(index))
                     }
+                }
+                if (method == "POST" && path == "/v1/sync/push" && response.code == 200 &&
+                    roomControls?.consumeResponseLoss(recorded) == true
+                ) {
+                    // Preserve real headers, but withhold the definitive outcome
+                    // body after upstream commit until the client's read timeout.
+                    // Body effects work for dynamic dispatch on HTTP/1 and HTTP/2.
+                    result.onResponseBody(SocketEffect.Stall)
                 }
                 result.build()
             }
