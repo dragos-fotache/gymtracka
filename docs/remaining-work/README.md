@@ -3,8 +3,9 @@
 **No implementation specification is open.**
 [R12a real finite-edit admission and timer barriers](../archive/remaining-work/R12a-review.md) is accepted and archived.
 The [finite three-slice R12 plan](../remaining-work-roadmap.md#r12--feature-and-app-reconciliation) is settled; b/c remain
-outstanding. The owner requires a scoped local commit, prepared handoff and report, then **stop**: no successor launch
-or later implementation under this request. R12b is the next outcome after fresh release.
+outstanding. The owner has resumed the process and authorized fresh-coordinator R12b pickup/implementation after
+verified ownership transfer. Stop after accepted R12b's scoped local commit, prepared handoff and owner report:
+no further successor launch or R12c implementation under this request.
 
 [R09g inert same-account recovery](../archive/remaining-work/R09g-review.md) remains accepted. The finite
 [R09 plan](../remaining-work-roadmap.md#remaining-r09-plan) remains R09g (accepted), R09h, then reduced personal closure.

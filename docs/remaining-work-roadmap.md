@@ -31,9 +31,10 @@ and interrupted older-generation gaps. Cached data/intent remain unchanged; no a
 The finite [R09 plan](#remaining-r09-plan) remains **R09g (accepted), R09h, then reduced personal R09 closure**.
 **[R12a real edit/timer barriers](archive/remaining-work/R12a-review.md) are accepted; R09h remains blocked on core R10
 and its app-facing activation/integration gates.** The finite [R12 plan](#r12--feature-and-app-reconciliation) is settled.
-The owner's explicit R12a request is complete and stops after scoped commit, handoff preparation and owner report:
-no successor launch or later implementation under this request. R12b is the next package outcome, pending fresh owner
-release. Core R10 remains required; do not bypass gates or add R09 slices.
+The owner's R12a request is complete. The owner has now resumed the process and authorized fresh-coordinator R12b
+pickup/implementation after verified ownership transfer. **Stop after accepted R12b's scoped commit, prepared handoff and
+owner report; no further successor launch or R12c implementation under this request.** Core R10 remains required;
+do not bypass gates or add R09 slices.
 “Pending” requires eligibility under explicit/standing authority and a bounded pickup spec, not another approval for each
 eligible next slice. “Deferred” remains required for its later
 milestone and is not automatically brought forward. Historical M-series assignments are not a second execution plan.
@@ -229,9 +230,9 @@ at pickup, not from old planning versions. Deterministic adapter tests and actua
 
 ### R12 — Feature and app reconciliation
 
-**Finite plan: three slices, R12a–c, then close R12 after its package gates.** Owner resumption and verified ownership
-release authorize planning and R12a only in the current request. Stop after accepted R12a and report to the owner;
-no later implementation or automatic successor launch under this request. Additional splitting requires user escalation.
+**Finite plan: three slices, R12a–c, then close R12 after its package gates.** R12a is accepted. The current owner request authorizes
+fresh-coordinator R12b pickup/implementation after verified transfer, then requires stopping after accepted R12b's scoped
+commit, prepared handoff and owner report. No R12c implementation or automatic further successor launch under this request. Additional splitting requires user escalation.
 
 | Slice | Outcome / completion boundary | Dependencies | Non-goals |
 |---|---|---|---|

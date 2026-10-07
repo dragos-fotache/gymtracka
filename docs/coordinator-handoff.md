@@ -10,9 +10,10 @@
 [Review](archive/remaining-work/R12a-review.md) owns executed evidence; the
 [archived specification](archive/remaining-work/R12a-task.md) records its contract. No implementation specification is open.
 
-The owner explicitly requires **stopping after R12a's scoped local commit and handoff preparation, then reporting to the
-owner**. Do not launch a successor or begin later implementation under this request. A later coordinator needs fresh
-owner release; acceptance evidence alone is not authorization.
+The owner has resumed the process and authorized **R12b pickup and implementation by a fresh coordinator**.
+Report bounded pickup readiness to the outgoing coordinator and wait for verified ownership release before specification,
+edits, delegation or builds. This request ends after accepted R12b's scoped local commit, prepared handoff and owner report:
+**stop there; do not launch another successor or implement R12c**. Acceptance evidence alone is not authorization.
 
 The [finite whole-R12 plan](remaining-work-roadmap.md#r12--feature-and-app-reconciliation) is settled at **three slices,
 R12a–c**. R12a is complete; **R12b — projection observation and feature refresh** is the next outcome after release.
