@@ -16,6 +16,22 @@ import com.dragosfotache.gymtracka.data.sync.model.PushResultModel
 import com.dragosfotache.gymtracka.data.sync.model.SnapshotResultModel
 
 /**
+ * Shared pure push preflight: deep-owns caller-mutable wrappers through the
+ * approved encode/decode roundtrip (preserving exact requestJson) and enforces
+ * the frozen batch envelope. Runs before any credential suspension; programming
+ * errors propagate unchanged. Reused by prepared, refreshing and facade paths so
+ * independent expected request bytes stay comparable without encoder-derived
+ * expectations.
+ */
+internal fun freezePushRequests(requests: List<DurableRequestModel>): List<DurableRequestModel> {
+    val frozen = requests.toList().map { model ->
+        decodeDurableRequest(encodeDurableRequest(model))
+    }
+    requirePushBatch(frozen)
+    return frozen
+}
+
+/**
  * Unused [GymSyncApi] decorator proving one refresh-and-unchanged-retry.
  * Each call runs inside the coordinator's access selection with the frozen
  * business inputs captured before suspension, and every accepted attempt
@@ -47,10 +63,7 @@ internal class SessionRefreshingGymSyncApi internal constructor(
     ) : this(coordinator, lease, OkHttpServiceTransport(lease.binding.origin, timeouts))
 
     override suspend fun push(requests: List<DurableRequestModel>): PushResultModel {
-        val frozen = requests.toList().map { model ->
-            decodeDurableRequest(encodeDurableRequest(model))
-        }
-        requirePushBatch(frozen)
+        val frozen = freezePushRequests(requests)
         return coordinator.withAccessToken(lease) { credential ->
             syncApiFor(credential).push(frozen)
         }

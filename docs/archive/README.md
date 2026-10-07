@@ -51,6 +51,7 @@ Enduring Android design is maintained in [the active integration design](../sync
 | R09e inert settled occupied-credential reauthentication | [Spec](remaining-work/R09e-task.md) | [Review](remaining-work/R09e-review.md) |
 | R09f inert exact-pending-refresh reconciliation | [Spec](remaining-work/R09f-task.md) | [Review](remaining-work/R09f-review.md) |
 | R09g inert complete same-account recovery/superseded evidence | [Spec](remaining-work/R09g-task.md) | [Review](remaining-work/R09g-review.md) |
+| R09h app-facing authority/activation and offline recovery | [Spec](remaining-work/R09h-task.md) | [Review](remaining-work/R09h-review.md) |
 | R10a core engine convergence/recovery | [Spec](remaining-work/R10a-task.md) | [Review](remaining-work/R10a-review.md) |
 | R12a real finite-edit admission and timer barriers | [Spec](remaining-work/R12a-task.md) | [Review](remaining-work/R12a-review.md) |
 | R12b projection observation and feature refresh | [Spec](remaining-work/R12b-task.md) | [Review](remaining-work/R12b-review.md) |

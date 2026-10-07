@@ -92,8 +92,9 @@ Inert [head claiming/replay admission](#durable-head-claiming-and-replay-admissi
 and [bounded incremental pull](#bounded-incremental-pull) exist, composed by the inert
 [shared push-before-pull driver](#shared-push-before-pull-and-valid-tail). Inert
 [snapshot staging storage](#frozen-snapshot-staging-storage), [bounded download](#bounded-frozen-snapshot-download)
-and [complete baseline/recovery](#complete-snapshot-baseline-and-publication-recovery) exist. No app-facing bootstrap,
-vault/Room journal, convergence integration or production publication activation exists.
+and [complete baseline/recovery](#complete-snapshot-baseline-and-publication-recovery) exist. The separate durable
+vault/Room journal and [app-facing authority boundary](#app-facing-authority-and-offline-recovery) compose them; these
+primitives alone grant no account visibility. Production publication/startup activation remains absent.
 The independent ledger is not itself a visible projection.
 
 ### Protected publication
@@ -132,8 +133,9 @@ Current canonical/physical bindings are not account-lifetime removed-child reser
 Any selected durable snapshot stage blocks direct publication before writes, including downloaded/corrupt stages;
 foreign stages do not. R12a delivers the real finite-edit/timer seam; R12b adds
 [narrow epoch observation and selected-feature refresh](../architecture.md#projection-observation-and-feature-refresh)
-without granting account visibility. R09h and R12c's authoritative timer-impact/scoped app reconciliation remain
-separate integration gates. These components do not authorize live publication or activation.
+without granting account visibility. The [app-facing authority boundary](#app-facing-authority-and-offline-recovery)
+is delivered separately; R12c's authoritative timer-impact/scoped app reconciliation still gates live publication.
+These components alone do not authorize production activation.
 
 ## Durable head claiming and replay admission
 
@@ -269,8 +271,8 @@ store and share one required `PushRunOwner` per physical database; the driver cr
 This is bounded push orchestration, not a complete running sync engine or durable session authority. R07a's
 [checkpoint transactions](#incremental-checkpoint-transactions) and [bounded pull driver](#bounded-incremental-pull)
 exist and the [shared driver](#shared-push-before-pull-and-valid-tail) composes them uninterrupted with valid-tail
-bookkeeping. R08c supplies inert complete-snapshot baseline/recovery; R09 owns the Room/session journal,
-R09h app-facing bootstrap/authority and R12 live publication/UI reconciliation.
+bookkeeping. R08c supplies inert complete-snapshot baseline/recovery; the separate [app-facing authority boundary](#app-facing-authority-and-offline-recovery)
+composes the Room/session journal and prepared bootstrap. R12c still owns live publication/UI reconciliation.
 
 ## Incremental checkpoint transactions
 
@@ -374,9 +376,9 @@ there is no nested admission, release/reacquire gap, additional owner or backgro
   successful tail commit, not false/clean. Nonnull is only the observation at that transaction. Neither false nor
   last-success establishes account convergence, visible publication or absence of later edits. Displays remain redacted.
 
-No app-facing bootstrap, durable Room/vault authority, live edit/timer barrier, engine convergence or production
-activation is implied. R08c adds separate inert complete-baseline establishment and same-run publication coordination;
-callers use returned epochs. Production integrations remain R09/R10/R12 and their later activation gates.
+No app-facing authority or production activation is implied by this driver alone. R08c adds separate inert
+complete-baseline establishment and same-run publication coordination; callers use returned epochs. The [app-facing boundary](#app-facing-authority-and-offline-recovery)
+composes delivered authority/bootstrap/recovery; live scoped publication/UI integration remains R12c.
 
 ## Frozen-snapshot staging storage
 
@@ -716,7 +718,7 @@ repository, refresh, publication or account-visibility admission.
   or grant replacement. Such an orphan cannot authorize mismatched Room. No fake cross-store transaction is claimed.
 - No HTTP/clock/UUID generation or Google proof persistence; expired stored grants are evidence, not freshness or delivery
   permission. No ACTIVE/promotion, occupied-credential reauthentication, local import/deletion, UI or startup wiring.
-  The separate private engine below supplies fresh admission/bootstrap; app-facing R09h authority/activation remains outstanding.
+  The separate private engine below supplies fresh admission/bootstrap; the [app-facing authority boundary](#app-facing-authority-and-offline-recovery) composes it without production startup activation.
 
 [R09b review](../archive/remaining-work/R09b-review.md) owns fresh full JVM, focused actual Room/Keystore/file plus existing
 session regression, build/lint/APK and preservation evidence. It is not full instrumentation, engine convergence or live
@@ -906,7 +908,45 @@ asset, HTTP/Google, clock/UUID, app construction, ordinary repository/UI rebindi
 
 [R09g review](../archive/remaining-work/R09g-review.md) owns fresh JVM/full instrumentation/lint/APK evidence. Stopped at
 inert safely recoverable same-account preparation eligibility. R12a real edit/timer drains and core R10 two-store actual
-engine/HTTP convergence precede R09h production activation. Legacy-data disposition and live milestone gates remain open.
+engine/HTTP convergence are the named prerequisites for the [app-facing boundary](#app-facing-authority-and-offline-recovery).
+Its delivery does not activate production startup/screens: R12c integration, legacy-data disposition and live milestone gates remain open.
+
+## App-facing authority and offline recovery
+
+`AppSessionCoordinator` explicitly composes the delivered private authority/preparation, retained-account recovery,
+bootstrap/completion and startup/refresh components. Construction performs no I/O and exposes one stable read-only
+`StateFlow`, initially privacy-locked. Production startup still constructs only signed-out/local repositories: no screen,
+engine or publisher is activated by this boundary. R12c owns its scoped UI/timer integration; R11/R13 own identity and
+account UI/triggers. Transition and publication barriers are mandatory caller inputs with no permissive defaults.
+
+- One operation mutex serializes facade work, one supplied physical-DB run owner serializes engine work, and one shared
+  credential mutex spans preparation, retained recovery and mutually exclusive prepared/recovered refresh ownership.
+  Synchronous invalidation kills the exact facade/subordinate handles and publishes privacy-locked under one short
+  state monitor, without waiting for operation/credential/run mutexes or network. Older faults cannot retire a newer handle.
+- Only fresh matching ACTIVE Room/vault evidence and a complete baseline admit an `AppAccountSession`. Offline recovery
+  does not inspect credential deadlines, call HTTP or require login every launch. Dirty cache and queued edits retain
+  eligibility. An existing active handle is revalidated without silent repository rebinding; exact clean completion-gap
+  recovery may promote PREPARED credentials before fresh startup reconciliation. Other interrupted states remain private.
+- Grants require an exact caller-captured Room expectation and configured-origin/service-UUID compatibility. A new ACTIVE
+  reservation needs a fresh operation; private resume uses the exact reserved operation/generation. Drain/acquire occurs
+  while the previous handle is valid; successful admission then hides it before reservation/CAS. Failed acquisition keeps
+  healthy editing eligibility. Already-started writes may commit despite cancellation/lost return: reread durable stores,
+  never compensate, erase evidence or restart generations. P17 evidence retention remains in the existing recovery seam.
+- Private bootstrap stops, retained stages and budgets do not launch another completion attempt. Actual bounded valid tail
+  precedes required protected completion, and only COMPLETED plus fresh startup reconciliation yields an app handle.
+  Local-only roots refuse unchanged pending owner disposition; no import, deletion or reassignment is implemented.
+- Facade repositories have an explicit process guard inside scoped transactions before effects/commit and after result
+  dispatch. Process-only invalidation prevents stale reads/edits even at unchanged durable generation. Guarded constructor
+  overloads preserve original legacy/default/trailing-lambda UUID/clock semantics; no supplier is coerced to a Unit guard.
+  Reconnect binds the same process guard to PushStore/PushRun and requires a guarded recovered-session HTTP decorator.
+- Reconnect reuses bounded push-before-pull and exact pending-refresh/request handling; it never publishes ACTIVE projection
+  or automatically restarts an expired cursor/stage. Transient/reauth stops retain account editing, credentials and frozen
+  intent. Observed credential-binding/storage or authority faults lock the exact handle; cancellation is not revocation.
+  Typed stops remain available; closed delivery status does not claim convergence. Incremental canonical writes mark dirty
+  without advancing cache/materialized epochs; actual publication remains gated to R12c's real timer-impact decisions.
+- Refusals, states and handles have fixed/redacted displays. Expectations/progress are advisory, not reusable authority.
+  Caller cancellation wins; acquired transition leases close on every path, and failed close cannot report success.
+  No Google proof, configuration, scheduler, sign-out/switching UI, lifecycle cleanup or live account/device action is added.
 
 ## Legacy auth replay limitation
 

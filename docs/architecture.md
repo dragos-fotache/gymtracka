@@ -32,7 +32,10 @@ still binds the original signed-out session; no account/session rebinding is wir
 adapter. R09b's [prepared vault/Room coordinator](sync/implementation.md#prepared-vaultroom-coordination-and-recovery)
 supplies inert private grant persistence/restart observations. R09c supplies registered private engine admission/bootstrap;
 R09d supplies [inert completed preparation/promotion](sync/implementation.md#private-completed-preparation-and-vault-promotion).
-App activation/rebinding remains future work. None is constructed at production startup or authorizes presentation alone.
+`data/sync/session/AppSessionCoordinator` now composes these seams into an explicitly constructed
+[app-facing authority/offline-recovery boundary](sync/implementation.md#app-facing-authority-and-offline-recovery), with
+mandatory transition/publication inputs and guarded account repositories. Production startup remains signed-out/local;
+R12c still owns scoped state/UI rebinding and canonical timer decisions. No root/leaf factory activates this boundary.
 
 ## Room database
 
@@ -167,9 +170,12 @@ owners and unchanged domain/cache/intent remain mandatory. See
   and exact vault promotion/gap recovery under those fences. R09e/f add inert settled occupied replacement and its exact
   established ACTIVE pending-refresh replay prerequisite. R09g adds retained-account signed-out/missing-vault and
   uncertain/interrupted-transition recovery; see [session boundaries](sync/implementation.md#inert-retained-account-recovery-and-superseded-evidence).
-  App-facing publication, canonical timer-impact integration, convergence and activation remain outstanding; repositories
-  never follow private preparation. The real app-owned edit/timer admission seam is described below; it activates none
-  of these inert sync components.
+  The explicit [app-facing boundary](sync/implementation.md#app-facing-authority-and-offline-recovery) supplies matching
+  offline account eligibility, exact grant expectations, private activation/recovery and bounded reconnect without ACTIVE
+  projection publication. Its repositories additionally check process revocation before effects/commit and after Room
+  result dispatch; legacy UUID/clock trailing-lambda constructor behavior remains unchanged. Repositories never follow
+  private preparation. Live scoped publication/timer/UI integration remains R12c; the app-owned seam below alone activates
+  none of these components.
   The [shared driver](sync/implementation.md#shared-push-before-pull-and-valid-tail),
   [push](sync/implementation.md#bounded-push-delivery), [checkpoint](sync/implementation.md#incremental-checkpoint-transactions)
   and [pull](sync/implementation.md#bounded-incremental-pull) references own details.

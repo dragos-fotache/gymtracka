@@ -67,6 +67,7 @@ class PushStore(
     private val database: GymDatabase,
     private val session: RepositorySession,
     private val owner: PushRunOwner,
+    private val processCheck: (() -> Unit)? = null,
 ) {
     private var preparedPermit: PreparedSessionEnginePermit? = null
 
@@ -90,7 +91,8 @@ class PushStore(
         session: RepositorySession,
         owner: PushRunOwner,
         permit: PreparedSessionEnginePermit,
-    ) : this(database, session, owner) {
+        processCheck: (() -> Unit)? = null,
+    ) : this(database, session, owner, processCheck) {
         preparedPermit = permit
     }
 
@@ -121,7 +123,8 @@ class PushStore(
         )
         return owner.mutex.withLock {
             currentCoroutineContext().ensureActive()
-            val run = PushRun(database, accountId, session.sessionGeneration, expectedCacheEpoch)
+            processCheck?.invoke()
+            val run = PushRun(database, accountId, session.sessionGeneration, expectedCacheEpoch, null, processCheck)
             try {
                 withContext(PushRunScope(run)) {
                     currentCoroutineContext().ensureActive()
@@ -190,12 +193,13 @@ class PushStore(
         }
         return owner.mutex.withLock {
             currentCoroutineContext().ensureActive()
+            processCheck?.invoke()
             val expectedCacheEpoch = readEpoch()
             if (expectedCacheEpoch < 0) {
                 throw IllegalStateException("Prepared epoch must be nonnegative")
             }
             currentCoroutineContext().ensureActive()
-            val run = PushRun(database, accountId, session.sessionGeneration, expectedCacheEpoch, permit)
+            val run = PushRun(database, accountId, session.sessionGeneration, expectedCacheEpoch, permit, processCheck)
             try {
                 withContext(PushRunScope(run)) {
                     currentCoroutineContext().ensureActive()
@@ -238,6 +242,7 @@ class PushRun internal constructor(
     private val sessionGeneration: Long,
     private var expectedCacheEpoch: Long,
     private val preparedPermit: PreparedSessionEnginePermit? = null,
+    private val processCheck: (() -> Unit)? = null,
 ) {
     @Volatile
     private var open = true
@@ -299,6 +304,8 @@ class PushRun internal constructor(
         if (!open || currentCoroutineContext()[PushRunScope.Key]?.run !== this) {
             throw IllegalStateException("Push run is not admitted")
         }
+        currentCoroutineContext().ensureActive()
+        processCheck?.invoke()
     }
 
     private fun requireStageToken(stage: SnapshotStage) {

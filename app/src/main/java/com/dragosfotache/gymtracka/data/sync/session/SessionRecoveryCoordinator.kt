@@ -37,6 +37,34 @@ internal class RecoveredSession internal constructor(
 
     internal fun fence(): Any = fence
 
+    internal fun snapshot(): RecoveryRoomSnapshot = originalSnapshot
+
+    /**
+     * Narrow read-only currentness check: verifies facade handle currentness
+     * before and after the existing lease authorization predicate. Uses
+     * [SessionRefreshLease.checkAuthorization], which is independent of the
+     * reauth latch, so REAUTHENTICATION_REQUIRED keeps offline eligibility
+     * while permanent lease invalidation or Room drift closes the handle.
+     * Performs no credential refresh, vault write, clock, UUID or HTTP work.
+     * Caller cancellation dominates stale mapping.
+     */
+    suspend fun checkCurrent() {
+        currentCoroutineContext().ensureActive()
+        if (!alive.get() || !owner.isHandleCurrent(this, fence)) {
+            throw SessionRecoveryException(SessionRecoveryFailure.STALE_SESSION)
+        }
+        try {
+            lease.checkAuthorization()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        }
+        currentCoroutineContext().ensureActive()
+        if (!alive.get() || !owner.isHandleCurrent(this, fence)) {
+            throw SessionRecoveryException(SessionRecoveryFailure.STALE_SESSION)
+        }
+    }
+
     /**
      * Runs [request] with the recovered credential through the owner's
      * serialized refresh machinery. The transport callback is checked
@@ -93,13 +121,14 @@ internal class SessionRecoveryCoordinator(
     private val authApi: ServiceAuthApi,
     private val clockMillis: () -> Long = System::currentTimeMillis,
     private val uuidProvider: () -> String = { UUID.randomUUID().toString() },
+    credentialMutex: Mutex = Mutex(),
 ) {
     private val stateLock = Any()
     private var currentFence: Any = Any()
     private var currentState: SessionRecoveryState = SessionRecoveryState.PrivacyLocked
     private var currentLease: SessionRefreshLease? = null
     private var currentHandle: RecoveredSession? = null
-    private val sharedMutex = Mutex()
+    private val sharedMutex = credentialMutex
     private val refreshCoordinator: SessionRefreshCoordinator? =
         if (origin != null) {
             SessionRefreshCoordinator(origin, vault, authApi, clockMillis, uuidProvider, sharedMutex)

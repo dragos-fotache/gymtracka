@@ -16,6 +16,8 @@ import com.dragosfotache.gymtracka.data.sync.model.SyncModelException
 import com.dragosfotache.gymtracka.data.sync.model.UnsupportedDurableVersionException
 import com.dragosfotache.gymtracka.data.sync.model.validateMutationEnvelope
 import java.util.UUID
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 /** An additional affected root whose metadata advances with the captured edit. */
 data class ExtraAffectedRoot(val type: AggregateType, val id: String)
@@ -48,11 +50,25 @@ data class CaptureOutcome(
  */
 class SyncStore(
     private val database: GymDatabase,
-    private val session: RepositorySession = RepositorySession.SIGNED_OUT,
-    private val newMutationId: () -> String = { UUID.randomUUID().toString() },
+    private val session: RepositorySession,
+    private val newMutationId: () -> String,
+    private val processCheck: (() -> Unit)?,
 ) {
-    suspend fun <T> withFencedTransaction(block: suspend (SyncTransaction) -> T): T =
-        database.withTransaction {
+    /**
+     * Legacy construction path with the original defaults and no process
+     * guard. Kept separate from the guarded primary so a trailing
+     * mutation-ID supplier lambda keeps binding [newMutationId] exactly as
+     * before, instead of coercing into the process guard.
+     */
+    constructor(
+        database: GymDatabase,
+        session: RepositorySession = RepositorySession.SIGNED_OUT,
+        newMutationId: () -> String = { UUID.randomUUID().toString() },
+    ) : this(database, session, newMutationId, null)
+    suspend fun <T> withFencedTransaction(block: suspend (SyncTransaction) -> T): T {
+        val result = database.withTransaction {
+            currentCoroutineContext().ensureActive()
+            processCheck?.invoke()
             val device = database.syncDao().getDeviceState()
             val actualAccountId = device?.activeAccountId
             val actualGeneration = device?.sessionGeneration ?: 0L
@@ -67,12 +83,22 @@ class SyncStore(
                 )
             }
             val transaction = SyncTransaction(database, session.accountId, newMutationId)
-            try {
+            val committed = try {
                 block(transaction)
             } finally {
                 transaction.close()
             }
+            currentCoroutineContext().ensureActive()
+            processCheck?.invoke()
+            committed
         }
+        // Post-dispatch guard: a process-only invalidation landing during lost
+        // result dispatch must not leak a stale read/write success. Caller
+        // cancellation dominates. Already committed writes remain committed.
+        currentCoroutineContext().ensureActive()
+        processCheck?.invoke()
+        return result
+    }
 }
 
 private data class RootState(

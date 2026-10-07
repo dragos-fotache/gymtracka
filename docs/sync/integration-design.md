@@ -318,8 +318,11 @@ rotation or Room mutation. See [implemented replay boundary](implementation.md#i
 selects the remaining unsuccessful/legacy-malformed/interrupted uncertain-session recovery policy: atomically retain and
 permanently fence exact encrypted predecessor evidence while installing distinct fresh same-account sign-in credentials.
 [R09g](implementation.md#inert-retained-account-recovery-and-superseded-evidence) delivers this and signed-out/missing-vault
-recovery privately, including nonadjacent older-evidence reservation gaps with a fresh grant. Live app integration remains
-outstanding; no old evidence supplies credentials/visibility, and R12a/core R10 still gate production activation. See
+recovery privately, including nonadjacent older-evidence reservation gaps with a fresh grant. The delivered
+[app-facing authority/offline-recovery boundary](implementation.md#app-facing-authority-and-offline-recovery) composes these
+seams with required transition/publication inputs and process-fenced repositories. It does not activate current startup
+screens/publisher; R12c retains scoped rebinding and canonical timer-impact integration. R12a/core R10 are the accepted
+named prerequisites, not substitute live-integration permission. No old evidence supplies credentials/visibility. See
 [implemented settled boundary](implementation.md#inert-settled-occupied-credential-reauthentication).
 Existing canonical-only engine recovery is reused, not recreated for completed preparation.
 Ordinary local backup need not be disabled to exclude credentials.

@@ -43,6 +43,7 @@ import com.dragosfotache.gymtracka.data.sync.store.StaleSnapshotStageException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
@@ -78,10 +79,11 @@ internal class PreparedSessionEngineCoordinator(
     private val runOwner: PushRunOwner,
     private val clockMillis: () -> Long = System::currentTimeMillis,
     private val uuidProvider: () -> String = { java.util.UUID.randomUUID().toString() },
+    credentialMutex: Mutex = Mutex(),
 ) {
     private val authority = RoomSessionAuthority(database)
-    private val preparation = SessionPreparationCoordinator(origin, authority, vault)
-    private val refresh = SessionRefreshCoordinator(origin, vault, authApi, clockMillis, uuidProvider)
+    private val preparation = SessionPreparationCoordinator(origin, authority, vault, credentialMutex)
+    private val refresh = SessionRefreshCoordinator(origin, vault, authApi, clockMillis, uuidProvider, credentialMutex)
 
     private val stateLock = Any()
     private var currentFence: Any = Any()

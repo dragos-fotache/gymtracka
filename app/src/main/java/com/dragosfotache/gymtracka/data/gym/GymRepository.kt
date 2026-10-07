@@ -31,18 +31,32 @@ import java.util.UUID
  */
 internal class GymRepository(
     private val database: GymDatabase,
-    private val session: RepositorySession = RepositorySession.SIGNED_OUT,
-    private val newMutationId: () -> String = { UUID.randomUUID().toString() },
-    private val tombstoneClock: () -> Long = System::currentTimeMillis,
+    private val session: RepositorySession,
+    private val newMutationId: () -> String,
+    private val tombstoneClock: () -> Long,
+    processCheck: (() -> Unit)?,
 ) : ExerciseStateRepository,
     GymAppStateRepository,
     ActiveWorkoutStateRepository,
     RoutineStateRepository,
     WorkoutHistoryStateRepository {
+    /**
+     * Legacy construction path with the original defaults and no process
+     * guard. Kept separate from the guarded primary so trailing lambdas
+     * keep binding their original parameters exactly as before, instead of
+     * coercing into the process guard.
+     */
+    constructor(
+        database: GymDatabase,
+        session: RepositorySession = RepositorySession.SIGNED_OUT,
+        newMutationId: () -> String = { UUID.randomUUID().toString() },
+        tombstoneClock: () -> Long = System::currentTimeMillis,
+    ) : this(database, session, newMutationId, tombstoneClock, null)
+
     /** Production construction path. Tests can inject an isolated [GymDatabase] directly. */
     constructor(context: Context) : this(GymDatabase.getInstance(context))
 
-    private val store = SyncStore(database, session, newMutationId)
+    private val store = SyncStore(database, session, newMutationId, processCheck)
 
     private companion object {
         const val DEFAULT_REST_DURATION_SECONDS = 30
