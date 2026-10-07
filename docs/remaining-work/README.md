@@ -4,8 +4,9 @@
 [R12b projection observation and feature refresh](../archive/remaining-work/R12b-review.md) is accepted and archived;
 [R12a real finite-edit admission and timer barriers](../archive/remaining-work/R12a-review.md) remains accepted.
 The [finite three-slice R12 plan](../remaining-work-roadmap.md#r12--feature-and-app-reconciliation) is settled: a/b complete,
-c outstanding. The current owner request ends with accepted R12b's scoped local commit, prepared handoff and owner
-report. **No further successor launch or R12c implementation under this request.**
+c outstanding. **Core R10 is the owner-authorized fresh-coordinator pickup after verified transfer**, under the
+[current handoff](../coordinator-handoff.md). Its bounded specification is prepared by that coordinator after release;
+no implementation specification is open yet. R12c remains blocked on its authority/convergence dependencies.
 
 [R09g inert same-account recovery](../archive/remaining-work/R09g-review.md) remains accepted. The finite
 [R09 plan](../remaining-work-roadmap.md#remaining-r09-plan) remains R09g (accepted), R09h, then reduced personal closure.

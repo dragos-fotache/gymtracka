@@ -10,9 +10,16 @@
 [Review](archive/remaining-work/R12b-review.md) owns executed evidence;
 [archived specification](archive/remaining-work/R12b-task.md) records its contract. No implementation specification is open.
 
-The owner-authorized request ends with accepted R12b's scoped local commit, prepared handoff and owner report.
-**Stop there: no further successor launch or R12c implementation under this request.** Acceptance is not new task
-or activation authority. Future work needs eligibility under owner direction/workflow and a verified ownership transfer.
+The owner has authorized a **fresh coordinator for Core R10 — engine convergence and recovery (R10a)**.
+Report bounded pickup readiness to outgoing live `gym-coordinator`, then wait for verified ownership release before
+specification, edits, delegation or builds. Acceptance evidence alone is not start or activation authority.
+
+After release, follow the [Core R10 outcome](remaining-work-roadmap.md#r10--engine-convergence-and-recovery): two
+independent real Room stores through the delivered engine and isolated HTTP, not DTO-only interoperability. The first
+R10 coordinator settles the finite whole-R10 outcome plan under the [major-task rule](coordinator-workflow.md#major-task-slicing--owner-rule),
+then creates the bounded Core R10 specification. Expanded R10b remains its public milestone; do not pull it forward or
+add hidden prerequisite slices. Core R10 does not authorize production activation, R12c implementation, real Google/
+phone journeys, personal configuration or deployment. Escalate missing inputs, unavailable gates and scope questions.
 
 The [finite R12 plan](remaining-work-roadmap.md#r12--feature-and-app-reconciliation) remains **three slices, R12a–c**.
 R12a/b are complete. R12c scoped app/timer reconstruction still needs delivered app-facing R09h authority and core R10
@@ -43,7 +50,7 @@ choice before affected activation. Unknown/foreign/unreadable authority/vault st
 credential archives are evidence only, never old-token/data authority or implicit cleanup permission. The
 [legacy accepted auth-replay limitation](sync/implementation.md#legacy-auth-replay-limitation) remains unrepaired.
 
-## Future pickup and verification
+## Core R10 pickup and verification
 
 Supplied AGENTS → README policy → this handoff → roadmap dependencies → workflow authority/transfer rules.
 Verify BOTH live trees/indexes/all untracked/HEADs, roles/models and resource ownership; preserve user changes. Do not
@@ -62,6 +69,6 @@ Those R12 package gates remain R12c closure; core R10, API24, hosted CI, Google/
 milestones. Secure laptop connectivity, OAuth audience/signing and authorized live data are external inputs. Backend
 access remains isolated operational build/start plus black-box HTTP only, never source/private-config review.
 
-Task build/device slots and owned test resources are released at closure; the test-owned emulator is stopped and its
+All R12b task build/device slots and owned test resources are released; its test-owned emulators are stopped and
 isolated Android/AVD homes removed. No resource ownership or contributor conversation transfers. Rediscover live
 roles/processes before grants or default-resource use. Commit receipts belong in the short owner report, not here.

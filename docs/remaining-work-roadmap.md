@@ -32,8 +32,8 @@ The finite [R09 plan](#remaining-r09-plan) remains **R09g (accepted), R09h, then
 **[R12a real edit/timer barriers](archive/remaining-work/R12a-review.md) and
 [R12b projection observation/feature refresh](archive/remaining-work/R12b-review.md) are accepted; R09h remains blocked
 on core R10 and its app-facing activation/integration gates.** The finite [R12 plan](#r12--feature-and-app-reconciliation)
-is settled. **The current owner request ends with R12b's scoped local commit, prepared handoff and owner report;
-no further successor launch or R12c implementation under this request.** Core R10 remains required; do not bypass gates
+is settled. **The next owner-authorized pickup is Core R10 with a fresh coordinator after verified ownership transfer;**
+see [current authority and handoff](coordinator-handoff.md). R09h/R12c remain dependency-blocked; do not bypass gates
 or add R09 slices.
 “Pending” requires eligibility under explicit/standing authority and a bounded pickup spec, not another approval for each
 eligible next slice. “Deferred” remains required for its later
@@ -230,9 +230,9 @@ at pickup, not from old planning versions. Deterministic adapter tests and actua
 
 ### R12 — Feature and app reconciliation
 
-**Finite plan: three slices, R12a–c, then close R12 after its package gates.** R12a/b are accepted. The current owner request
-ends after R12b's scoped local commit, prepared handoff and owner report. No R12c implementation or further successor
-launch under this request. Additional splitting requires user escalation.
+**Finite plan: three slices, R12a–c, then close R12 after its package gates.** R12a/b are accepted; R12c remains pending
+its authority/convergence dependencies. Current pickup is Core R10, not premature R12c integration. Additional splitting
+requires user escalation.
 
 | Slice | Outcome / completion boundary | Dependencies | Non-goals |
 |---|---|---|---|
