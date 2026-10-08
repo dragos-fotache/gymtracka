@@ -23,7 +23,7 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/`.
 | `ui/activeworkout/` | Active screen, compact exercise/set controls, timer UI and feature state |
 | `ui/util/WorkoutFormatters.kt` | Shared derived calculations and locale-aware parsing/formatting |
 | `data/gym/GymRepository.kt` | Application-facing persistence, UUID creation, transactional edits and sync capture |
-| `data/sync/` | Fenced capture/canonical storage, protected publication, push/pull/snapshot drivers, HTTP/vault/session authority and explicit guarded ACTIVE reconciliation; [details](sync/implementation.md) |
+| `data/sync/` | Fenced capture/canonical storage, protected publication, push/pull/snapshot drivers, HTTP/vault/session authority, explicit guarded ACTIVE reconciliation and inert foreground Google identity adapter; [details](sync/implementation.md) |
 
 `FeatureRepositories.kt` exposes narrow interfaces to state holders; reusable/leaf composables receive values and callbacks.
 `ui/GymRepositoryProvider.kt` supplies `rememberGymRepository()` and optional internal `LocalGymRepositoryOverride` for
@@ -41,7 +41,9 @@ real Android clock/hardware and composition scope; construction starts private a
 `GymApp(accountState)` selects only the synchronously current live handle, keys reconstruction by handle identity and
 otherwise renders `account-privacy-gate`. Same-handle delivery status updates preserve navigation/timers. Retiring
 state stays pinned while a transition/publication lease is held, even after privacy hide; whole-runtime disposal
-revokes the facade and cancels owned child scopes. Default startup remains local; identity/UI/triggers remain R11/R13.
+revokes the facade and cancels owned child scopes. Default startup remains local. The explicitly constructed
+[foreground Google adapter](sync/implementation.md#foreground-android-google-identity) is inert until called; service
+exchange/handoff and account UI/triggers remain R11b/R13.
 
 ## Room database
 

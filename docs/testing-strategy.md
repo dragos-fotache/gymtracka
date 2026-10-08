@@ -86,6 +86,7 @@ future assignments. Total test count alone does not explain delivery time or jus
 | App/timer | Active discovery/replacement/finish/discard, shared finite admission and retained failures/cancellation, normal/terminal acceptance order, exclusive self-excluding versus external drains, request/session-bound leases and lost-return cancellation, ownership/at-most-once rest, clock/hardware behavior |
 | Compose/app flows | Catalogue/picker/editor/routine/set/history controls; actual startup, custom edit/add, workout finish/history, routine start and perform-again journeys; real root shared-admission refusal and accepted routine autosave surviving editor→picker disposal |
 | Wire/HTTP | Raw duplicates, family identities, durable exact bytes, auth scalar/expiry validation, operation-aware errors, fixed-origin TLS/redirect/retry refusal, framing/UTF-8/cancellation |
+| Foreground Google identity adapter | Independent injected SDK-client tests using actual Google request/credential/parser types on API24/current Android; exact audience/nonce/button/default policy, invalid/config/provider failures, caller/user cancellation, virtual timeout, shared-slot concurrency, destroy/recreation/close, cancellation-resistant late results and queued caller delivery, explicit clear and redaction. Not an actual Google/provider/account verification |
 | Vault/refresh/recovery | Real codec/CAS restart, JCA crypto, Android Keystore/file/backup placement, pending-first durable-before-send rotation, unchanged request retry, startup authority/visibility precedence, recovered-handle fencing and cancellation races |
 | Real service | All 17 kinds/imports, complete canonical results, no-effect rejection, replay/account isolation/pull/snapshot, challenge/refresh/logout and invalid Google-proof rejection |
 | Durable push stores and bounded driver | Real Room explicit-head/replay ownership/fencing, complete outcomes/retry, exact accepted provenance and atomic canonical/removal/metadata acknowledgment; all-three-family and DELETE-target paths, newer generations/watermarks/tombstones, old duplicate winners, corruption/successor blocking, reopen, concurrent settlement, consumed-token and transaction rollback. Driver integration covers one-head transport/commit order, bounded progress, exact retry, cancellation/late fences, shared ownership and earlier commits surviving later failure; no complete push/pull engine |
@@ -153,6 +154,27 @@ or use those filtered runs as full unfiltered regression evidence. Relevant repo
 
 Catalogue join-table foreign-key-index KSP warnings and recorded newer-dependency lint findings are nonfatal baseline
 findings, not permission to hide new warnings. Record any new warnings and limitations in the relevant review.
+
+## Foreground Google adapter procedure
+
+R11a's scoped device gate uses the injected SDK launch boundary, not real Google. Construct the provider on Android
+Main; virtual-time tests substitute the coroutine Main dispatcher before construction while ActivityScenario lifecycle
+operations continue on the real Android Main thread. Distinguish cancellation-resistant late SDK work from a result
+already queued for caller dispatch: both need their own independently controlled gates.
+
+Use disposable API24/current emulators, never a personal device. Select one owned serial per invocation and inspect the
+executed XML class/case names for both runs:
+
+```sh
+ANDROID_SERIAL=<owned-emulator> ./gradlew :app:connectedDebugAndroidTest --rerun \
+  -Pandroid.testInstrumentationRunnerArguments.class=com.dragosfotache.gymtracka.data.sync.identity.AndroidGoogleIdentityProviderTest \
+  --console=plain
+```
+
+Preserve each device's reports before another invocation replaces them. API24 may report unsupported additional output;
+that is not a pass or failure by itself—require complete native test execution and XML. Full unfiltered default device
+and isolated auth interoperability remain R11b personal-package gates. Configured audience/signing/provider/service and
+actual user sign-in/reauthentication are separate authorized R17a gates.
 
 ## Isolated real-backend procedure
 
@@ -303,8 +325,9 @@ stays in the linked reviews; consult only when assessing coverage freshness or i
 
 | Layer | Latest relevant recorded evidence | Limitation |
 |---|---|---|
-| Offline JVM/compilation | [R12c review](archive/remaining-work/R12c-review.md), 2026-10-08: fresh **63 classes / 1,008 cases / 0 failures/errors/skips**, main/default/opt-in Kotlin/KSP compilation | Final scoped-runtime snapshot, not real Google/phone readiness |
-| Debug assembly/lint/APK | [R12c review](archive/remaining-work/R12c-review.md): frozen assembly/lint, helper/config/private-key/JWT marker exclusion, exact v1 packaged asset and unchanged schemas/manifest | One newer-dependency warning; not release/OEM/cloud-transfer audit |
+| Offline JVM/compilation | [R11a review](archive/remaining-work/R11a-review.md), 2026-10-08: fresh **63 classes / 1,008 cases / 0 failures/errors/skips**, main/default AndroidTest Kotlin/KSP compilation | Adapter/dependency snapshot, not real Google/phone readiness; prior opt-in layer evidence remains R12c |
+| Debug assembly/lint/APK | [R11a review](archive/remaining-work/R11a-review.md): frozen assembly/fresh lint analysis, auth-fixture/backend/JDBC/config/key marker exclusions, binary/merged min24 manifest/vendor-component audit, exact v1 packaged asset and unchanged schemas | One newer-json dependency warning; new transitive normal biometric permissions reviewed, not release/OEM/cloud-transfer audit |
+| Foreground Google adapter | [R11a review](archive/remaining-work/R11a-review.md): fresh focused **1 class / 34 cases / 0 failures/errors/skips on each API24/Android7 and API37/Android17**, exact declared-name sets and actual SDK parser/request types | Injected launch/client, not actual Google; no fresh full default instrumentation or full minAPI app regression |
 | App-facing authority/offline recovery | [R09h review](archive/remaining-work/R09h-review.md): whole affected session package plus separate unchanged capture/scoped-repository/push-fence/rollback/real root-admission classes | Filtered Android gates, not full instrumentation, live UI/timer rebinding, active projection or actual account journeys |
 | Focused projection/feature/edit flows | [R12b review](archive/remaining-work/R12b-review.md): individual API37 observation, actual-screen focus/dialog/shared-admission, root-disposal, leaf-refusal and focused controls classes | Scoped device evidence, not full unfiltered instrumentation, account activation or remote app/timer reconstruction |
 | Settled reauthentication and affected Room/session | [R09e review](archive/remaining-work/R09e-review.md): individual API37 real authority/Keystore/reopen/retained-intent and affected Room/preparation classes | No fresh unfiltered instrumentation, API24, two-store HTTP convergence, activation or live OEM/cloud transfer |
@@ -320,9 +343,10 @@ stays in the linked reviews; consult only when assessing coverage freshness or i
 | Focused shared-driver/tail Room | [R07c review](archive/remaining-work/R07c-review.md): separately executed 3 new classes before the full package gate; R07a/b checkpoint/paging cases included in full regression | Filtered evidence remains scoped; full and packaging gate claims come only from their separate executions |
 | Launcher | [R10a review](archive/remaining-work/R10a-review.md): fresh Python launcher regression | Isolated launcher safeguards, not personal deployment/configuration |
 
-API 24 runtime, hosted CI, successful real Google identity, expanded R10b and owner phone/laptop journeys remain
-unverified by these records. Core R10a convergence and R12a–c scoped reconciliation are accepted; default startup
-still remains local and identity/account UI/triggers are not activated.
+Full minimum-API app regression, hosted CI, successful real Google identity, expanded R10b and owner phone/laptop journeys
+remain unverified by these records. R11a verifies the scoped adapter on API24, not all app behavior. Core R10a convergence,
+R12a–c reconciliation and deterministic R11a are accepted; default startup remains local and foreground service
+exchange/account UI/triggers are not activated.
 Broader/public gates are tracked in [the roadmap](remaining-work-roadmap.md), not inferred
 from the most recent JVM total. The [legacy replay limitation](sync/implementation.md#legacy-auth-replay-limitation) remains
 an explicit recovery/release risk, not a repaired case.

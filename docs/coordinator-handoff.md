@@ -4,24 +4,61 @@
 
 ## Current boundary and authority
 
-**R12c and the finite R12a–c package are accepted.** The [archived review](archive/remaining-work/R12c-review.md) owns final scoped evidence; the [roadmap](remaining-work-roadmap.md#r12--feature-and-app-reconciliation) records closure. R09a–h authority/offline recovery and Core R10a are accepted dependencies. No additional R09/R12 slice is planned.
+**R11a foreground Android Google identity adapter is accepted, deterministic-only.** The
+[archived review](archive/remaining-work/R11a-review.md) owns scoped verification and limits; the
+[finite R11 plan](remaining-work-roadmap.md#r11--foreground-google-identity) has accepted a, pending personal b and deferred
+public c. R09a–h, Core R10a and R12a–c remain accepted dependencies; no additional R09/R12 slice is planned.
 
-**Current release: R11 plan design and report-back only.** R12c closure remains the implementation stop; no R11 implementation, contributor delegation, build or live Google/account action is released. The proposed [finite R11 plan](remaining-work-roadmap.md#r11--foreground-google-identity) has two personal slices and one deferred public slice. Obtain implementation release and resolve its input gates before a bounded specification/delegation. The standing automatic-continuation rule does not override this planning-only boundary; durable readiness is not a resource or scope grant.
-
-The accepted slice is committed locally as the latest scoped `R12c` commit; verify `git log` and both live trees/indexes rather than treating an archived hash as current. No pushes, deployment or personal configuration/actions were authorized.
+**Owner stop: finish R11a, prepare the next coordinator, then stop.** No successor was launched, no ownership was
+transferred and no R11b specification/implementation/delegation began. The standing continuation rule does not override
+this explicit stop. A future fresh coordinator must obtain execution release and confirm input scope before edits,
+delegation or builds; durable readiness is not a resource or live-account grant. Scoped changes are committed locally;
+verify both HEADs/trees/indexes, not an archived receipt. No push, deployment or personal configuration/action is authorized.
 
 ## Delivered boundary and remaining limits
 
-Default startup remains **signed-out/local-only** until R13 policy/UI integration. The explicit [account authority](sync/implementation.md#app-facing-authority-and-offline-recovery) and [ACTIVE reconciliation](sync/implementation.md#guarded-active-reconciliation-and-scoped-runtime) support private grant/bootstrap/completion, matching offline recovery, exact-live scoped runtime/root, real edit/timer barriers and one-owner push/pull/typed snapshot/tail/paired publication. Reconnect remains nonpublishing. Fresh cache observation is advisory, never authority. Private/revoked models have no local repository fallback; lease-safe retirement preserves hidden normal reauthentication reservation. See [architecture](architecture.md).
+The explicitly constructed [Google adapter](sync/implementation.md#foreground-android-google-identity) uses Credential
+Manager's Google button flow, exact supplied service nonce/configured audience, actual Google credential parsing and opaque
+tokens, safe failures and lifetime/concurrency/cancellation fences. Clear is an explicit SDK primitive only. No real
+OAuth audience/service/signing configuration is packaged; no Google request was executed against a real provider/account.
 
-Final synthetic gates: full JVM **1,008**, full default device **926**, isolated backend JVM **58**, complete opt-in real Room/HTTP **6**, all zero failures/errors/skips; frozen assembly/lint/APK and source/document checks passed. Lint has one newer-dependency warning. Kotlin LSP misbehaved and was unavailable; bounded allowlisted text navigation/exact reads plus compilation were authorized, not clean diagnostics. An earlier real activation returned Private once; safe metadata diagnostics did not reproduce it in defined repeatability/final runs and are not claimed to repair its unknown cause. Retain the review limitation; investigate recurrence without masking retries.
+Default startup remains **signed-out/local-only** until R13 policy/UI integration. Google success is not a service grant,
+account authority or activation. Existing explicit private authority/bootstrap/offline recovery and scoped ACTIVE runtime
+remain available for bounded integration, with no private/revoked fallback. R11b owns exchange/guarded handoff; R13 owns
+account UI/triggers and activation. See [architecture](architecture.md) and [sync implementation](sync/implementation.md).
 
-**Legacy policy is approved: preserve and import existing local-only data once into the first service-confirmed account ([P18](../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions)).** Implement it as a dedicated bounded R13 import/activation workstream, not another major R or a reopening of R09/R12. Preserve IDs/values/relationships and exact recoverable evidence; no destructive clean/cloud-only start. The policy is not implemented: current activation still refuses local roots until durable migration/recovery and import-before-publication gates pass. No ad hoc personal-data changes are authorized. [P16/P17](../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions) bind exact intent and encrypted uncertain evidence. Superseded archives remain private/preserved/excluded from credential selection/replay/cleanup. Foreign/unreadable/unknown-provenance evidence is not adoptable. The [legacy auth-replay limitation](sync/implementation.md#legacy-auth-replay-limitation) remains unrepaired.
+R11a's required synthetic gates passed; fresh full offline JVM and focused API24/current adapter execution are scoped in
+its review. Full unfiltered default instrumentation and isolated auth interoperability remain R11b personal-package
+closure gates. Actual Google/audience/signing, trusted HTTPS and owner phone/account journeys remain R17a. Kotlin LSP is
+unavailable, not clean; use bounded allowlisted reads and compilation. The earlier unexplained R12c Private activation
+stop remains a review limitation; recurrence needs investigation, not masking retries.
+
+**P18 legacy policy remains preserve/import once into the first service-confirmed account.** Its bounded implementation
+belongs to R13, not a new major task or reopened R09/R12. Current activation still refuses local roots until durable
+migration/recovery, definitive import settlement and complete snapshot publication pass. Preserve IDs/values and exact
+recoverable evidence; no destructive clean/cloud-only start or ad hoc personal-data changes. P16/P17 account fencing and
+superseded encrypted evidence retention remain binding. Foreign/unreadable/unknown-provenance evidence is not adoptable;
+[legacy auth replay](sync/implementation.md#legacy-auth-replay-limitation) remains unrepaired.
 
 ## Next-coordinator preparation
 
-Next is **R11a foreground Android Google identity adapter**, then R11b bounded foreground exchange and guarded grant handoff, followed by R13 account UI/triggers plus the approved legacy import. R11c lifecycle proofs remain deferred public. The [roadmap plan](remaining-work-roadmap.md#r11--foreground-google-identity) owns outcomes, dependencies, candidate SDKs and verification boundaries; no implementation is released here. Execution pickup must obtain/confirm owner-supplied OAuth audience, service/package/signing inputs or an explicit deterministic-only scope, and verify dependency compatibility before a bounded specification. The nonce comes from each service challenge, not owner configuration. Missing inputs/product/scope questions go to the owner; do not access private configuration or substitute another task. R17 actual Google/connectivity/phone/account/deployment inputs are separate live gates. Expanded R10b remains deferred.
+Next is **R11b bounded foreground sign-in/reauthentication exchange and guarded grant handoff**, then R13 account
+UI/triggers plus P18 import. R11c lifecycle proofs and expanded R10b remain deferred public.
 
-Pickup: supplied AGENTS → README policy → this handoff → roadmap status/dependencies → workflow. Verify BOTH HEADs, indexes, all tracked/untracked work and live roles/resources. Preserve user work. Use a fresh native coordinator `openai-codex/gpt-6.1-sol`/high and fresh independent Worker/QA `meta/muse-spark-1.3-contributor`/high sessions per released slice; completed R12c conversations are not successor assignments. Reports are fire-and-forget, never waits or acknowledgment polling. Every Gradle run requires an exclusive serialized slot; lint freezes both source layers.
+After owner release, confirm either real integration inputs/permission boundaries or an explicit deterministic-only
+R11b scope. Do not discover private configuration, invent an endpoint/audience, generate/change signing keys or operate
+on a personal account/device. Nonce comes from each service challenge, not configuration. Reuse accepted R11a, exact
+`GoogleExchangeAttempt`, auth HTTP, vault/refresh and `AppSessionCoordinator.acceptGrant` seams; preserve caller intent,
+origin, expected authority and invocation liveness. Resolve task-relevant contracts/code/harness facts before creating
+one bounded specification and disjoint Worker/QA assignments. The roadmap owns R11b outcomes, safety and package gates.
 
-Owned R12c emulator/backend/relay/ADB resources are settled at task closure; retained sanitized test evidence is historical, not a reusable live resource grant. Rediscover/allocate explicitly for future checks. Backend access remains operational build/start and black-box HTTP under the [isolated procedure](testing-strategy.md#isolated-real-backend-procedure), never source/private-config review. No personal devices/accounts/configuration, Google journeys, pushes or deployment without separate permission. No further implementation begins until the owner resumes coordinator execution; recording the approved policy does not release a slice.
+Pickup: supplied AGENTS → README policy → this handoff → roadmap status/dependencies → workflow authority. Verify both
+HEADs/indexes/tracked/untracked work and live roles/resources; preserve user work. Use a fresh native coordinator
+`openai-codex/gpt-6.1-sol`/high and fresh independent Worker/QA `meta/muse-spark-1.3-contributor`/high sessions. Completed
+R11a contributor conversations are not successor assignments. Reports are fire-and-forget, never waits/acknowledgment
+polling. Every Gradle run requires one exclusive serialized slot; lint freezes both source layers.
+
+Owned R11a synthetic emulator/build resources are settled at closure; retained test evidence is historical, not a reusable
+resource grant. Allocate/verify future emulators and any isolated backend resources explicitly. Backend access remains
+operational build/start and black-box HTTP under the [isolated procedure](testing-strategy.md#isolated-real-backend-procedure),
+never source/private-config review. No further implementation starts until the owner resumes coordinator execution.

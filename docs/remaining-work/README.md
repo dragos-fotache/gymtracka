@@ -1,10 +1,15 @@
-# Active task specifications
+# Active Android assignments
 
-There is **no active implementation specification** after R12c closure. The finite R12a–c package is accepted; its [archived specification](../archive/remaining-work/R12c-task.md) and [review](../archive/remaining-work/R12c-review.md) retain scoped historical evidence, not live assignments.
+There is **no active implementation specification** after R11a acceptance. Its
+[archived specification](../archive/remaining-work/R11a-task.md) and [review](../archive/remaining-work/R11a-review.md)
+retain deterministic adapter scope/evidence, not a live assignment.
 
-The current release is R11 plan design and report-back only; no implementation specification, delegation or build is released. The proposed [finite R11 plan](../remaining-work-roadmap.md#r11--foreground-google-identity) is recorded in the roadmap. Use the [current handoff](../coordinator-handoff.md) and [workflow](../coordinator-workflow.md) for execution release, dependencies and source-separated execution. Do not treat this index or old sessions/resources as permission to implement.
+The owner explicitly stopped after completing R11a and preparing the next coordinator. No successor or R11b work was
+started. Next is **R11b bounded foreground exchange and guarded grant handoff**, subject to fresh execution release and
+confirmed input scope. Use the [handoff](../coordinator-handoff.md),
+[finite R11 plan](../remaining-work-roadmap.md#r11--foreground-google-identity) and
+[workflow](../coordinator-workflow.md) for dependencies, gates and source-separated execution.
 
-Next personal area is R11 foreground identity, then R13 account UI/triggers, subject to verified inputs/authority. Default startup remains local-only. [P18](../../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions)
-approves one-time preservation/import of legacy local-only data, assigned to a bounded R13 import/activation workstream;
-no destructive clean start or ad hoc migration is authorized. Affected activation still refuses unchanged until that
-implementation and its gates are delivered. R17 live and deferred-public obligations remain separate.
+Default startup remains local-only. Account UI/triggers and approved P18 legacy preservation/import remain R13.
+Actual Google/configured audience/signing/provider/service/phone journeys remain separately authorized R17a gates;
+R11c lifecycle proofs and other public obligations remain deferred. Acceptance does not authorize live actions.

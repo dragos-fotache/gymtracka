@@ -546,6 +546,32 @@ configured versus actual rest remain distinct. Bundled exercises are not uploada
   UUID idempotency keys are header data. Typed auth methods receive the attempt; legacy conveniences delegate. Exchange
   attempts/Google proofs remain foreground-memory-only; uncertain refresh persistence belongs in the encrypted vault.
 
+## Foreground Android Google identity
+
+`data/sync/identity/AndroidGoogleIdentityProvider` implements the existing SDK-independent `GoogleIdentityProvider`.
+It is explicitly constructed on Android Main for one `ComponentActivity`, with an injected web/server audience and
+optional `GoogleCredentialClient`; default startup constructs none. The production client delegates to Credential
+Manager using application context for the manager and the captured current Activity for UI. Dependencies are matched
+Credentials/Play Services bridge 1.6.0 and Google ID 1.2.1; no actual OAuth/service/signing configuration is packaged.
+
+- Each explicit call builds one Google button option (`GetSignInWithGoogleOption`), passing exact configured audience
+  and service nonce unchanged. Missing/blank/padded audience and blank nonce refuse before SDK launch. Admission needs
+  a RESUMED, nonfinishing/nondestroyed Activity; provider UI may temporarily pause/stop it without invalidating the result.
+- Only the Google custom credential type is accepted, parsed through the real Google ID parser. A nonblank opaque token
+  is returned unchanged, never decoded as account authority. No challenge, HTTP exchange, vault/Room write or activation
+  follows Google success here; those boundaries remain R11b/R13.
+- One nonqueueing slot covers get and explicit clear. Operations have a two-minute default timeout, caller cancellation
+  precedence and fixed safe SDK-independent failure reasons. No provider details/causes, tokens, nonces, audiences or
+  identity data enter diagnostics. No automatic fallback/retry or credential-state cleanup is performed.
+- `close()` permanently fences the adapter, cancels its owned SDK work without cancelling the caller scope, releases its
+  Activity and removes the observer on Android Main. Activity destruction/recreation retires it automatically. Caller
+  dispatch and final acceptance recheck retirement/liveness, so cancellation-resistant late work cannot publish a token.
+- `clearCredentialState()` is only an explicit SDK primitive; it needs a live adapter but no configured audience or
+  RESUMED Activity. It does not clear service credentials, sign out, erase account data or run on cancellation/close.
+
+Configuration, real Google verification and installed signing/audience interoperability remain separate R17a gates.
+Default local startup/account visibility policy is unchanged; no interactive auth is wired to a background worker.
+
 ## API and secure HTTP
 
 `sync/api` exposes SDK-independent `GymSyncApi` (push/pull/snapshot), service-auth, identity, and bearer boundaries.
