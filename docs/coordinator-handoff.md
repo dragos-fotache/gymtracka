@@ -9,11 +9,12 @@
 [finite R11 plan](remaining-work-roadmap.md#r11--foreground-google-identity) has accepted a, pending personal b and deferred
 public c. R09a–h, Core R10a and R12a–c remain accepted dependencies; no additional R09/R12 slice is planned.
 
-**Owner stop: finish R11a, prepare the next coordinator, then stop.** No successor was launched, no ownership was
-transferred and no R11b specification/implementation/delegation began. The standing continuation rule does not override
-this explicit stop. A future fresh coordinator must obtain execution release and confirm input scope before edits,
-delegation or builds; durable readiness is not a resource or live-account grant. Scoped changes are committed locally;
-verify both HEADs/trees/indexes, not an archived receipt. No push, deployment or personal configuration/action is authorized.
+**Current release: hand over R11b pickup to a fresh coordinator.** The owner resumed coordinator handover after R11a
+closure. Transfer ownership only after fresh-session readiness acknowledgment under the workflow; do not reuse completed
+contributor conversations. R11b input scope is still unresolved: the new coordinator must confirm real integration inputs
+or explicit deterministic-only scope with the owner before specification, delegation or builds. Once those gates are
+resolved, execute the bounded R11b slice under the standing workflow. Durable readiness is not a live-resource/account
+grant. Verify both HEADs/trees/indexes, not an archived receipt. No push, deployment or personal configuration/action is authorized.
 
 ## Delivered boundary and remaining limits
 
@@ -45,8 +46,8 @@ superseded encrypted evidence retention remain binding. Foreign/unreadable/unkno
 Next is **R11b bounded foreground sign-in/reauthentication exchange and guarded grant handoff**, then R13 account
 UI/triggers plus P18 import. R11c lifecycle proofs and expanded R10b remain deferred public.
 
-After owner release, confirm either real integration inputs/permission boundaries or an explicit deterministic-only
-R11b scope. Do not discover private configuration, invent an endpoint/audience, generate/change signing keys or operate
+After verified ownership release, confirm either real integration inputs/permission boundaries or an explicit
+deterministic-only R11b scope with the owner. Do not discover private configuration, invent an endpoint/audience, generate/change signing keys or operate
 on a personal account/device. Nonce comes from each service challenge, not configuration. Reuse accepted R11a, exact
 `GoogleExchangeAttempt`, auth HTTP, vault/refresh and `AppSessionCoordinator.acceptGrant` seams; preserve caller intent,
 origin, expected authority and invocation liveness. Resolve task-relevant contracts/code/harness facts before creating
@@ -61,4 +62,4 @@ polling. Every Gradle run requires one exclusive serialized slot; lint freezes b
 Owned R11a synthetic emulator/build resources are settled at closure; retained test evidence is historical, not a reusable
 resource grant. Allocate/verify future emulators and any isolated backend resources explicitly. Backend access remains
 operational build/start and black-box HTTP under the [isolated procedure](testing-strategy.md#isolated-real-backend-procedure),
-never source/private-config review. No further implementation starts until the owner resumes coordinator execution.
+never source/private-config review. R11b specification/delegation/builds remain gated on owner-confirmed input scope.

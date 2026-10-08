@@ -35,8 +35,9 @@ and [Core R10a convergence/recovery](archive/remaining-work/R10a-review.md) rema
 and the finite R12a–c package are accepted:** explicit scoped runtime/root, real timer/edit barriers, guarded ACTIVE
 reconciliation/full-resync and complete package gates are delivered. **[R11a](archive/remaining-work/R11a-review.md) is
 accepted, deterministic-only:** foreground Android Google adapter and declared synthetic/dependency/package gates passed.
-Default startup remains local. The owner stopped after R11a acceptance/next-coordinator preparation; no R11b implementation,
-successor launch or live journey is released. See [current authority](coordinator-handoff.md).
+Default startup remains local. The owner released fresh-coordinator handover for R11b pickup; implementation remains
+gated on owner-confirmed input scope, bounded specification and independent assignments. No live journey is released.
+See [current authority](coordinator-handoff.md).
 Service exchange/handoff, account UI/triggers and live journeys remain R11b/R13/R17. No new R09 slices or deferred-public work is inferred.
 “Pending” requires eligibility under explicit/standing authority and a bounded pickup spec, not another approval for each
 eligible next slice. “Deferred” remains required for its later
@@ -54,7 +55,7 @@ milestone and is not automatically brought forward. Historical M-series assignme
 | R08 bootstrap/full resync | **a staging, b bounded HTTP download and c complete canonical baseline/absence/protected publication recovery accepted; no further R08 slice** | R05–R07; app-facing authority/convergence/barriers remain R09/R10/R12 |
 | R09 single-account activation/recovery | a–h accepted; finite reduced authority/recovery boundary closed. Explicit app-facing authority/private activation/offline recovery and bounded reconnect delivered; current startup/screens/publisher unchanged. Approved one-time legacy import pending R13; general transitions/import-replace UI deferred public | R04/R08 and accepted R12a/core R10; live scoped integration R12c, identity/UI/triggers R11/R13 |
 | R10 engine convergence/recovery | Core a accepted; expanded b deferred before public release | R03b/c, R06–R09 |
-| R11 Google identity/proofs | Finite three-slice plan: **a identity adapter accepted deterministic-only; b foreground exchange pending personal; c lifecycle proofs deferred public**. Owner stop before b; sign-out UI remains deferred public R13 | Relevant R02/R03/R04; b uses accepted R09/R12 handoff; c needs lifecycle foundations |
+| R11 Google identity/proofs | Finite three-slice plan: **a identity adapter accepted deterministic-only; b foreground exchange pending personal; c lifecycle proofs deferred public**. Fresh R11b coordinator pickup released, input scope unresolved; sign-out UI remains deferred public R13 | Relevant R02/R03/R04; b uses accepted R09/R12 handoff; c needs lifecycle foundations |
 | R12 feature/app reconciliation | **a–c accepted; finite package closed**: real barriers, projection observation, explicit scoped app/timer runtime, ACTIVE reconciliation/full-resync and package gates | R12a/b, R09h and Core R10a accepted; default startup/UI/triggers remain later R11/R13 |
 | R13 account UI/foreground sync | Pending; includes bounded P18 one-time legacy preserve/import and activation/recovery gate, not a separate major R | R09, core R10, personal R11, R12; import must complete before affected activation |
 | R14 cloud JSON export | Deferred public | R02e, R03d export, R11 proofs, R13 |
@@ -238,8 +239,8 @@ assignments and risk-selected gates belong to each slice specification at pickup
 
 **Finite plan: three slices total; two personal slices (R11a–b), one deferred public slice (R11c).**
 [R11a is accepted](archive/remaining-work/R11a-review.md) with injected synthetic configuration and actual Google/configuration
-verification deferred. Owner stop after R11a acceptance, scoped local commit and next-coordinator preparation: no R11b or
-successor launch is released. Any additional split requires the [major-task slicing rule](coordinator-workflow.md#major-task-slicing--owner-rule).
+verification deferred. Fresh-coordinator handover for R11b pickup is released; its input scope must be confirmed before
+specification/delegation/builds. Actual Google/live actions remain separately gated. Any additional split requires the [major-task slicing rule](coordinator-workflow.md#major-task-slicing--owner-rule).
 
 | Slice | Outcome / completion boundary | Dependencies / input gates | Non-goals |
 |---|---|---|---|
@@ -320,7 +321,7 @@ oracles, deterministic clocks/UUIDs/virtual time and representative cancellation
 **Stop boundary:** personal R11 is complete only when R11a–b and their declared synthetic/package gates are accepted;
 R11c remains visibly deferred until its public proof gates pass. Default local startup remains unchanged throughout
 R11. Account/configuration UI, initial access gating, foreground/edit/manual sync and one-time legacy import/activation
-are R13; sign-out UI/credential-clearing journey stays public R13. R11a is closed; resume R11b only after fresh owner execution release.
+are R13; sign-out UI/credential-clearing journey stays public R13. R11a is closed; R11b pickup is released to a fresh coordinator, with input scope still to resolve.
 
 ### R12 — Feature and app reconciliation
 
