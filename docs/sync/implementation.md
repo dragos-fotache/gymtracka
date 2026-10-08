@@ -2,8 +2,10 @@
 
 Default startup remains signed-out/local-only. An explicitly constructed account runtime now supplies real scoped
 root/edit/timer integration and guarded ACTIVE reconciliation over the delivered authority. Construction is private and
-runs no HTTP automatically; identity/account UI, foreground/edit/manual triggers and startup-policy replacement remain
-R11/R13. No Google UI, scheduler or live account/device action is wired into default startup. The [roadmap](../remaining-work-roadmap.md) owns delivery status; the
+runs no HTTP automatically. Explicit foreground Google acquisition/exchange and guarded private grant handoff are
+available; account UI, foreground/edit/manual triggers, P18 import and startup-policy replacement remain R13.
+No Google UI, scheduler or live account/device action is wired into default startup.
+The [roadmap](../remaining-work-roadmap.md) owns delivery status; the
 [integration design](integration-design.md) owns approved future coordination. The
 [shared contract](../../shared-docs/docs/backend-contract/README.md) remains the service authority.
 
@@ -559,7 +561,7 @@ Credentials/Play Services bridge 1.6.0 and Google ID 1.2.1; no actual OAuth/serv
   a RESUMED, nonfinishing/nondestroyed Activity; provider UI may temporarily pause/stop it without invalidating the result.
 - Only the Google custom credential type is accepted, parsed through the real Google ID parser. A nonblank opaque token
   is returned unchanged, never decoded as account authority. No challenge, HTTP exchange, vault/Room write or activation
-  follows Google success here; those boundaries remain R11b/R13.
+  follows Google success in this adapter; the separate foreground exchange below consumes it, while activation remains R13.
 - One nonqueueing slot covers get and explicit clear. Operations have a two-minute default timeout, caller cancellation
   precedence and fixed safe SDK-independent failure reasons. No provider details/causes, tokens, nonces, audiences or
   identity data enter diagnostics. No automatic fallback/retry or credential-state cleanup is performed.
@@ -571,6 +573,36 @@ Credentials/Play Services bridge 1.6.0 and Google ID 1.2.1; no actual OAuth/serv
 
 Configuration, real Google verification and installed signing/audience interoperability remain separate R17a gates.
 Default local startup/account visibility policy is unchanged; no interactive auth is wired to a background worker.
+
+## Bounded foreground exchange and guarded grant handoff
+
+`data/sync/session/ForegroundSignInCoordinator` is explicitly constructed with one configured origin, Google provider,
+auth API and guarded private handoff. Default startup constructs none. `signIn(request)` obtains one SIGN_IN challenge,
+passes its exact nonce once, captures one immutable `GoogleExchangeAttempt` and consumes the original service grant once
+through `AppSessionCoordinator.acceptForegroundGrant`; it returns private preparation, never a reusable grant or ACTIVE
+authority. Initial sign-in requires an empty signed-out expectation; reauthentication requires the retained account.
+
+- Default whole-invocation budget is 180000 ms. Only transient exchange failures retry, with at most three sends of the
+  same object/key/body/token/challenge. Minimum delays are 1000/2000 ms, extended by service hints without sending early.
+  Challenge/provider/permanent/malformed failures do not reacquire or rekey. No refresh, logout, clear or lifecycle proof.
+- Expiry equality refuses at actual Google and first-send admission, including queued work. Sent uncertain replay may
+  cross challenge expiry within the budget. Original returned grant/expiry values remain unchanged, including expired
+  access; the existing later refresh boundary owns renewal. All exchange evidence is foreground-memory-only.
+- One nonqueueing slot spans final acceptance. Owned lazy seam work checks caller/slot before starting effects, is
+  cancelled on every exit and cannot clear a newer slot. Close permanently retires/cancels only owned work, not borrowed
+  provider/facade or caller scope. Late/queued results and cancellation-resistant seams cannot advance or report success.
+  Original outer caller cancellation is rechecked after the timeout scope; a seam's timeout is not the invocation budget.
+- `captureForegroundSignInRequest(intent, expected, operationId)` performs no I/O, uses the facade's actual configured
+  origin and binds immutable expected authority/operation/intent to its exact process fence and owner. Real handoff
+  refuses naked/foreign-owner/origin/account requests and carries the captured fence into the existing acceptGrant
+  critical section without recapturing currentness. Process invalidation thus refuses even at unchanged Room authority.
+- Existing exact Room/vault expectations, serialized ownership, real transition barriers, private preparation and P17
+  uncertain-evidence retention remain definitive. Already-admitted commits may survive cancellation/lost return;
+  explicit fresh recovery, not compensation or automatic activation, settles observation. Displays/errors are closed.
+
+[R11b acceptance](../archive/remaining-work/R11b-review.md) closes deterministic personal R11a–b/package gates, not real
+Google/signing/HTTPS/phone verification. R13 still owns UI/triggers, complete activation and P18 legacy import;
+local-only roots continue to refuse until that work is delivered. R11c lifecycle proofs remain deferred public.
 
 ## API and secure HTTP
 
@@ -948,8 +980,9 @@ preserve/import implementation, identity/account UI/triggers and live milestone 
 `AppSessionCoordinator` explicitly composes the delivered private authority/preparation, retained-account recovery,
 bootstrap/completion and startup/refresh components. Construction performs no I/O and exposes one stable read-only
 `StateFlow`, initially privacy-locked. Default startup still constructs signed-out/local repositories. The explicit
-account runtime supplies scoped UI/timer integration and ACTIVE reconciliation; R11/R13 own identity, account UI/triggers
-and startup-policy replacement. Transition and publication barriers are mandatory caller inputs with no permissive defaults.
+account runtime supplies scoped UI/timer integration and ACTIVE reconciliation. Foreground exchange/captured grant
+handoff is available above; R13 owns account UI/triggers, P18 import and startup-policy replacement.
+Transition and publication barriers are mandatory caller inputs with no permissive defaults.
 
 - One operation mutex serializes facade work, one supplied physical-DB run owner serializes engine work, and one shared
   credential mutex spans preparation, retained recovery and mutually exclusive prepared/recovered refresh ownership.

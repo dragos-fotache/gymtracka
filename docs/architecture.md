@@ -180,8 +180,12 @@ owners and unchanged domain/cache/intent remain mandatory. See
   uncertain/interrupted-transition recovery; see [session boundaries](sync/implementation.md#inert-retained-account-recovery-and-superseded-evidence).
   The explicit [app-facing boundary](sync/implementation.md#app-facing-authority-and-offline-recovery) supplies matching
   offline account eligibility, exact grant expectations, private activation/recovery and bounded reconnect without ACTIVE
-  projection publication. Its repositories additionally check process revocation before effects/commit and after Room
-  result dispatch; legacy UUID/clock trailing-lambda constructor behavior remains unchanged. Repositories never follow
+  projection publication. Its explicit foreground request factory and grant handoff retain actual configured origin,
+  caller intent/expected authority/operation and an immutable captured process fence through that same preparation
+  critical section. The [bounded foreground exchange](sync/implementation.md#bounded-foreground-exchange-and-guarded-grant-handoff)
+  composes identity/auth without default startup, reusable grants or activation. Its repositories additionally check
+  process revocation before effects/commit and after Room result dispatch; legacy UUID/clock trailing-lambda constructor
+  behavior remains unchanged. Repositories never follow
   private preparation. Explicit `AppSessionCoordinator.reconcile` holds one admitted owner through push/pull, typed
   snapshot recovery, actual post-baseline tail and paired guarded publication. `reconnect` remains nonpublishing;
   fresh fenced `observeCacheEpoch` is advisory progress, not authority. No observation starts engine work.

@@ -71,7 +71,7 @@ internal class AppSessionCoordinator(
     private val publicationBarrier: ProjectionPublicationBarrier,
     private val clockMillis: () -> Long = System::currentTimeMillis,
     private val uuidProvider: () -> String = { UUID.randomUUID().toString() },
-) {
+) : ForegroundGrantHandoff {
     private val authority = RoomSessionAuthority(database)
     private val credentialMutex = Mutex()
     private val operationMutex = Mutex()
@@ -244,6 +244,99 @@ internal class AppSessionCoordinator(
             throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
         }
         val observedFence = synchronized(stateLock) { currentFence }
+        return acceptGrantWithFence(expected, targetOperation, session, observedFence)
+    }
+
+    /**
+     * Foreground grant handoff for one facade-captured request. Refuses a
+     * missing/foreign owner binding, an origin different from the facade
+     * configuration, or an invalid intent/context/operation before any
+     * drain or reservation. Carries the captured facade fence into the
+     * shared critical section without recapturing it, so an invalidation
+     * between Google/exchange and handoff fails even when the durable Room
+     * snapshot is unchanged. Delegates existing R09 preparation exactly
+     * once; every guard/lease/error path below is shared with [acceptGrant].
+     * Real consumer refusals propagate unchanged.
+     */
+    override suspend fun acceptForegroundGrant(
+        request: ForegroundSignInRequest,
+        session: ServiceSession,
+    ): AppSessionState {
+        currentCoroutineContext().ensureActive()
+        val binding = request.authorityBinding
+        if (binding == null || binding.owner !== this) {
+            throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
+        }
+        val configured = origin
+            ?: throw AppSessionException(AppSessionReason.CONFIGURATION_UNAVAILABLE)
+        if (request.origin != configured) {
+            throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
+        }
+        val targetOperation = try {
+            canonicalForegroundOperation(
+                configured,
+                request.intent,
+                request.expected,
+                request.operationId,
+            )
+        } catch (_: ForegroundSignInContextInvalidException) {
+            throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
+        } catch (_: Exception) {
+            throw AppSessionException(AppSessionReason.UNAVAILABLE)
+        }
+        return acceptGrantWithFence(request.expected, targetOperation, session, binding.fence)
+    }
+
+    /**
+     * Synchronous no-I/O factory binding one foreground request to this
+     * facade. Uses the actual configured origin and records the opaque
+     * exact owner/process fence under the state monitor. Unconfigured
+     * capture throws CONFIGURATION_UNAVAILABLE; invalid
+     * intent/context/operation throws IDENTITY_MISMATCH. Performs no
+     * Room/vault reads, launches no Google UI, calls no HTTP and changes
+     * no observable authority.
+     */
+    fun captureForegroundSignInRequest(
+        intent: ForegroundSignInIntent,
+        expected: RecoveryRoomSnapshot,
+        operationId: String,
+    ): ForegroundSignInRequest {
+        val configured: ServiceOrigin?
+        val fence: Any
+        synchronized(stateLock) {
+            configured = origin
+            fence = currentFence
+        }
+        val bound = configured
+            ?: throw AppSessionException(AppSessionReason.CONFIGURATION_UNAVAILABLE)
+        val canonical = try {
+            canonicalForegroundOperation(bound, intent, expected, operationId)
+        } catch (_: ForegroundSignInContextInvalidException) {
+            throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
+        } catch (_: Exception) {
+            throw AppSessionException(AppSessionReason.UNAVAILABLE)
+        }
+        return ForegroundSignInRequest.bound(
+            bound,
+            intent,
+            expected,
+            canonical,
+            ForegroundSignInAuthorityBinding(this, fence),
+        )
+    }
+
+    /**
+     * Common acceptGrant critical section over the exact supplied fence.
+     * The original three-argument entry supplies the latest fence; the
+     * foreground handoff supplies its captured fence. Every guard, lease
+     * and error path below is unchanged.
+     */
+    private suspend fun acceptGrantWithFence(
+        expected: RecoveryRoomSnapshot,
+        targetOperation: String,
+        session: ServiceSession,
+        observedFence: Any,
+    ): AppSessionState {
         return operationMutex.withLock {
             ensureCurrent(observedFence)
             if (origin == null) {
