@@ -15,27 +15,33 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/`.
 |---|---|
 | `MainActivity.kt` | Edge-to-edge/Compose/theme setup; calls `GymApp` |
 | `ui/GymApp.kt` | Root scaffold, destinations, bottom navigation, active-workout pill, app dialogs |
-| `ui/GymAppState.kt` | In-memory navigation, active-workout coordination, catalogue restoration, rest timer |
+| `ui/GymAppState.kt` | Navigation/active-pill materialization reconciliation, catalogue restoration, real edit/timer barriers and rest timer |
+| `ui/AccountGymAppState.kt` | Explicit account runtime/root, exact-handle repository binding, privacy gate and lease-safe scope retirement |
 | `ui/exercises/` | Catalogue/detail/custom editor, picker variants, feature state |
 | `ui/workouts/` | Workout landing, history/detail, feature state |
 | `ui/routines/` | Routine list/detail/editor and feature state |
 | `ui/activeworkout/` | Active screen, compact exercise/set controls, timer UI and feature state |
 | `ui/util/WorkoutFormatters.kt` | Shared derived calculations and locale-aware parsing/formatting |
 | `data/gym/GymRepository.kt` | Application-facing persistence, UUID creation, transactional edits and sync capture |
-| `data/sync/` | Models/codecs, fenced capture/canonical batches, inert protected publication, durable head claiming/replay, outcome/retry bookkeeping, atomic acknowledgment, inert bounded push/pull and shared push-first drivers, incremental checkpoint/valid-tail transactions, durable inert snapshot staging, unused HTTP/session components; [details](sync/implementation.md) |
+| `data/sync/` | Fenced capture/canonical storage, protected publication, push/pull/snapshot drivers, HTTP/vault/session authority and explicit guarded ACTIVE reconciliation; [details](sync/implementation.md) |
 
 `FeatureRepositories.kt` exposes narrow interfaces to state holders; reusable/leaf composables receive values and callbacks.
 `ui/GymRepositoryProvider.kt` supplies `rememberGymRepository()` and optional internal `LocalGymRepositoryOverride` for
-real-Room app-flow tests. With no override, it remembers `GymRepository(applicationContext)`. Production construction
-still binds the original signed-out session; no account/session rebinding is wired into the app. The unused
-[startup recovery seams](sync/implementation.md#startup-recovery-seams) can now use R09a's inert durable Room-authority
+real-Room tests and the account root. With no override, it remembers `GymRepository(applicationContext)`. Default
+startup still binds the signed-out/local session. The explicit account root provides the exact live handle repository
+and shared edits around every feature factory, with no local fallback. The
+[startup recovery seams](sync/implementation.md#startup-recovery-seams) use the inert durable Room-authority
 adapter. R09b's [prepared vault/Room coordinator](sync/implementation.md#prepared-vaultroom-coordination-and-recovery)
 supplies inert private grant persistence/restart observations. R09c supplies registered private engine admission/bootstrap;
 R09d supplies [inert completed preparation/promotion](sync/implementation.md#private-completed-preparation-and-vault-promotion).
 `data/sync/session/AppSessionCoordinator` now composes these seams into an explicitly constructed
 [app-facing authority/offline-recovery boundary](sync/implementation.md#app-facing-authority-and-offline-recovery), with
-mandatory transition/publication inputs and guarded account repositories. Production startup remains signed-out/local;
-R12c still owns scoped state/UI rebinding and canonical timer decisions. No root/leaf factory activates this boundary.
+mandatory transition/publication inputs and guarded account repositories. `rememberAccountGymAppState` supplies the
+real Android clock/hardware and composition scope; construction starts private and runs no HTTP automatically.
+`GymApp(accountState)` selects only the synchronously current live handle, keys reconstruction by handle identity and
+otherwise renders `account-privacy-gate`. Same-handle delivery status updates preserve navigation/timers. Retiring
+state stays pinned while a transition/publication lease is held, even after privacy hide; whole-runtime disposal
+revokes the facade and cancels owned child scopes. Default startup remains local; identity/UI/triggers remain R11/R13.
 
 ## Room database
 
@@ -165,7 +171,7 @@ owners and unchanged domain/cache/intent remain mandatory. See
   returned epoch (actual publication advances again). Retained stages cannot be adopted after restart; durable complete
   dirty baselines can publish under a fresh run at the observed epoch without redownload. See
   [complete baseline/recovery](sync/implementation.md#complete-snapshot-baseline-and-publication-recovery).
-  The app constructs none of it. R09a/b private authority/preparation and R09c private engine admission/canonical bootstrap
+  Default startup constructs none of it. R09a/b private authority/preparation and R09c private engine admission/canonical bootstrap
   are delivered separately, with exact durable and process fences. R09d completes inert protected projection/Room-ready
   and exact vault promotion/gap recovery under those fences. R09e/f add inert settled occupied replacement and its exact
   established ACTIVE pending-refresh replay prerequisite. R09g adds retained-account signed-out/missing-vault and
@@ -174,8 +180,9 @@ owners and unchanged domain/cache/intent remain mandatory. See
   offline account eligibility, exact grant expectations, private activation/recovery and bounded reconnect without ACTIVE
   projection publication. Its repositories additionally check process revocation before effects/commit and after Room
   result dispatch; legacy UUID/clock trailing-lambda constructor behavior remains unchanged. Repositories never follow
-  private preparation. Live scoped publication/timer/UI integration remains R12c; the app-owned seam below alone activates
-  none of these components.
+  private preparation. Explicit `AppSessionCoordinator.reconcile` holds one admitted owner through push/pull, typed
+  snapshot recovery, actual post-baseline tail and paired guarded publication. `reconnect` remains nonpublishing;
+  fresh fenced `observeCacheEpoch` is advisory progress, not authority. No observation starts engine work.
   The [shared driver](sync/implementation.md#shared-push-before-pull-and-valid-tail),
   [push](sync/implementation.md#bounded-push-delivery), [checkpoint](sync/implementation.md#incremental-checkpoint-transactions)
   and [pull](sync/implementation.md#bounded-incremental-pull) references own details.
@@ -187,7 +194,8 @@ owners and unchanged domain/cache/intent remain mandatory. See
   visible domain data or outbox/cursor state. The inert protected publisher requires an injected pause/drain lease,
   protects the entire account graph while any account outbox row remains, and publishes a validated complete baseline
   atomically with generation preservation and a checked account epoch signal. A real app-owned barrier now exists,
-  but no account UI or production publication activation is wired. See [capture boundaries](sync/implementation.md#room-and-local-capture),
+  with the explicit account runtime supplying canonical impact and process guards. Default startup and account UI
+  do not trigger publication. See [capture boundaries](sync/implementation.md#room-and-local-capture),
   [canonical batches](sync/implementation.md#fenced-canonical-batches) and [protected publication](sync/implementation.md#protected-publication).
 - `ActiveWorkoutState.awaitPendingEdits()` delegates to the shared finite-edit coordinator, never the endless elapsed-time
   ticker. The screen retains its workout/owner-specific finish-drain registration; disposal detaches only the matching
@@ -199,9 +207,9 @@ owners and unchanged domain/cache/intent remain mandatory. See
 - `GymAppState` discovers the newest active workout at startup. Starting empty/again/from-routine replaces the old active
   in one repository transaction. Navigation/new-active state publish only after success; failure keeps the old active,
   dialog, navigation and timer intact.
-- Navigation, filters/list restoration, dialogs and countdown are in memory. Narrow projection-epoch observation and
-  selected-feature refresh are described below. Canonical timer-impact decisions, app navigation/pill reconciliation
-  and session-bound UI reconstruction remain [R12c](remaining-work-roadmap.md#r12--feature-and-app-reconciliation).
+- Navigation, filters/list restoration, dialogs and countdown remain in memory. App/feature epoch observation and
+  canonical timer-impact reconciliation use the delivered scoped runtime, without persisted navigation or timer
+  process-death reconstruction.
 
 ### Finite-edit admission and publication leases
 
@@ -223,13 +231,14 @@ threads. Pre-grant work is drained before atomic issuance; post-grant terminal a
 persistence, holding admission until close. Failed/cancelled acquisition and lost result dispatch release the pause.
 `GymAppState.publicationBarrier` binds one exact account/generation/cache-epoch request and requires an explicit canonical
 impact callback. Acquisition and timer claims run on the app-state owner dispatcher without adopting its Job, preserving
-caller cancellation. This seam does not supply account authority or a canonical graph reader: R12c must provide that
-fenced impact decision, and the existing publisher still rechecks Room/outbox protection. No production publisher/engine
-is constructed at startup.
+caller cancellation. `AccountGymAppState` supplies the request-bound, process-fenced canonical reader and real
+transition barrier. Open explicit-save custom editors refuse normal account transitions without discarding drafts;
+emergency invalidation hides immediately. The publisher still rechecks authority, lease and account-wide outbox
+protection, including after final SQL at its newly advanced epoch. No publisher/engine runs at default startup.
 
 ## Projection observation and feature refresh
 
-`ProjectionObservationRepository` is inherited by the four feature repository interfaces. Its compatibility default is
+`ProjectionObservationRepository` is inherited by the four feature interfaces and `GymAppStateRepository`. Its compatibility default is
 an inert initial `0` for hand-written fakes; `GymRepository` overrides it. An account-bound cold stream registers Room
 invalidation for `sync_account_cache` and `sync_device_state` before its first fenced metadata read, then emits distinct
 selected-account `materialized_epoch` values. Cache/baseline progress, dirty/outbox state and foreign-account epochs are
@@ -237,8 +246,9 @@ not publication signals. Missing metadata yields `0`; negative counters or mater
 closed. Every reread checks the immutable repository session before distinct filtering; revocation terminates the old
 stream, never follows a new account. Cancellation detaches observation without writes/capture or schema changes.
 
-Production still constructs only a signed-out repository: its stream emits one fenced `0`, never retained private
-metadata. Local mutations use explicit refresh; this stream is not a universal local-change log or visibility grant.
+The default signed-out repository stream emits one fenced `0`, never retained private metadata. The explicit account
+root supplies a process/session-fenced account repository. Local mutations use explicit refresh; the stream is not a
+universal local-change log or visibility grant.
 No engine/publisher/account authority is activated by observation.
 
 Catalogue/pickers/exercise detail, routine list/detail/editor, history list/detail and active-workout feature states
@@ -264,9 +274,15 @@ the incoming persisted value, including trailing zeros and null-valued invalid/i
 values replace stale text. Rest-dialog initial input is snapshotted per opening, so a publication does not reset an
 unconfirmed draft. The configured-rest wheel settles through one stable, sequential idle observer with a misalignment
 check, not an animation keyed by its own scrolling flag; opening and dismissal quiesce without a self-triggered snap
-loop. Observation/rename never invokes completion or starts/ends a timer. Actual remote finish/delete,
-app-pill/navigation reconstruction and authoritative timer-impact selection remain R12c and its authority/convergence
-dependencies.
+loop. Feature observation/rename never invokes completion or starts a timer.
+
+The app shell uses the same initial/epoch-driven guarded load, finite drain and latest-generation fences. Navigation
+invalidates and schedules a replacement load so discovery cannot be lost. Same-ID active names refresh; an active-ID
+change retires old-root consent and source intent on every tab, returning old active/picker/replacement flows to Workout
+without forcing navigation into a replacement. Independently captured missing history/routine/custom selections apply
+History/Workout/Exercises fallbacks even in the same pulse as an active change. A disappeared explicit custom-editor
+target retains its presentation and flags failure. Destructive dialogs and pending finish eligibility bind the root/token
+at request time; dismissal or root replacement cannot resurrect consent. Refresh emits no domain edits or summaries.
 
 ## Rest-timer lifecycle
 
@@ -286,6 +302,11 @@ without cancelling the parent scope and releases held hardware resources.
 Terminal success/failure is visible to every later transition/publication drain, even after the running timer is gone;
 a failed rest write is never retried as an edit to immutable history. The explicit publication-impact callback retains a
 valid unchanged timer (including rename/reference-only replacement) or claims/drains old-set rest before lease issuance.
-Newly captured rest remains local intent: the publisher's outbox recheck postpones projection. Actual canonical-impact
-selection and scoped remote app/timer reconciliation remain R12c under the
+Newly captured rest remains local intent: the publisher's outbox recheck postpones projection. `ProjectionStore.preservesTimer`
+requires complete baseline/no selected stage and transaction/session/epoch/process fences; protected outbox returns true
+without treating the latent graph as publication authority. Eligible graphs receive full validation. Remote finish/delete,
+removed entry/set or uncompleted source returns false; reference-only replacement preserves the timer. The real barrier
+claims/drains rest before old domain rows disappear, and then protection prevents a destructive publish. Account timer
+starts require an accepted completed-set callback bound to the selected active parent. Unsupported timer-invalidating
+materialization faults only the exact handle, without a late history write or silent timer loss. See the
 [publication/timer design](sync/integration-design.md#7-autosave-timer-and-ui-publication-prerequisites).

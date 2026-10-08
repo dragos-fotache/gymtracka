@@ -54,7 +54,7 @@ internal fun GymApp(appState: GymAppState = rememberGymAppState()) {
 }
 
 @Composable
-private fun GymAppContent(appState: GymAppState) {
+internal fun GymAppContent(appState: GymAppState) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
@@ -208,8 +208,15 @@ private fun GymAppContent(appState: GymAppState) {
                     onCancelWorkout = appState::requestDiscardWorkout,
                     // Accepted-edit timers start only from the already tracked successful
                     // set-completion callback; every other start path uses the default refusal.
+                    // The composed selected parent binds the start: a stale callback from a
+                    // replaced/finished root refuses inside startRestTimer.
                     onRestTimerStarted = { set, durationSeconds ->
-                        appState.startRestTimer(set, durationSeconds, acceptedEdit = true)
+                        appState.startRestTimer(
+                            set,
+                            durationSeconds,
+                            acceptedEdit = true,
+                            expectedWorkoutId = workout.id,
+                        )
                     },
                     onRestTimerEnded = appState::skipRestTimer,
                     onRestTimerAdjusted = appState::adjustRestTimer,

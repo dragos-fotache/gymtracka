@@ -7,15 +7,23 @@ import com.dragosfotache.gymtracka.data.sync.api.ServiceSession
 import com.dragosfotache.gymtracka.data.sync.api.SyncApiException
 import com.dragosfotache.gymtracka.data.sync.engine.PushDeliveryStop
 import com.dragosfotache.gymtracka.data.sync.engine.PullDeliveryStop
+import com.dragosfotache.gymtracka.data.sync.engine.PullRecoveryReason
+import com.dragosfotache.gymtracka.data.sync.engine.SnapshotDeliveryLoop
+import com.dragosfotache.gymtracka.data.sync.engine.SnapshotDownloadStop
 import com.dragosfotache.gymtracka.data.sync.engine.SyncDeliveryLoop
 import com.dragosfotache.gymtracka.data.sync.engine.SyncDeliveryResult
 import com.dragosfotache.gymtracka.data.sync.http.ServiceHttpTransport
 import com.dragosfotache.gymtracka.data.sync.http.ServiceOrigin
 import com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid
 import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationBarrier
+import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationStatus
+import com.dragosfotache.gymtracka.data.sync.store.ProjectionStore
 import com.dragosfotache.gymtracka.data.sync.store.PushRunOwner
 import com.dragosfotache.gymtracka.data.sync.store.PushStore
 import com.dragosfotache.gymtracka.data.sync.store.RepositorySession
+import androidx.room.withTransaction
+import com.dragosfotache.gymtracka.data.sync.store.CanonicalStorageException
+import com.dragosfotache.gymtracka.data.sync.store.StaleSessionException
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
@@ -696,6 +704,690 @@ internal class AppSessionCoordinator(
             ensureCurrent(observedFence)
             updateDeliveryStatus(current, observedFence, statusFor(result))
             result
+        }
+    }
+
+    /**
+     * R12c bounded recovery read: observes the selected account's current cache epoch
+     * for the exact current handle. RecoveryRoomSnapshot carries no cache epoch and
+     * materialized-only observation cannot recover dirty progress after a
+     * committed-but-cancelled/lost baseline/publication result; this read supplies that
+     * epoch without requiring UI callers to query DAOs.
+     *
+     * Read-only and fenced: reuses the existing facade operation mutex with exact-handle
+     * pre/post read-only authority, process and caller-cancellation guards around one
+     * fenced Room read transaction. Requires a complete baseline with nonnegative
+     * cache/materialized counters (materialized <= cache) under Active account/session
+     * fences, then repeats exact handle/process authority after dispatch. Dirty complete
+     * cache and queued intent remain eligible. Performs no HTTP, UUID/clock work,
+     * engine/run admission, write/publication/cleanup, stage restart, handle rebinding
+     * or new visibility. The returned epoch is advisory progress evidence, never a grant.
+     *
+     * Closed classification: binding drift revokes exactly the affected handle as stale;
+     * missing/incomplete baseline or closed read failures report UNAVAILABLE with the
+     * healthy handle preserved; a stale epoch observation is never reported as a revoked
+     * handle. Caller cancellation always propagates.
+     */
+    suspend fun observeCacheEpoch(session: AppAccountSession): Long {
+        currentCoroutineContext().ensureActive()
+        val observedFence = synchronized(stateLock) { currentFence }
+        return operationMutex.withLock {
+            ensureCurrent(observedFence)
+            if (origin == null) {
+                throw AppSessionException(AppSessionReason.CONFIGURATION_UNAVAILABLE)
+            }
+            val current = synchronized(stateLock) { currentHandle }
+            if (current == null || current !== session) {
+                throw AppSessionStaleException()
+            }
+            try {
+                current.checkCurrent()
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                throw AppSessionStaleException()
+            }
+            ensureCurrent(observedFence)
+            val binding = current.identity.binding
+            val facadeCheck: () -> Unit = {
+                if (!current.isAlive() || !isFacadeCurrent(observedFence, current)) {
+                    throw AppSessionStaleException()
+                }
+            }
+            try {
+                facadeCheck()
+                val epoch = database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    facadeCheck()
+                    val device = database.syncDao().getDeviceState()
+                    val actualAccountId = device?.activeAccountId
+                    val actualGeneration = device?.sessionGeneration ?: 0L
+                    if (actualAccountId != binding.accountId ||
+                        actualGeneration != binding.sessionGeneration ||
+                        device?.cachedAccountId != binding.accountId
+                    ) {
+                        throw StaleSessionException(
+                            binding.accountId,
+                            binding.sessionGeneration,
+                            actualAccountId,
+                            actualGeneration,
+                        )
+                    }
+                    val cache = database.syncCanonicalDao().getAccountCache(binding.accountId)
+                    if (cache == null || !cache.baselineComplete) {
+                        throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                    }
+                    if (cache.cacheEpoch < 0 || cache.materializedEpoch < 0 ||
+                        cache.materializedEpoch > cache.cacheEpoch
+                    ) {
+                        throw CanonicalStorageException()
+                    }
+                    currentCoroutineContext().ensureActive()
+                    facadeCheck()
+                    cache.cacheEpoch
+                }
+                currentCoroutineContext().ensureActive()
+                facadeCheck()
+                try {
+                    current.checkCurrent()
+                } catch (e: CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e
+                } catch (_: Exception) {
+                    currentCoroutineContext().ensureActive()
+                    throw AppSessionStaleException()
+                }
+                ensureCurrent(observedFence)
+                epoch
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (e: AppSessionStaleException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (e: AppSessionException) {
+                // Closed refusal revalidates authority/process first: a concurrent
+                // invalidation behind missing/incomplete metadata must surface stale,
+                // never a falsely healthy unavailable.
+                currentCoroutineContext().ensureActive()
+                ensureCurrent(observedFence)
+                try {
+                    current.checkCurrent()
+                } catch (e2: CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e2
+                } catch (_: Exception) {
+                    currentCoroutineContext().ensureActive()
+                    throw AppSessionStaleException()
+                }
+                ensureCurrent(observedFence)
+                throw e
+            } catch (e: StaleSessionException) {
+                currentCoroutineContext().ensureActive()
+                lockIfAlive(observedFence, current.aliveToken())
+                throw AppSessionStaleException()
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                ensureCurrent(observedFence)
+                try {
+                    current.checkCurrent()
+                } catch (e: CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e
+                } catch (_: Exception) {
+                    currentCoroutineContext().ensureActive()
+                    throw AppSessionStaleException()
+                }
+                ensureCurrent(observedFence)
+                throw AppSessionException(AppSessionReason.UNAVAILABLE)
+            }
+        }
+    }
+
+    /**
+     * R12c guarded ACTIVE reconciliation over the exact current handle. Holds ONE
+     * admitted run through push/pull, any typed full-resync, an actual
+     * post-baseline tail and guarded paired publication. Never calls the
+     * separate reconnect entry and never reacquires the owner between phases.
+     * Retains reconnect's auth/transient/stale/cancellation classification.
+     */
+    suspend fun reconcile(
+        session: AppAccountSession,
+        expectedCacheEpoch: Long,
+        maxPushMutations: Int = 100,
+        maxPullPages: Int = 100,
+        pullPageLimit: Int = 100,
+        maxSnapshotPages: Int = 100,
+        snapshotPageLimit: Int = 200,
+        restartStageId: String? = null,
+    ): AppReconciliationResult {
+        currentCoroutineContext().ensureActive()
+        if (expectedCacheEpoch < 0) {
+            throw IllegalArgumentException("Expected cache epoch must be nonnegative")
+        }
+        if (maxPushMutations !in 1..100 || maxPullPages !in 1..100 || maxSnapshotPages !in 1..100) {
+            throw IllegalArgumentException("Invalid reconcile budgets")
+        }
+        if (pullPageLimit !in 1..200 || snapshotPageLimit !in 1..500) {
+            throw IllegalArgumentException("Invalid reconcile page limits")
+        }
+        val canonicalRestart = restartStageId?.let {
+            try {
+                requireWorkoutUuid(it, "stageId")
+            } catch (_: Exception) {
+                throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
+            }
+        }
+        val observedFence = synchronized(stateLock) { currentFence }
+        return operationMutex.withLock {
+            ensureCurrent(observedFence)
+            if (origin == null) {
+                throw AppSessionException(AppSessionReason.CONFIGURATION_UNAVAILABLE)
+            }
+            val current = synchronized(stateLock) { currentHandle }
+            if (current == null || current !== session) {
+                throw AppSessionStaleException()
+            }
+            try {
+                current.checkCurrent()
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                throw AppSessionStaleException()
+            }
+            ensureCurrent(observedFence)
+            val recovered = synchronized(stateLock) { currentRecovered }
+                ?: throw AppSessionStaleException()
+            val facadeCheck: () -> Unit = {
+                if (!current.isAlive() || !isFacadeCurrent(observedFence, current)) {
+                    throw AppSessionStaleException()
+                }
+            }
+            val binding = current.identity.binding
+            val store = PushStore(
+                database,
+                RepositorySession(binding.accountId, binding.sessionGeneration),
+                runOwner,
+                facadeCheck,
+            )
+            val api = RecoveredSessionGymSyncApi(recovered, transport, facadeCheck)
+            val result = try {
+                store.withRun(expectedCacheEpoch) { run ->
+                    reconcileOnRun(
+                        run = run,
+                        store = store,
+                        api = api,
+                        handle = current,
+                        fence = observedFence,
+                        facadeCheck = facadeCheck,
+                        maxPushMutations = maxPushMutations,
+                        maxPullPages = maxPullPages,
+                        pullPageLimit = pullPageLimit,
+                        maxSnapshotPages = maxSnapshotPages,
+                        snapshotPageLimit = snapshotPageLimit,
+                        restartStageId = canonicalRestart,
+                    )
+                }
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (e: AppSessionStaleException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (e: AppSessionException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (e: SessionVaultException) {
+                currentCoroutineContext().ensureActive()
+                lockIfAlive(observedFence, current.aliveToken())
+                throw AppSessionStaleException()
+            } catch (e: SessionRefreshException) {
+                currentCoroutineContext().ensureActive()
+                if (e.failure == SessionRefreshFailure.ACCESS_UNAVAILABLE) {
+                    ensureCurrent(observedFence)
+                    updateDeliveryStatus(current, observedFence, AppSessionDeliveryStatus.RETRY_REQUIRED)
+                    throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                }
+                lockIfAlive(observedFence, current.aliveToken())
+                throw AppSessionStaleException()
+            } catch (e: SessionRecoveryException) {
+                currentCoroutineContext().ensureActive()
+                lockIfAlive(observedFence, current.aliveToken())
+                throw AppSessionStaleException()
+            } catch (e: SyncApiException.ReauthenticationRequired) {
+                currentCoroutineContext().ensureActive()
+                ensureCurrent(observedFence)
+                updateDeliveryStatus(current, observedFence, AppSessionDeliveryStatus.REAUTHENTICATION_REQUIRED)
+                throw e
+            } catch (e: SyncApiException) {
+                currentCoroutineContext().ensureActive()
+                ensureCurrent(observedFence)
+                throw e
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                ensureCurrent(observedFence)
+                try {
+                    current.checkCurrent()
+                } catch (e: CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e
+                } catch (_: Exception) {
+                    currentCoroutineContext().ensureActive()
+                    throw AppSessionStaleException()
+                }
+                ensureCurrent(observedFence)
+                updateDeliveryStatus(current, observedFence, AppSessionDeliveryStatus.RETRY_REQUIRED)
+                throw AppSessionException(AppSessionReason.UNAVAILABLE)
+            }
+            // Final exact-handle revalidation after run return, before reporting any
+            // typed stop: same-durable-generation invalidation or authority drift
+            // racing the run must fail closed stale, never return a stale result.
+            // Caller cancellation dominates and never reports a delivery.
+            currentCoroutineContext().ensureActive()
+            try {
+                current.checkCurrent()
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                throw AppSessionStaleException()
+            }
+            ensureCurrent(observedFence)
+            result
+        }
+    }
+
+    private suspend fun reconcileOnRun(
+        run: com.dragosfotache.gymtracka.data.sync.store.PushRun,
+        store: PushStore,
+        api: RecoveredSessionGymSyncApi,
+        handle: AppAccountSession,
+        fence: Any,
+        facadeCheck: () -> Unit,
+        maxPushMutations: Int,
+        maxPullPages: Int,
+        pullPageLimit: Int,
+        maxSnapshotPages: Int,
+        snapshotPageLimit: Int,
+        restartStageId: String?,
+    ): AppReconciliationResult {
+        currentCoroutineContext().ensureActive()
+        ensureCurrent(fence)
+        try {
+            handle.checkCurrent()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            throw AppSessionStaleException()
+        }
+        ensureCurrent(fence)
+        val retained = run.readSnapshotStage()
+        ensureCurrent(fence)
+        if (retained != null && restartStageId == null) {
+            val epoch = run.observedCacheEpoch()
+            updateDeliveryStatus(handle, fence, AppSessionDeliveryStatus.RETRY_REQUIRED)
+            return AppReconciliationResult(
+                stop = AppReconciliationStop.RETAINED_STAGE,
+                cacheEpoch = epoch,
+                delivery = null,
+                snapshot = null,
+                publication = null,
+                retainedStageId = retained.stageId,
+            )
+        }
+        var forcedSnapshot = false
+        var freshStageId: String? = null
+        if (retained != null) {
+            val requested = restartStageId
+            if (requested == null || requested != retained.stageId) {
+                throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
+            }
+            // Generate and validate the fresh stage UUID BEFORE abandoning the
+            // explicitly selected old stage: a provider failure (cancellation
+            // dominates and propagates; any other failure is UNAVAILABLE) must not
+            // destroy recovery evidence.
+            val fresh = try {
+                uuidProvider()
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                throw AppSessionException(AppSessionReason.UNAVAILABLE)
+            }
+            try {
+                requireWorkoutUuid(fresh, "stageId")
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                throw AppSessionException(AppSessionReason.UNAVAILABLE)
+            }
+            run.abandonSnapshotStage(retained)
+            ensureCurrent(fence)
+            freshStageId = fresh
+            forcedSnapshot = true
+        } else if (restartStageId != null) {
+            throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
+        }
+        val syncDriver = SyncDeliveryLoop(store, api, clockMillis)
+        val snapshotDriver = SnapshotDeliveryLoop(store, api, clockMillis)
+        if (forcedSnapshot) {
+            val stageId = freshStageId ?: throw AppSessionException(AppSessionReason.UNAVAILABLE)
+            return runSnapshotChain(
+                run = run,
+                store = store,
+                syncDriver = syncDriver,
+                snapshotDriver = snapshotDriver,
+                handle = handle,
+                fence = fence,
+                facadeCheck = facadeCheck,
+                stageId = stageId,
+                maxPushMutations = maxPushMutations,
+                maxPullPages = maxPullPages,
+                pullPageLimit = pullPageLimit,
+                maxSnapshotPages = maxSnapshotPages,
+                snapshotPageLimit = snapshotPageLimit,
+            )
+        }
+        val delivery = syncDriver.deliver(run, maxPushMutations, maxPullPages, pullPageLimit)
+        ensureCurrent(fence)
+        if (delivery.push.stop != PushDeliveryStop.Empty) {
+            updateDeliveryStatus(handle, fence, statusFor(delivery))
+            return AppReconciliationResult(
+                stop = AppReconciliationStop.PUSH_STOPPED,
+                cacheEpoch = run.observedCacheEpoch(),
+                delivery = delivery,
+                snapshot = null,
+                publication = null,
+                retainedStageId = null,
+            )
+        }
+        val pull = delivery.pull
+        if (pull == null) {
+            updateDeliveryStatus(handle, fence, statusFor(delivery))
+            return AppReconciliationResult(
+                stop = AppReconciliationStop.PULL_STOPPED,
+                cacheEpoch = run.observedCacheEpoch(),
+                delivery = delivery,
+                snapshot = null,
+                publication = null,
+                retainedStageId = null,
+            )
+        }
+        when (val stop = pull.stop) {
+            is PullDeliveryStop.Tail -> {
+                return publishAfterTail(
+                    run = run,
+                    handle = handle,
+                    fence = fence,
+                    facadeCheck = facadeCheck,
+                    delivery = delivery,
+                    snapshot = null,
+                )
+            }
+            is PullDeliveryStop.RecoveryRequired -> {
+                if (stop.reason != PullRecoveryReason.MISSING_BASELINE_OR_CURSOR &&
+                    stop.reason != PullRecoveryReason.CURSOR_EXPIRED
+                ) {
+                    updateDeliveryStatus(handle, fence, statusFor(delivery))
+                    return AppReconciliationResult(
+                        stop = AppReconciliationStop.PULL_STOPPED,
+                        cacheEpoch = run.observedCacheEpoch(),
+                        delivery = delivery,
+                        snapshot = null,
+                        publication = null,
+                        retainedStageId = null,
+                    )
+                }
+                val generated = try {
+                    uuidProvider()
+                } catch (e: CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e
+                } catch (_: Exception) {
+                    currentCoroutineContext().ensureActive()
+                    throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                }
+                val stageId = try {
+                    requireWorkoutUuid(generated, "stageId")
+                } catch (e: CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e
+                } catch (_: Exception) {
+                    currentCoroutineContext().ensureActive()
+                    throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                }
+                return runSnapshotChain(
+                    run = run,
+                    store = store,
+                    syncDriver = syncDriver,
+                    snapshotDriver = snapshotDriver,
+                    handle = handle,
+                    fence = fence,
+                    facadeCheck = facadeCheck,
+                    stageId = stageId,
+                    maxPushMutations = maxPushMutations,
+                    maxPullPages = maxPullPages,
+                    pullPageLimit = pullPageLimit,
+                    maxSnapshotPages = maxSnapshotPages,
+                    snapshotPageLimit = snapshotPageLimit,
+                )
+            }
+            else -> {
+                updateDeliveryStatus(handle, fence, statusFor(delivery))
+                return AppReconciliationResult(
+                    stop = AppReconciliationStop.PULL_STOPPED,
+                    cacheEpoch = run.observedCacheEpoch(),
+                    delivery = delivery,
+                    snapshot = null,
+                    publication = null,
+                    retainedStageId = null,
+                )
+            }
+        }
+    }
+
+    private suspend fun runSnapshotChain(
+        run: com.dragosfotache.gymtracka.data.sync.store.PushRun,
+        store: PushStore,
+        syncDriver: SyncDeliveryLoop,
+        snapshotDriver: SnapshotDeliveryLoop,
+        handle: AppAccountSession,
+        fence: Any,
+        facadeCheck: () -> Unit,
+        stageId: String,
+        maxPushMutations: Int,
+        maxPullPages: Int,
+        pullPageLimit: Int,
+        maxSnapshotPages: Int,
+        snapshotPageLimit: Int,
+    ): AppReconciliationResult {
+        ensureCurrent(fence)
+        // Each driver chunk is bounded by maxSnapshotPages (1..100 per invocation);
+        // consecutive same-run continuations have no total account-size ceiling.
+        val start = snapshotDriver.start(
+            run,
+            stageId,
+            maxPushMutations,
+            maxSnapshotPages,
+            snapshotPageLimit,
+        )
+        ensureCurrent(fence)
+        val pendingDownload = start.download
+        if (pendingDownload == null) {
+            val delivery = SyncDeliveryResult(start.push, null, null)
+            updateDeliveryStatus(handle, fence, statusFor(delivery))
+            return AppReconciliationResult(
+                stop = AppReconciliationStop.PUSH_STOPPED,
+                cacheEpoch = run.observedCacheEpoch(),
+                delivery = delivery,
+                snapshot = null,
+                publication = null,
+                retainedStageId = null,
+            )
+        }
+        val firstDownload: com.dragosfotache.gymtracka.data.sync.engine.SnapshotDownloadResult = pendingDownload
+        var current: com.dragosfotache.gymtracka.data.sync.engine.SnapshotDownloadResult = firstDownload
+        // Consecutive bounded same-run continuations until actual terminal, typed
+        // failure/expiry or cancellation. No permanent page cap: budgets bound each
+        // driver chunk, never total account size. Only this driver's issued
+        // LimitReached capability on this uninterrupted run continues; durable
+        // retained stages are never silently resumed or fabricated into completion.
+        while (current.stop is SnapshotDownloadStop.LimitReached) {
+            currentCoroutineContext().ensureActive()
+            current = snapshotDriver.continueDownload(run, current, maxSnapshotPages)
+            ensureCurrent(fence)
+        }
+        when (current.stop) {
+            is SnapshotDownloadStop.RestartRequired -> {
+                updateDeliveryStatus(handle, fence, AppSessionDeliveryStatus.RETRY_REQUIRED)
+                return AppReconciliationResult(
+                    stop = AppReconciliationStop.SNAPSHOT_RESTART_REQUIRED,
+                    cacheEpoch = run.observedCacheEpoch(),
+                    delivery = null,
+                    snapshot = current,
+                    publication = null,
+                    retainedStageId = current.stage.stageId,
+                )
+            }
+            is SnapshotDownloadStop.Failed -> {
+                updateDeliveryStatus(handle, fence, AppSessionDeliveryStatus.RETRY_REQUIRED)
+                return AppReconciliationResult(
+                    stop = AppReconciliationStop.SNAPSHOT_STOPPED,
+                    cacheEpoch = run.observedCacheEpoch(),
+                    delivery = null,
+                    snapshot = current,
+                    publication = null,
+                    retainedStageId = current.stage.stageId,
+                )
+            }
+            is SnapshotDownloadStop.LimitReached -> {
+                updateDeliveryStatus(handle, fence, AppSessionDeliveryStatus.RETRY_REQUIRED)
+                return AppReconciliationResult(
+                    stop = AppReconciliationStop.SNAPSHOT_STOPPED,
+                    cacheEpoch = run.observedCacheEpoch(),
+                    delivery = null,
+                    snapshot = current,
+                    publication = null,
+                    retainedStageId = current.stage.stageId,
+                )
+            }
+            is SnapshotDownloadStop.Downloaded -> {
+                snapshotDriver.complete(run, current)
+                ensureCurrent(fence)
+                val tail = syncDriver.deliver(run, maxPushMutations, maxPullPages, pullPageLimit)
+                ensureCurrent(fence)
+                if (tail.push.stop != PushDeliveryStop.Empty) {
+                    updateDeliveryStatus(handle, fence, statusFor(tail))
+                    return AppReconciliationResult(
+                        stop = AppReconciliationStop.PUSH_STOPPED,
+                        cacheEpoch = run.observedCacheEpoch(),
+                        delivery = tail,
+                        snapshot = current,
+                        publication = null,
+                        retainedStageId = null,
+                    )
+                }
+                val tailPull = tail.pull
+                if (tailPull?.stop !is PullDeliveryStop.Tail || tail.hasOutstandingLocalWork != false) {
+                    updateDeliveryStatus(handle, fence, statusFor(tail))
+                    return AppReconciliationResult(
+                        stop = AppReconciliationStop.PULL_STOPPED,
+                        cacheEpoch = run.observedCacheEpoch(),
+                        delivery = tail,
+                        snapshot = current,
+                        publication = null,
+                        retainedStageId = null,
+                    )
+                }
+                return publishAfterTail(
+                    run = run,
+                    handle = handle,
+                    fence = fence,
+                    facadeCheck = facadeCheck,
+                    delivery = tail,
+                    snapshot = current,
+                )
+            }
+        }
+    }
+
+    private suspend fun publishAfterTail(
+        run: com.dragosfotache.gymtracka.data.sync.store.PushRun,
+        handle: AppAccountSession,
+        fence: Any,
+        facadeCheck: () -> Unit,
+        delivery: SyncDeliveryResult,
+        snapshot: com.dragosfotache.gymtracka.data.sync.engine.SnapshotDownloadResult?,
+    ): AppReconciliationResult {
+        ensureCurrent(fence)
+        try {
+            handle.checkCurrent()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            throw AppSessionStaleException()
+        }
+        ensureCurrent(fence)
+        val binding = handle.identity.binding
+        val paired = ProjectionStore(
+            database,
+            RepositorySession(binding.accountId, binding.sessionGeneration),
+            publicationBarrier,
+            facadeCheck,
+        )
+        val publication = run.publishProjection(paired)
+        ensureCurrent(fence)
+        try {
+            handle.checkCurrent()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            throw AppSessionStaleException()
+        }
+        ensureCurrent(fence)
+        when (publication.status) {
+            ProjectionPublicationStatus.PROTECTED -> {
+                updateDeliveryStatus(handle, fence, AppSessionDeliveryStatus.RETRY_REQUIRED)
+                return AppReconciliationResult(
+                    stop = AppReconciliationStop.PROTECTED,
+                    cacheEpoch = run.observedCacheEpoch(),
+                    delivery = delivery,
+                    snapshot = snapshot,
+                    publication = publication,
+                    retainedStageId = null,
+                )
+            }
+            ProjectionPublicationStatus.PUBLISHED,
+            ProjectionPublicationStatus.UNCHANGED,
+            -> {
+                updateDeliveryStatus(handle, fence, AppSessionDeliveryStatus.IDLE)
+                return AppReconciliationResult(
+                    stop = AppReconciliationStop.TAIL,
+                    cacheEpoch = run.observedCacheEpoch(),
+                    delivery = delivery,
+                    snapshot = snapshot,
+                    publication = publication,
+                    retainedStageId = null,
+                )
+            }
+            ProjectionPublicationStatus.INCOMPLETE_BASELINE -> {
+                updateDeliveryStatus(handle, fence, AppSessionDeliveryStatus.RETRY_REQUIRED)
+                throw AppSessionException(AppSessionReason.UNAVAILABLE)
+            }
         }
     }
 

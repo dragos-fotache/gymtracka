@@ -15,7 +15,7 @@ internal interface ProjectionObservationRepository {
 }
 
 /** Narrow app-shell persistence boundary used by GymAppState and its JVM fake. */
-internal interface GymAppStateRepository {
+internal interface GymAppStateRepository : ProjectionObservationRepository {
     suspend fun activeWorkout(): WorkoutEntity?
     suspend fun deleteCustomExercise(exerciseId: String): Boolean
     suspend fun createRoutineDraft(): RoutineEntity
@@ -36,6 +36,8 @@ internal interface GymAppStateRepository {
         finishedAtMillis: Long = System.currentTimeMillis(),
     ): Boolean
     suspend fun workoutDetails(workoutId: String): WorkoutDetails?
+    suspend fun routineDetails(routineId: String): RoutineDetails?
+    suspend fun exerciseDetails(exerciseId: String): ExerciseDetails?
     suspend fun updateWorkoutSetRestSeconds(workoutSetId: String, elapsedSeconds: Int)
 }
 

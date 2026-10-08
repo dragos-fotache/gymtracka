@@ -36,6 +36,8 @@ class PublicationBarrierAdapterTest {
         const val EPOCH = 7L
     }
 
+    private fun completedSet() = WorkoutSetEntity("set", "entry", 0, 8, 50.0).copy(isCompleted = true)
+
     @Test
     fun exactRequestBindingRejectsMismatch() = runTest {
         val repository = FakeGymAppStateRepository()
@@ -69,7 +71,7 @@ class PublicationBarrierAdapterTest {
         val repository = FakeGymAppStateRepository()
         val state = state(repository, session = RepositorySession(ACCOUNT, GENERATION))
         runCurrent()
-        state.startRestTimer(WorkoutSetEntity("set", "entry", 0), 30)
+        state.startRestTimer(completedSet(), 30, acceptedEdit = true, expectedWorkoutId = "workout")
         runCurrent()
         val timer = state.activeRestTimer!!
         assertEquals(RepositorySession(ACCOUNT, GENERATION), timer.session)
@@ -94,7 +96,7 @@ class PublicationBarrierAdapterTest {
         val hardware = FakeTimerHardware()
         val state = state(repository, session = RepositorySession(ACCOUNT, GENERATION), hardware = hardware)
         runCurrent()
-        state.startRestTimer(WorkoutSetEntity("old-set", "entry", 0), 30)
+        state.startRestTimer(completedSet(), 30, acceptedEdit = true, expectedWorkoutId = "workout")
         runCurrent()
         assertTrue(hardware.isHeld)
 
@@ -109,8 +111,8 @@ class PublicationBarrierAdapterTest {
             assertEquals(1, impactCalls)
             // Old timer is terminated and its rest is captured exactly once.
             assertNull(state.activeRestTimer)
-            assertEquals(listOf("old-set" to 0), repository.restUpdates)
-            assertEquals(listOf("old-set" to 0), repository.committedRestUpdates)
+            assertEquals(listOf("set" to 0), repository.restUpdates)
+            assertEquals(listOf("set" to 0), repository.committedRestUpdates)
             lease.checkValid()
         } finally {
             lease.close()
@@ -123,7 +125,7 @@ class PublicationBarrierAdapterTest {
         val hardware = FakeTimerHardware()
         val state = state(repository, session = RepositorySession(ACCOUNT, GENERATION), hardware = hardware)
         runCurrent()
-        state.startRestTimer(WorkoutSetEntity("keep-set", "entry", 0), 30)
+        state.startRestTimer(completedSet(), 30, acceptedEdit = true, expectedWorkoutId = "workout")
         val before = state.activeRestTimer!!
         val remainingBefore = state.restTimerRemainingSeconds
         runCurrent()
@@ -154,7 +156,7 @@ class PublicationBarrierAdapterTest {
         val repository = FakeGymAppStateRepository()
         val state = state(repository, session = RepositorySession(ACCOUNT, GENERATION))
         runCurrent()
-        state.startRestTimer(WorkoutSetEntity("bound-set", "entry", 0), 30)
+        state.startRestTimer(completedSet(), 30, acceptedEdit = true, expectedWorkoutId = "workout")
         val bound = state.activeRestTimer!!
         runCurrent()
         val expected = ProjectionPublicationRequest(ACCOUNT, GENERATION, EPOCH)
@@ -199,7 +201,7 @@ class PublicationBarrierAdapterTest {
         repository.restUpdate = { _, _ -> writeGate.await() }
         val state = state(repository, session = RepositorySession(ACCOUNT, GENERATION))
         runCurrent()
-        state.startRestTimer(WorkoutSetEntity("expiring", "entry", 0), 1)
+        state.startRestTimer(completedSet().copy(), 1, acceptedEdit = true, expectedWorkoutId = "workout")
         runCurrent()
 
         val expected = ProjectionPublicationRequest(ACCOUNT, GENERATION, EPOCH)
@@ -222,7 +224,7 @@ class PublicationBarrierAdapterTest {
             runCurrent()
         }
         // Terminal rest is still attempted exactly once and stays observable.
-        assertEquals(listOf("expiring" to 1), repository.restUpdates)
+        assertEquals(listOf("set" to 1), repository.restUpdates)
     }
 
     @Test
@@ -232,7 +234,7 @@ class PublicationBarrierAdapterTest {
         }
         val state = state(repository, session = RepositorySession(ACCOUNT, GENERATION))
         runCurrent()
-        state.startRestTimer(WorkoutSetEntity("doomed", "entry", 0), 1)
+        state.startRestTimer(completedSet().copy(), 1, acceptedEdit = true, expectedWorkoutId = "workout")
         advanceTimeBy(1.seconds)
         runCurrent()
         assertNull(state.activeRestTimer)
@@ -264,7 +266,7 @@ class PublicationBarrierAdapterTest {
         val completionGate = CompletableDeferred<Unit>()
         state.edits.launchEdit(key = "tracked-completion") {
             completionGate.await()
-            state.startRestTimer(WorkoutSetEntity("bound-a", "entry", 0), 30, acceptedEdit = true)
+            state.startRestTimer(completedSet(), 30, acceptedEdit = true, expectedWorkoutId = "workout")
         }
         runCurrent()
 
@@ -299,7 +301,7 @@ class PublicationBarrierAdapterTest {
         }
         val state = state(repository, session = RepositorySession(ACCOUNT, GENERATION))
         runCurrent()
-        state.startRestTimer(WorkoutSetEntity("doomed-finish", "entry", 0), 1)
+        state.startRestTimer(completedSet().copy(), 1, acceptedEdit = true, expectedWorkoutId = "workout")
         advanceTimeBy(1.seconds)
         runCurrent()
         assertNull(state.activeRestTimer)
@@ -401,7 +403,11 @@ class PublicationBarrierAdapterTest {
     ): GymAppState {
         val detailsRepository = repository.apply {
             if (active == null) active = WorkoutEntity("workout", "Lift", 1_000L)
-            if (details == null) details = workoutDetailsFixture()
+            if (details == null) {
+                details = workoutDetailsFixture(
+                    sets = listOf(WorkoutSetEntity("set", "entry", 0, 8, 50.0).copy(isCompleted = true)),
+                )
+            }
         }
         return GymAppState(detailsRepository, backgroundScope, clock, hardware, session = session)
     }

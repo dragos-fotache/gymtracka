@@ -8,6 +8,8 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.PosixFilePermissions
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
+import java.util.UUID
+import kotlinx.coroutines.runBlocking
 import mockwebserver3.MockResponse
 import mockwebserver3.RecordedRequest
 import org.json.JSONObject
@@ -30,6 +32,25 @@ internal class RoomRelayControls(private val fixture: RealBackendFixture) {
                     JSONObject()
                         .put("accountId", account.accountId)
                         .put("accessToken", account.accessToken)
+                        .toString(),
+                )
+            }
+            "/__r10__/session" -> {
+                // Test-only credential setup, then a real service refresh supplies
+                // authoritative token deadlines. No domain outcome is simulated.
+                val seed = synchronized(fixture) { fixture.newAuthSession() }
+                val grant = runBlocking {
+                    fixture.authApi().refresh(UUID.randomUUID().toString(), seed.refreshToken)
+                }
+                tokens.add("Bearer ${grant.accessToken.value}")
+                response(
+                    200,
+                    JSONObject()
+                        .put("accountId", grant.account.accountId)
+                        .put("accessToken", grant.accessToken.value)
+                        .put("accessExpiresAtMillis", grant.accessExpiresAtMillis)
+                        .put("refreshToken", grant.refreshToken.value)
+                        .put("refreshExpiresAtMillis", grant.refreshExpiresAtMillis)
                         .toString(),
                 )
             }

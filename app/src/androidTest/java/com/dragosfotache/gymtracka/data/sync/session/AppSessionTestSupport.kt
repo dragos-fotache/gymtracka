@@ -438,9 +438,13 @@ internal class GatedTransactionExecutor : Executor {
     @Volatile
     var gateNext = false
 
+    /** Parking predicate evaluated on the executor thread; default parks unconditionally. */
+    @Volatile
+    var gateWhen: () -> Boolean = { true }
+
     override fun execute(command: Runnable) {
         delegate.execute {
-            if (gateNext) {
+            if (gateNext && gateWhen()) {
                 gateNext = false
                 enteredLatch.countDown()
                 releaseLatch.await()

@@ -16,6 +16,8 @@ import com.dragosfotache.gymtracka.data.gym.WorkoutHistoryStateRepository
 import com.dragosfotache.gymtracka.data.gym.WorkoutHistorySummary
 import com.dragosfotache.gymtracka.data.gym.WorkoutSetEntity
 import com.dragosfotache.gymtracka.data.gym.WorkoutEntity
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 
 internal open class FakeExerciseRepository : ExerciseStateRepository {
     var summaries: List<ExerciseSummary> = emptyList()
@@ -198,6 +200,11 @@ internal open class FakeWorkoutHistoryRepository : WorkoutHistoryStateRepository
 internal class FakeGymAppStateRepository : GymAppStateRepository {
     var active: WorkoutEntity? = null
     var details: WorkoutDetails? = null
+    var routineDetailsResult: RoutineDetails? = null
+    var routineDetailsProvider: suspend (String) -> RoutineDetails? = { routineDetailsResult }
+    var exerciseDetailsResult: ExerciseDetails? = null
+    var exerciseDetailsProvider: suspend (String) -> ExerciseDetails? = { exerciseDetailsResult }
+    var projectionEpochs = MutableStateFlow(0L)
     var completedSets = true
     var finishResult = true
     var startEmptyResult = WorkoutEntity("empty", "Empty", 0L)
@@ -211,6 +218,9 @@ internal class FakeGymAppStateRepository : GymAppStateRepository {
     var finishError: Throwable? = null
     var hasCompletedSetsError: Throwable? = null
     var restUpdate: suspend (String, Int) -> Unit = { _, _ -> }
+    var activeWorkoutGate: (suspend () -> Unit)? = null
+    var workoutDetailsGate: (suspend () -> Unit)? = null
+    var detailsError: Throwable? = null
     val startedEmptyAt = mutableListOf<Long>()
     val performedAgainAt = mutableListOf<Pair<String, Long>>()
     val startedRoutineAt = mutableListOf<Pair<String, Long>>()
@@ -224,8 +234,10 @@ internal class FakeGymAppStateRepository : GymAppStateRepository {
     override suspend fun deleteRoutine(routineId: String) = Unit
 
     override suspend fun activeWorkout(): WorkoutEntity? {
+        val snapshot = active
+        activeWorkoutGate?.invoke()
         activeWorkoutError?.let { throw it }
-        return active
+        return snapshot
     }
 
     override suspend fun startEmptyWorkout(startedAtMillis: Long): WorkoutEntity {
@@ -268,7 +280,20 @@ internal class FakeGymAppStateRepository : GymAppStateRepository {
         return finishResult
     }
 
-    override suspend fun workoutDetails(workoutId: String) = details
+    override suspend fun workoutDetails(workoutId: String): WorkoutDetails? {
+        val snapshot = details
+        workoutDetailsGate?.invoke()
+        detailsError?.let { throw it }
+        return snapshot
+    }
+
+    override fun observeProjectionEpoch(): Flow<Long> = projectionEpochs
+
+    override suspend fun routineDetails(routineId: String): RoutineDetails? =
+        routineDetailsProvider(routineId)
+
+    override suspend fun exerciseDetails(exerciseId: String): ExerciseDetails? =
+        exerciseDetailsProvider(exerciseId)
 
     override suspend fun updateWorkoutSetRestSeconds(workoutSetId: String, elapsedSeconds: Int) {
         val update = workoutSetId to elapsedSeconds

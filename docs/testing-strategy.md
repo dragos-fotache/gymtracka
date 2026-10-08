@@ -101,8 +101,9 @@ future assignments. Total test count alone does not explain delivery time or jus
 | Private completed preparation/promotion | Real Room/Keystore/file and actual adapters: complete projection+journal/device atomicity, true foreign collision, postwrite trigger/count-zero/cancellation rollback, actual-tail/epoch protection, same-completion refresh rotation, exact expired/pending phase promotion, file-reopen gap/idempotence, pre-CAS readiness races, uncertain post-CAS invalidation/cancellation and shared-owner contention; no app activation |
 | Settled occupied reauthentication and exact pending replay | Exact R09e private replacement/finalization/resume and R09f shared-owner/shared-credential replay-only prerequisite; independent exact bytes/original expiry, required old-Room authorization, pre-CAS/late-result/newest/cancellation/error fences, semantic rereads, strict malformed legacy retention, real Room/Keystore/file reopen and retained-scope preservation; no app activation or unsuccessful pending retirement |
 | Retained-account recovery/superseded evidence | Independent v1/v2 bytes and immutable archives, exact source append and old-token fences, signed-out/missing/pre-CAS/post-commit reopen, real Room rollback/root/precedence seams, actual legacy replay then fresh-grant supersession, and archive-preserving private engine/refresh/completion/R09e regression; no app activation |
-| App-facing authority/offline recovery | Real Room/Keystore/file reopen, constructor/unconfigured privacy, exact preparation/bootstrap/tail/completion admission, interrupted promotion, offline read/edit with expired credentials and queued intent, preserved uncertain evidence and foreign/local refusal, transition/cancellation cleanup, process-only stale reads/writes and post-insert rollback, bounded reconnect/no-publication, exact backoff retries, runtime binding faults and retained editing on transient/reauth stops; required real UI/timer integration remains R12c |
-| Still outstanding | Live scoped ACTIVE publication/full-resync orchestration, canonical timer-impact and app/timer reconciliation/package gates (R12c), legacy-data disposition, actual Google/account UI/triggers, WorkManager and live deployment/lifecycle gates; expanded R10b remains public |
+| App-facing authority/offline recovery | Real Room/Keystore/file reopen, constructor/unconfigured privacy, exact preparation/bootstrap/tail/completion admission, interrupted promotion, offline read/edit with expired credentials and queued intent, preserved uncertain evidence and foreign/local refusal, transition/cancellation cleanup, process-only stale reads/writes and post-insert rollback, bounded reconnect/no-publication, exact backoff retries, runtime binding faults and retained editing on transient/reauth stops; scoped runtime coverage below composes these primitives |
+| Scoped runtime/ACTIVE reconciliation | Actual scoped Compose privacy/repository binding and lease-safe reauthentication, real transition/timer/publication pipeline, canonical graph impact and final-metadata-write rollback, epoch observation/recovery/typed snapshot chaining, app pill/selection/consent/latest-load races including mixed active and nested deletion; isolated real scoped-facade/root HTTP convergence across independent Room/vault stores |
+| Still outstanding | Legacy-data disposition, actual Google/account UI/triggers, WorkManager and live deployment/lifecycle gates; expanded R10b remains public |
 
 ## Standard commands
 
@@ -187,7 +188,12 @@ exchange. Local interoperability is not deployed TLS, phone behavior, or real Ro
 Core R10 uses two independent file-backed Android Room stores through the delivered capture/push/pull/snapshot/
 publication drivers and production HTTP transport. The host JVM relay reuses the guarded fixture; its only opt-in
 controls provision disposable credentials and lose one token-specific response **after the real service answered**.
-No successful domain outcome is simulated. Host JDBC/config/key helpers remain outside both Android APKs.
+The test-only `POST /__r10__/session` additionally performs synthetic setup followed by an actual service refresh and
+returns the complete service session/deadlines for fresh EMPTY Room/vault facade tests. Consume without logging bodies,
+headers, tokens or configuration. The scoped journey renders one real account-root composition and verifies intended
+custom/routine IDs/names/references, both quiescent outboxes and paired materialized epochs. Readiness uses bounded normal
+Main scheduling, not snapshot observation without a composition. Normal missing-row reads are distinct from read errors;
+only the explicit custom editor retains deleted-target presentation. No successful domain outcome is simulated. Host JDBC/config/key helpers remain outside both Android APKs.
 
 Run the isolated launcher above, then prepare the host launch classpath in a serialized build slot:
 
@@ -297,15 +303,16 @@ stays in the linked reviews; consult only when assessing coverage freshness or i
 
 | Layer | Latest relevant recorded evidence | Limitation |
 |---|---|---|
-| Offline JVM/compilation | [R09h review](archive/remaining-work/R09h-review.md): fresh full offline JVM and changed main/instrumentation Kotlin/KSP compilation | Explicit authority boundary, no current startup activation or real Google/phone claim |
-| Debug assembly/lint/APK | [R09h review](archive/remaining-work/R09h-review.md): frozen-source main/unit/device lint, debug assembly, new helper/literal exclusion and asset/schema preservation | One dependency-version warning; unchanged backup/configuration, not release/OEM/cloud-transfer audit |
+| Offline JVM/compilation | [R12c review](archive/remaining-work/R12c-review.md), 2026-10-08: fresh **63 classes / 1,008 cases / 0 failures/errors/skips**, main/default/opt-in Kotlin/KSP compilation | Final scoped-runtime snapshot, not real Google/phone readiness |
+| Debug assembly/lint/APK | [R12c review](archive/remaining-work/R12c-review.md): frozen assembly/lint, helper/config/private-key/JWT marker exclusion, exact v1 packaged asset and unchanged schemas/manifest | One newer-dependency warning; not release/OEM/cloud-transfer audit |
 | App-facing authority/offline recovery | [R09h review](archive/remaining-work/R09h-review.md): whole affected session package plus separate unchanged capture/scoped-repository/push-fence/rollback/real root-admission classes | Filtered Android gates, not full instrumentation, live UI/timer rebinding, active projection or actual account journeys |
 | Focused projection/feature/edit flows | [R12b review](archive/remaining-work/R12b-review.md): individual API37 observation, actual-screen focus/dialog/shared-admission, root-disposal, leaf-refusal and focused controls classes | Scoped device evidence, not full unfiltered instrumentation, account activation or remote app/timer reconstruction |
 | Settled reauthentication and affected Room/session | [R09e review](archive/remaining-work/R09e-review.md): individual API37 real authority/Keystore/reopen/retained-intent and affected Room/preparation classes | No fresh unfiltered instrumentation, API24, two-store HTTP convergence, activation or live OEM/cloud transfer |
 | Private completion and affected engine/publication | [R09d review](archive/remaining-work/R09d-review.md): individual API37 completion/recovery/fence and affected private-engine/projection/baseline/shared-driver classes | Historical scoped evidence, not freshly rerun by R09e or permission to activate |
-| Real service | [R10a review](archive/remaining-work/R10a-review.md): fresh full isolated HTTP/auth/host-control suite | Local interoperability, not deployed TLS/Google; legacy replay unresolved |
+| Real service | [R12c review](archive/remaining-work/R12c-review.md): fresh isolated **11 classes / 58 cases / 0 failures/errors/skips** HTTP/auth/host-control suite | Local interoperability, not deployed TLS/Google; legacy replay unresolved |
 | Core Room/engine convergence | [R10a review](archive/remaining-work/R10a-review.md): two independent file-backed stores through delivered engine and actual isolated HTTP, independent complete outcomes and recovery gates | Representative core cases, not expanded R10b, actual process death, pruning or production activation |
-| Full instrumentation | [R10a review](archive/remaining-work/R10a-review.md): fresh full unfiltered default API37/Android17 16KB-page regression, including migrations and persistence/sync/HTTP/session/Compose/app flows | External convergence is a separate opt-in gate; no API24, live phone/Google, hosted CI or activated-app publication claim |
+| Scoped account runtime/HTTP | [R12c review](archive/remaining-work/R12c-review.md): final complete opt-in **6 cases / 0 failures/errors/skips**, including actual scoped root/facade, nonempty independently expected data and paired publication | Representative synthetic journey; earlier unexplained Private stop retained, no claim diagnostic recorder fixed it |
+| Full instrumentation | [R12c review](archive/remaining-work/R12c-review.md): final full unfiltered API37/Android17 **87 classes / 926 cases / 0 failures/errors/skips**, including54 R12c cases, migrations/copied asset and actual Compose/app flows | External convergence separate; no API24, live phone/Google, hosted CI or default-startup activation claim |
 | Focused private authority/migrations | [R09a review](archive/remaining-work/R09a-review.md): authority/session package plus separate populated11→12, all-supported/copied-asset, staging migration and foundation classes | Strict fixture correction retained; current-slice scoped evidence, not full unfiltered instrumentation or app activation |
 | Focused complete baseline/ownership Room | [R08c review](archive/remaining-work/R08c-review.md): separate baseline/fence class runs and final refined cancellation/corruption method reruns before the full gate | Repeated methods are not extra distinct tests; focused passes do not substitute for the separately executed full gate |
 | Focused snapshot download/ownership Room | [R08b review](archive/remaining-work/R08b-review.md): separate driver/fence and staging/pull/shared-driver filters | Historical scoped evidence; fresh full package execution is owned by the R08c review |
@@ -314,7 +321,8 @@ stays in the linked reviews; consult only when assessing coverage freshness or i
 | Launcher | [R10a review](archive/remaining-work/R10a-review.md): fresh Python launcher regression | Isolated launcher safeguards, not personal deployment/configuration |
 
 API 24 runtime, hosted CI, successful real Google identity, expanded R10b and owner phone/laptop journeys remain
-unverified by these records. Core R10a Room/engine convergence is accepted, without application activation.
+unverified by these records. Core R10a convergence and R12a–c scoped reconciliation are accepted; default startup
+still remains local and identity/account UI/triggers are not activated.
 Broader/public gates are tracked in [the roadmap](remaining-work-roadmap.md), not inferred
 from the most recent JVM total. The [legacy replay limitation](sync/implementation.md#legacy-auth-replay-limitation) remains
 an explicit recovery/release risk, not a repaired case.

@@ -81,6 +81,7 @@ class ProjectionStore(
     private val database: GymDatabase,
     private val session: RepositorySession,
     private val barrier: ProjectionPublicationBarrier,
+    private val processCheck: (() -> Unit)? = null,
 ) {
     init {
         if (session.accountId == null) {
@@ -116,12 +117,16 @@ class ProjectionStore(
             expectedCacheEpoch = expectedCacheEpoch,
         )
         currentCoroutineContext().ensureActive()
+        processCheck?.invoke()
         val lease = barrier.acquire(request)
         try {
             try {
-                return database.withTransaction {
+                val result = database.withTransaction {
                     publishInsideTransaction(accountId, expectedCacheEpoch, GuardedPublicationLease(lease))
                 }
+                currentCoroutineContext().ensureActive()
+                processCheck?.invoke()
+                return result
             } catch (e: LeaseOriginFailure) {
                 currentCoroutineContext().ensureActive()
                 throw e.origin
@@ -132,6 +137,97 @@ class ProjectionStore(
         } finally {
             lease.close()
         }
+    }
+
+    /**
+     * R12c ACTIVE-only canonical timer-impact decision. Read-only and
+     * transactionally session/epoch/process fenced. Returns true when the
+     * visible timer remains valid under the canonical graph; false when remote
+     * finish/delete/replacement, removed entry/set or uncompleted set ends it.
+     * Protected outbox intent returns true after fences. Invalid/incomplete or
+     * stale data throws; no writes are performed and no UI types are referenced.
+     */
+    suspend fun preservesTimer(
+        expectedCacheEpoch: Long,
+        workoutId: String,
+        workoutExerciseId: String,
+        workoutSetId: String,
+    ): Boolean {
+        if (expectedCacheEpoch < 0) {
+            throw IllegalArgumentException("Expected cache epoch must be nonnegative")
+        }
+        com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid(workoutId, "workoutId")
+        com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid(workoutExerciseId, "workoutExerciseId")
+        com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid(workoutSetId, "workoutSetId")
+        if (database.inTransaction()) {
+            throw IllegalStateException("Timer impact check requires no active transaction")
+        }
+        currentCoroutineContext().ensureActive()
+        processCheck?.invoke()
+        val accountId = session.accountId ?: throw IllegalArgumentException(
+            "Projection store requires a signed-in account",
+        )
+        val decision = database.withTransaction {
+            currentCoroutineContext().ensureActive()
+            processCheck?.invoke()
+            val oldEpoch = checkCanonicalFences(
+                database,
+                accountId,
+                session.sessionGeneration,
+                expectedCacheEpoch,
+            )
+            currentCoroutineContext().ensureActive()
+            processCheck?.invoke()
+            val cache = database.syncCanonicalDao().getAccountCache(accountId)
+            if (cache == null || !cache.baselineComplete) {
+                throw CanonicalStorageException()
+            }
+            if (database.syncSnapshotDao().getStageForAccount(accountId) != null) {
+                throw SnapshotStageActiveException()
+            }
+            if (database.syncDao().getOutboxForAccount(accountId).isNotEmpty()) {
+                currentCoroutineContext().ensureActive()
+                processCheck?.invoke()
+                checkCanonicalFences(database, accountId, session.sessionGeneration, expectedCacheEpoch)
+                currentCoroutineContext().ensureActive()
+                processCheck?.invoke()
+                return@withTransaction true
+            }
+            val retained = loadValidatedRetained(database, accountId, oldEpoch)
+            checkFamilyBindings(retained, emptyList())
+            val live = liveProjectionGraph(retained)
+            val projectionDao = database.syncProjectionDao()
+            validateCanonicalGraphDependencies(
+                live,
+                projectionDao.getAllExercises().associateBy { it.id },
+                projectionDao.getMuscleGroupIds().toSet(),
+                projectionDao.getEquipmentIds().toSet(),
+            )
+            val keep = run {
+                val workout = live.workouts.singleOrNull { it.id == workoutId }
+                    ?: return@run false
+                if (workout.status != "active") return@run false
+                val entry = workout.exercises.singleOrNull { it.id == workoutExerciseId }
+                    ?: return@run false
+                val set = entry.sets.singleOrNull { it.id == workoutSetId }
+                    ?: return@run false
+                set.isCompleted
+            }
+            currentCoroutineContext().ensureActive()
+            processCheck?.invoke()
+            checkCanonicalFences(database, accountId, session.sessionGeneration, expectedCacheEpoch)
+            currentCoroutineContext().ensureActive()
+            processCheck?.invoke()
+            keep
+        }
+        currentCoroutineContext().ensureActive()
+        processCheck?.invoke()
+        database.withTransaction {
+            checkCanonicalFences(database, accountId, session.sessionGeneration, expectedCacheEpoch)
+        }
+        currentCoroutineContext().ensureActive()
+        processCheck?.invoke()
+        return decision
     }
 
     /**
@@ -164,6 +260,7 @@ class ProjectionStore(
         lease: ProjectionPublicationLease,
     ): ProjectionPublicationResult {
         currentCoroutineContext().ensureActive()
+        processCheck?.invoke()
         lease.checkValid()
         val oldEpoch = checkCanonicalFences(
             database,
@@ -270,10 +367,12 @@ class ProjectionStore(
         validateSurvivingCustomReferences(snapshot, accountId, live.customIds)
         val preserved = preserveGenerationReservations(database, accountId, retained, snapshot, live)
         currentCoroutineContext().ensureActive()
+        if (permit == null) processCheck?.invoke()
         lease.checkValid()
         checkCanonicalFences(database, accountId, session.sessionGeneration, expectedCacheEpoch, permit)
         replaceAccountGraph(accountId, live, snapshot, preserved)
         currentCoroutineContext().ensureActive()
+        if (permit == null) processCheck?.invoke()
         lease.checkValid()
         checkCanonicalFences(database, accountId, session.sessionGeneration, expectedCacheEpoch, permit)
         val newEpoch = try {
@@ -285,7 +384,23 @@ class ProjectionStore(
         if (updated != 1) {
             throw CanonicalStorageException()
         }
+        // Last-precommit guards AFTER all SQL effects: revocation or terminal admission
+        // racing the final metadata write must fail closed with rollback instead of
+        // committing. Rechecks run at the NEW returned epoch because this publication
+        // advanced it; the old epoch is never rechecked after the advance. The ACTIVE
+        // path adds the exact process fence; the prepared path keeps final lease
+        // validity with its owning combined completion fences (permit, no process check).
         currentCoroutineContext().ensureActive()
+        lease.checkValid()
+        if (permit == null) {
+            processCheck?.invoke()
+        }
+        checkCanonicalFences(database, accountId, session.sessionGeneration, newEpoch, permit)
+        currentCoroutineContext().ensureActive()
+        lease.checkValid()
+        if (permit == null) {
+            processCheck?.invoke()
+        }
         return ProjectionPublicationResult(
             status = ProjectionPublicationStatus.PUBLISHED,
             cacheEpoch = newEpoch,
