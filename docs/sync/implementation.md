@@ -914,8 +914,8 @@ asset, HTTP/Google, clock/UUID, app construction, ordinary repository/UI rebindi
 [R09g review](../archive/remaining-work/R09g-review.md) owns fresh JVM/full instrumentation/lint/APK evidence. Stopped at
 inert safely recoverable same-account preparation eligibility. R12a real edit/timer drains and core R10 two-store actual
 engine/HTTP convergence are the named prerequisites for the [app-facing boundary](#app-facing-authority-and-offline-recovery).
-Its delivery does not activate default startup. Explicit scoped integration is delivered below; legacy-data disposition,
-identity/account UI/triggers and live milestone gates remain open.
+Its delivery does not activate default startup. Explicit scoped integration is delivered below; approved P18 legacy
+preserve/import implementation, identity/account UI/triggers and live milestone gates remain open.
 
 ## App-facing authority and offline recovery
 
@@ -940,7 +940,8 @@ and startup-policy replacement. Transition and publication barriers are mandator
   never compensate, erase evidence or restart generations. P17 evidence retention remains in the existing recovery seam.
 - Private bootstrap stops, retained stages and budgets do not launch another completion attempt. Actual bounded valid tail
   precedes required protected completion, and only COMPLETED plus fresh startup reconciliation yields an app handle.
-  Local-only roots refuse unchanged pending owner disposition; no import, deletion or reassignment is implemented.
+  Local-only roots still refuse unchanged until the approved P18 one-time preserve/import is implemented and verified
+  in R13; no import, deletion or reassignment is implemented by this facade.
 - Facade repositories have an explicit process guard inside scoped transactions before effects/commit and after result
   dispatch. Process-only invalidation prevents stale reads/edits even at unchanged durable generation. Guarded constructor
   overloads preserve original legacy/default/trailing-lambda UUID/clock semantics; no supplier is coerced to a Unit guard.

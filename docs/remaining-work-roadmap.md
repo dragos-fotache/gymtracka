@@ -27,14 +27,14 @@ snapshot publication. Accepted personal slices never imply completion of their d
 [R09h app-facing authority/offline recovery](archive/remaining-work/R09h-review.md) is accepted. R09a–h close the finite
 [reduced authority/recovery plan](#remaining-r09-plan), including [P17](../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions)
 retention/fencing of exact uncertain encrypted evidence. The delivered boundary supports private activation and matching
-offline recovery but does **not** activate current production startup/screens/publisher or resolve legacy local-data disposition.
+offline recovery but does **not** activate default startup or implement legacy migration. [P18](../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions)
+now selects one-time preservation/import of existing local-only data; its bounded implementation/gates belong to R13.
 
 [R12a real edit/timer barriers](archive/remaining-work/R12a-review.md), [R12b observation/feature refresh](archive/remaining-work/R12b-review.md)
 and [Core R10a convergence/recovery](archive/remaining-work/R10a-review.md) remain accepted. **[R12c](archive/remaining-work/R12c-review.md)
 and the finite R12a–c package are accepted:** explicit scoped runtime/root, real timer/edit barriers, guarded ACTIVE
-reconciliation/full-resync and complete package gates are delivered. Default startup remains local. The owner explicitly
-stopped after current-task closure and next-coordinator preparation; no successor/next implementation was launched.
-See [current authority](coordinator-handoff.md).
+reconciliation/full-resync and complete package gates are delivered. Default startup remains local. The owner released **R11 planning and report-back only** after the explicit R12c stop; no R11 implementation,
+delegation or live journey is released. See [current authority](coordinator-handoff.md).
 Google identity/account UI/triggers and live journeys remain R11/R13/R17. No new R09 slices or deferred-public work is inferred.
 “Pending” requires eligibility under explicit/standing authority and a bounded pickup spec, not another approval for each
 eligible next slice. “Deferred” remains required for its later
@@ -50,11 +50,11 @@ milestone and is not automatically brought forward. Historical M-series assignme
 | R06 durable push | **a claiming/exact replay, b outcomes/retry, c atomic canonical acknowledgment and d bounded delivery loop accepted**; production activation remains later integration | R03b, R04, R05 |
 | R07 incremental pull | **a checkpoint transactions, b bounded HTTP pull, c shared push-first/valid-tail orchestration and package gates accepted** | R06; b after a, c after b |
 | R08 bootstrap/full resync | **a staging, b bounded HTTP download and c complete canonical baseline/absence/protected publication recovery accepted; no further R08 slice** | R05–R07; app-facing authority/convergence/barriers remain R09/R10/R12 |
-| R09 single-account activation/recovery | a–h accepted; finite reduced authority/recovery boundary closed. Explicit app-facing authority/private activation/offline recovery and bounded reconnect delivered; current startup/screens/publisher unchanged. Legacy-data disposition unresolved; general transitions/import-replace UI deferred public | R04/R08 and accepted R12a/core R10; live scoped integration R12c, identity/UI/triggers R11/R13 |
+| R09 single-account activation/recovery | a–h accepted; finite reduced authority/recovery boundary closed. Explicit app-facing authority/private activation/offline recovery and bounded reconnect delivered; current startup/screens/publisher unchanged. Approved one-time legacy import pending R13; general transitions/import-replace UI deferred public | R04/R08 and accepted R12a/core R10; live scoped integration R12c, identity/UI/triggers R11/R13 |
 | R10 engine convergence/recovery | Core a accepted; expanded b deferred before public release | R03b/c, R06–R09 |
-| R11 Google identity/proofs | Personal sign-in/reauthentication pending; sign-out UI and lifecycle proofs deferred public | Relevant R02, R04 |
+| R11 Google identity/proofs | Finite three-slice plan: **a identity adapter and b foreground exchange pending personal; c lifecycle proofs deferred public**. Planning-only release; sign-out UI remains deferred public R13 | Relevant R02/R03/R04; b uses accepted R09/R12 handoff; c needs lifecycle foundations |
 | R12 feature/app reconciliation | **a–c accepted; finite package closed**: real barriers, projection observation, explicit scoped app/timer runtime, ACTIVE reconciliation/full-resync and package gates | R12a/b, R09h and Core R10a accepted; default startup/UI/triggers remain later R11/R13 |
-| R13 account UI/foreground sync | Pending | R09, core R10, personal R11, R12 |
+| R13 account UI/foreground sync | Pending; includes bounded P18 one-time legacy preserve/import and activation/recovery gate, not a separate major R | R09, core R10, personal R11, R12; import must complete before affected activation |
 | R14 cloud JSON export | Deferred public | R02e, R03d export, R11 proofs, R13 |
 | R15 deletion/status recovery | Deferred public | R02e, R03d delete/status, R09, R11 proofs, R13, R14 |
 | R16 background scheduling | After usable personal app | R06–R08, R13; deletion hooks added with R15 |
@@ -166,13 +166,15 @@ normal serialized refresh; unrecoverable credential expiry suspends delivery for
 local-data deletion. Missing/mismatched vault fails closed/private.
 A different service account UUID cannot silently adopt retained data or pending work, even for the same Google identity.
 
-Pre-existing local-only data disposition is **unresolved**. Before any activation that encounters it, obtain the owner's
-choice of one-time preservation/import or confirmed clean/cloud-only start and scope that work. No deletion/import is
-currently authorized; no general choice UI is required for new installations.
+Pre-existing local-only data disposition is **decided: preserve and import once into the first service-confirmed account**
+under P18. Implementation belongs to a bounded R13 import/activation workstream; R09a–h remain closed. Preserve the graph
+until transactional capture, definitive import settlement and complete snapshot publication are implemented/verified.
+No destructive clean/cloud-only start is selected; current activation still refuses local roots. No general choice UI is
+required for new installations.
 
 **Personal gate:** interrupted initial activation/reauthentication, matching offline restart/edit/reconnect, vault/Room
-mismatch, delayed callbacks, different-account rejection and pending-work preservation; include the selected legacy-data
-migration gate once decided. R12a barriers and core R10 remain required before production activation. First bounded
+mismatch, delayed callbacks, different-account rejection and pending-work preservation; R13 additionally owns the approved
+one-time legacy import gate. R12a barriers and core R10 remain required before production activation. First bounded
 slice: [R09a durable private account authority/journal](archive/remaining-work/R09a-review.md), accepted with inert
 storage/read/reservation/private fencing. [R09b prepared coordination/recovery](archive/remaining-work/R09b-review.md)
 is accepted, stopping at stable private observations without occupied credential replacement or engine admission.
@@ -190,20 +192,21 @@ P17 fresh-grant supersession atomically retains/fences exact uncertain encrypted
 and interrupted older-generation gaps, without domain/cache/intent changes. No retirement/cleanup or old-credential authority.
 [R09h](archive/remaining-work/R09h-review.md) composes the app-facing authority/private activation/offline recovery boundary,
 with mandatory supplied barriers, exact expectations and process-fenced repositories. Production startup is unchanged;
-explicit scoped publication/rebinding is delivered by R12c; account UI/triggers remain R13. No legacy-data disposition is inferred.
+explicit scoped publication/rebinding is delivered by R12c; account UI/triggers and approved P18 legacy import remain R13.
 
 ### Remaining R09 plan
 
 **Finite reduced R09 authority/recovery plan closed: R09a–h are accepted.** The owner's confirmed R09h boundary delivers
 reusable app-facing authority without current screen/publisher startup activation. Usable personal-account delivery still
-needs the separate R12c/R11/R13 integration and R17 gates, plus owner disposition before affected legacy-data activation.
+uses accepted R12c integration and still needs R11/R13 and R17 gates, including implemented P18 import before affected
+legacy-data activation.
 No hidden prerequisite slices, sub-letter sequences or R09i are authorized. A genuine safety/dependency reason for revising
 this finite plan must go to the owner; deferred public transitions remain separate obligations.
 
 | Slice | Outcome and completion boundary | Dependencies / blockers | Non-goals |
 |---|---|---|---|
-| **R09g — complete same-account recovery (accepted)** | [Review](archive/remaining-work/R09g-review.md): signed-out/missing-vault and uncertain/interrupted recovery with exact encrypted evidence retention/fencing and fresh same-account grants; strictly older evidence never supplies authority. Preserves all cached data/intent; stops at inert preparation eligibility. | R09a–f delivered. P17 disposition implemented without schema expansion. Unreadable/foreign/unknown-provenance or incompatible same/newer states remain preserved/private; legacy choice unresolved. | No Google adapter/account UI, fresh uncertain retry key, expiry rounding, implicit evidence retirement/cleanup, account switching/sign-out UI, legacy import/deletion, production activation or convergence work. |
-| **R09h — app-facing activation and offline recovery (accepted)** | [Review](archive/remaining-work/R09h-review.md): explicit authority/private activation/offline recovery and bounded reconnect over delivered seams; matching cache reopens/edits offline, exact expected grants and process guards fence stale work. Mandatory transition/publication inputs; no production startup/screens/publisher activation. | R09g, R12a/core R10 accepted. R12c consumes delivered authority for real scoped/timer integration. Owner choice remains required before affected legacy-data activation. | Google identity R11; account UI/triggers R13; no switching/sign-out/import-replace UI, legacy disposition, scheduler, public lifecycle, deployment or live account/device actions. |
+| **R09g — complete same-account recovery (accepted)** | [Review](archive/remaining-work/R09g-review.md): signed-out/missing-vault and uncertain/interrupted recovery with exact encrypted evidence retention/fencing and fresh same-account grants; strictly older evidence never supplies authority. Preserves all cached data/intent; stops at inert preparation eligibility. | R09a–f delivered. P17 disposition implemented without schema expansion. Unreadable/foreign/unknown-provenance or incompatible same/newer states remain preserved/private; approved P18 import implementation remains R13. | No Google adapter/account UI, fresh uncertain retry key, expiry rounding, implicit evidence retirement/cleanup, account switching/sign-out UI, legacy import/deletion, production activation or convergence work. |
+| **R09h — app-facing activation and offline recovery (accepted)** | [Review](archive/remaining-work/R09h-review.md): explicit authority/private activation/offline recovery and bounded reconnect over delivered seams; matching cache reopens/edits offline, exact expected grants and process guards fence stale work. Mandatory transition/publication inputs; no production startup/screens/publisher activation. | R09g, R12a/core R10 accepted. R12c consumes delivered authority for real scoped/timer integration. Approved P18 import must be implemented/verified in R13 before affected legacy-data activation. | Google identity R11; account UI/triggers R13; no switching/sign-out/import-replace UI, legacy disposition, scheduler, public lifecycle, deployment or live account/device actions. |
 
 R09g implements P17 without implicit retirement/discard of uncertain evidence; new unresolved disposition/blockers still
 require user escalation. R09h cannot bypass its external package dependencies; if
@@ -231,12 +234,89 @@ assignments and risk-selected gates belong to each slice specification at pickup
 
 ### R11 — Foreground Google identity
 
-Personal delivery adds Credential Manager behind the identity interface, supplied nonce/server audience/package/signing
-inputs and foreground sign-in/reauthentication exchange/cancellation. Sign-out UI and its credential-state clearing
-journey are deferred with public account workflows. Service account identity—not email or decoded Google
-claims—owns local data. Keep bounded foreground exchange retries exact; no interactive worker auth or persisted Google
-proof/client secret. Deferred c supplies purpose/account-bound export/delete/status proofs. Verify dependency compatibility
-at pickup, not from old planning versions. Deterministic adapter tests and actual Google journeys are separate gates.
+**Finite plan: three slices total; two personal slices (R11a–b), one deferred public slice (R11c).** The owner released
+plan design/report-back only. These are proposed execution boundaries, not active implementation assignments; obtain
+implementation release and resolve input gates before creating the first bounded specification. Any additional split
+requires the [major-task slicing rule](coordinator-workflow.md#major-task-slicing--owner-rule).
+
+| Slice | Outcome / completion boundary | Dependencies / input gates | Non-goals |
+|---|---|---|---|
+| **R11a — foreground Android Google identity adapter (pending personal)** | Implement the existing SDK-independent `GoogleIdentityProvider` through Credential Manager. An explicit foreground request supplies the exact service nonce and configured web/server audience; a current Activity launches the Google button flow and a strictly parsed Google credential returns only an opaque token. Safe unavailable/cancelled/invalid/provider-failure behavior, Activity disposal and late-result fencing; implement `clearCredentialState()` as a primitive, never automatic cancellation cleanup. Include dependency/configuration seams and independent adapter tests in this slice. | Existing R02 identity boundary; owner-confirmed configuration/input scope; compatible stable Credentials, Play Services bridge and Google ID artifacts; Android test resources including minimum-API coverage. | No service challenge/exchange orchestration, token decoding as authority, automatic sign-in on construction/startup, account/sign-out UI, Room/vault writes, cloud activation, personal configuration or actual Google journey. |
+| **R11b — bounded foreground sign-in/reauthentication exchange (pending personal)** | Compose `ServiceAuthApi.challenge(SIGN_IN)`, R11a credential acquisition and one captured `GoogleExchangeAttempt`; bounded exact retries return an origin/intent-bound service grant for the existing guarded `AppSessionCoordinator.acceptGrant` boundary. Fence concurrent/disposed/stale attempts and same-account recovery handoff; verify the consumer with real Room/vault and real barriers without activating default startup. Close the personal R11 package gates. | Accepted R11a; existing R03c auth HTTP/R04 vault/refresh and R09h/R12c authority/runtime seams; captured expected authority/origin supplied by the caller; disposable device/backend resources for declared integration gates. | No replacement auth transport/vault/refresh/authority, bootstrap/publication or ACTIVE admission on Google success alone, account screens/startup/triggers, legacy import, switching/sign-out, scheduler or lifecycle proofs. |
+| **R11c — purpose/account-bound lifecycle proofs (deferred public)** | Reuse the foreground adapter for fresh `export`, `deleteAccount` and `accountStatus` challenges, retaining exact target/purpose/attempt context and cancellation/stale-result fences. Supply proof handoff to the lifecycle adapters; never create a service account or substitute a sign-in grant for proof. Independent proof orchestration and account/purpose refusal gates close the remaining R11 obligation. | R11a–b; relevant R02e/R03d lifecycle models/adapters and separately released public workflow scope; authoritative [fresh-proof contract](../shared-docs/docs/backend-contract/account-lifecycle.md#fresh-google-proof). | No export file delivery, deletion acceptance/cleanup/status recovery or sign-out/account-switch UI implementation; those belong to R14/R15/public R13. No automatic pull-forward into personal delivery. |
+
+**Reuse and ownership.** `data/sync/api/ServiceAuth.kt` already defines `GoogleIdentityProvider`, opaque credentials,
+service challenges/grants and `ServiceAuthApi`; `ServiceAuthRequests.kt` owns immutable exact exchange attempts.
+`HttpServiceAuthApi` already performs single-send secure auth HTTP with strict decoding and typed failures. R04 owns
+credential encryption/exact refresh recovery; R09h's `AppSessionCoordinator.acceptGrant(expected, operationId, session)`
+accepts fresh service-confirmed grants under exact current expectations and real transition barriers, returning private
+preparation rather than activation. R12c supplies the explicit scoped runtime. Extend these narrow seams, not duplicate
+them or place Google SDK types in session/sync/domain interfaces. R11b's handoff must preserve caller origin, expected
+Room authority and invocation liveness; R09 remains the definitive guard against different-account adoption and stale
+installation. R13 owns consuming the foreground flow in UI and completing activation, including P18 legacy import.
+No schema or bundled-asset change is planned; a discovered persistence requirement is a scope question, not permission
+for another authority layer or persisted Google proof.
+
+**Execution inputs and dependency gate.** Before the R11a specification, ask the owner to supply/confirm the intended
+HTTPS service origin, web/server OAuth audience ID and matching backend audience, Android OAuth registration for
+`com.dragosfotache.gymtracka`, intended debug/release signing fingerprints, and live-verification resource/permission
+boundary—or explicitly release deterministic-only implementation with injected synthetic configuration and live gates
+unverified. Do not discover values in private configuration, generate/change signing keys, configure Google/backend,
+embed a client secret or invent a personal endpoint. The nonce is **not** a static owner input: each service challenge
+supplies it and the adapter passes it unchanged; generic Google examples generating a client nonce do not override the
+[shared auth contract](../shared-docs/docs/backend-contract/authentication.md#https-endpoints).
+
+The [official integration guide](https://developer.android.com/identity/sign-in/credential-manager-siwg-implementation)
+uses `GetSignInWithGoogleOption` for an explicit button and a current Activity context for UI. Prefer that bounded flow;
+no automatic bottom-sheet/auto-select ladder is needed for personal delivery. Stable dependency candidates are matched
+`androidx.credentials:credentials` / `credentials-play-services-auth` **1.6.0** and `googleid` **1.2.1**, per the
+[Credentials release page](https://developer.android.com/jetpack/androidx/releases/credentials) and
+[Google Maven metadata](https://dl.google.com/dl/android/maven2/com/google/android/libraries/identity/googleid/googleid/maven-metadata.xml).
+These are candidates, not a resolved/build-tested compatibility claim. Recheck APIs, transitive dependencies, manifest/
+minSdk24 compatibility and current Kotlin/AGP/Compose at specification/acceptance; do not copy the guide's alpha version
+blindly or silently raise minSdk. Keep Activity lifetime/cancellation safe without relying on alpha-only behavior.
+
+**Foreground safety boundary.** Each explicit attempt has one owner, captured configuration/intent and a finite retry/
+time budget fixed in its specification. No interactive auth from a worker, replay of superseded/disposed attempts,
+automatic new challenge/token/key after uncertain exchange, or generic failure treated as account deletion. Before a
+first exchange, an expired challenge refuses (`now >= expiresAt`); an already-sent uncertain exchange may replay only
+its original challenge/token/key/body within the foreground budget, since the service checks committed replay before
+consumed/expired-challenge rejection. Do not recapture bytes, change credentials, round deadlines or extend returned
+grant expiry. A valid replay with expired access preserves the original grant; the existing refresh boundary, not a
+new exchange under the old key, handles access renewal. Google token/challenge/exchange body remain foreground-memory
+only, excluded from saved state, Room, vault, logs and diagnostics. Cancellation/process death cannot promise server
+rollback or durable exchange recovery; a later explicit sign-in is a distinct attempt, not settlement of the lost one.
+The caller cannot install a late grant against newer authority. Only service UUID/origin establish account ownership;
+email/display names and decoded Google claims never do.
+
+**Proportionate verification and completion.** Authentication/security/dependency risk requires independent expected
+oracles, deterministic clocks/UUIDs/virtual time and representative cancellation/late-result/concurrency cases:
+
+- **R11a:** prove exact audience/nonce/request policy, Android credential type/parser handling, provider/user/caller
+  cancellation, absent configuration/provider and retired Activity behavior using an injected SDK launch boundary.
+  Execute focused Android adapter tests on API24 and a current API; these do not contact real Google. Run Kotlin and
+  instrumentation compilation, full offline JVM, assembly/lint and APK/merged-manifest/secret-exclusion checks because
+  dependencies and Android packaging change.
+- **R11b:** prove challenge→credential→exchange ordering, one captured exact attempt across lost-response/throttled
+  retry, bounded termination and nonretryable proof rejection, cancellation at seams, simultaneous/stale handoff and
+  different-service/account refusal. Reuse existing auth codec/HTTP and R04/R09 suites instead of duplicating their
+  matrices. Add focused real Room/vault/real-barrier handoff checks for private preparation and refusal preserving
+  account data, pending intent and uncertain evidence; no synthetic successful Google token is a real-provider pass.
+  Slice acceptance includes affected checks and full offline JVM. At personal R11 package closure run full unfiltered
+  default instrumentation, assembly/lint/APK checks and the existing isolated auth interoperability suite (challenge,
+  invalid-proof rejection and refresh/replay), not another whole engine-convergence run. Any newly touched transaction
+  or capture behavior needs its actual Room gate; unavailable required synthetic gates block acceptance.
+- **R11c:** specify the affected purpose/account/freshness/cancellation matrix and relevant lifecycle interoperability
+  gates when its public dependencies are released; lifecycle effects remain tested in their owning packages.
+- **Actual Google:** separately authorized R17a installed-app/provider/service verification must cover configured
+  audience, actual signing/package, initial sign-in, cancellation and same-account reauthentication before personal
+  live readiness. Deterministic R11a–b acceptance permits dependency-ready R13 development, not a successful Google,
+  deployed HTTPS or phone-readiness claim; release-signing/public proof journeys remain later public live gates.
+
+**Stop boundary:** personal R11 is complete only when R11a–b and their declared synthetic/package gates are accepted;
+R11c remains visibly deferred until its public proof gates pass. Default local startup remains unchanged throughout
+R11. Account/configuration UI, initial access gating, foreground/edit/manual sync and one-time legacy import/activation
+are R13; sign-out UI/credential-clearing journey stays public R13. No implementation begins under this planning release.
 
 ### R12 — Feature and app reconciliation
 
@@ -269,7 +349,17 @@ triggers and retained rejection recovery. An unconfigured new installation shows
 signed-out workout editing. Confirm destructive recovery; settle uncertain frozen work unchanged before discarding
 confirmed remaining intent and reloading a complete snapshot. Preserve autosave draining, accessibility and cancellation.
 **Personal gate:** state/Compose/actual app journeys for initial access gating, offline restart/edit/reconnect, failure,
-reauthentication and recovery; selected legacy-data handling once decided; core R10 before activation.
+reauthentication and recovery; approved one-time legacy preserve/import; core R10 before activation.
+
+**Legacy import placement:** include a dedicated bounded import/activation slice or workstream in R13's finite plan;
+no new major R task and no reopening closed R09/R12 are required. It covers existing local-only workouts/history,
+saved/draft routines, custom exercises and their children/relationships. Preserve IDs/values and create-only dependency
+order; retain collision/rejection/partial-acceptance evidence. Design durable graph/target/progress tracking and exact
+restart/idempotence before implementation, and gate activation on definitive import settlement plus complete cloud
+snapshot publication. Verify populated real Room capture/rollback, crashes/restarts/duplicate prevention and actual
+Room/HTTP import-to-activation outcomes. This records placement and approval, not a completed R13 slice plan or permission
+for live migration; the next R13 coordinator specifies its finite plan before implementing. General chooser/switching
+UI remains deferred.
 **Deferred public:** signed-out workflows, sign-out/account-switch controls and general import/replace confirmations with
 their choice/isolation gates. Offline sign-out must never claim server revocation.
 

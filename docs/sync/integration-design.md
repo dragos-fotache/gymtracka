@@ -105,7 +105,7 @@ coordination and production activation remain future work:
 | `sync_canonical_roots` | PK `(account_id, aggregate_type, aggregate_id)`; nullable highest observed positive revision; state `unobserved`, `upsert`, `delete`, or `snapshot_absent`; validated complete canonical JSON only for upsert; local-generation watermark; cache epoch. No FK cascade from domain tables |
 | Account cache metadata (`sync_account_cache`, delivered R05a) | Account PK; complete-baseline flag; cache epoch; projection-dirty flag; materialized epoch. Existing opaque cursor/last success stay in `sync_state`; admission binds immutable session and per-callback cache-epoch fences, the frozen row's attempt count and a live run capability; successful snapshot completion/publication adopts returned run epochs. Outcome bookkeeping and atomic acknowledgment additionally use conservative process-local write tokens; bounded push orchestration reuses these seams without advancing pull checkpoints or epochs |
 | Snapshot staging (R08a delivered Room11) | Unique account/stage; origin session/epoch, fixed limit, original full checkpoint/baseline observation, frozen baseline/continuation and phase/counters; whole records PK `(stage_id,type,id)` plus page/position; durable exact continuation/page evidence. Stage-only child cascades, no visible-domain/canonical FKs. Read/restart observes for explicit abandon/new-stage restart, never resumes append authority |
-| `sync_session_authority` (R09a delivered Room12) | Independent singleton id1, checked revision/session generation, strict phase and nullable canonical service_origin/account_id/operation_id. Private signed-out cache retains known origin provenance. Private preparation/fencing and R09d's explicit registered completion ACTIVE/ready writer exist; exact vault phase promotion is separate, and no app activation is wired. Legacy-data fields require owner-selected migration; broader local-choice/import provenance is deferred public. **No credentials/Google proofs** |
+| `sync_session_authority` (R09a delivered Room12) | Independent singleton id1, checked revision/session generation, strict phase and nullable canonical service_origin/account_id/operation_id. Private signed-out cache retains known origin provenance. Private preparation/fencing and R09d's explicit registered completion ACTIVE/ready writer exist; exact vault phase promotion is separate, and no app activation is wired. Approved one-time legacy import needs bounded durable migration/progress design before affected activation; broader local-choice provenance is deferred public. **No credentials/Google proofs** |
 
 A generation watermark survives domain rematerialization/removal; canonical writes must not lower a local generation.
 Capture advances any relevant ledger watermark in the same transaction as its existing domain/outbox update. Local-only
@@ -336,10 +336,13 @@ requires foreground reauthentication for delivery, not local-data deletion. Miss
 mismatched vault binding still fails closed/private, and another service UUID cannot adopt the account's data or queue.
 
 No signed-out editing, account switching, sign-out UI or general import/replace UI is required for personal delivery.
-Existing local-only data disposition is unresolved: retain it without import/deletion/reassignment until owner direction.
-A selected one-time migration/import or confirmed clean/cloud-only start needs its own bounded scope and gates.
-The protocol below retains durable account authority/journal, crash recovery and late-result fences; legacy-choice
-branches apply only after that decision, and broader transition branches remain deferred public obligations.
+[P18](../../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions) approves preserving and
+importing existing local-only workouts/history, routines and custom exercises once into the first service-confirmed
+account, not a destructive clean/cloud-only start. Implement this as a bounded **R13 import/activation workstream** with
+its own specification and migration/recovery gates, reusing the closed R09/R12 authority and barrier foundations rather
+than reopening them or adding another major R task. Approval is not implementation or permission for ad hoc personal-data
+operations: current activation must still refuse local roots until that work is delivered. The protocol below retains
+durable account authority/journal, crash recovery and late-result fences; broader choice/switching workflows remain public.
 
 ### Startup and activation
 
@@ -355,8 +358,8 @@ Bind vault to configured HTTPS service identity as well as account and session g
 must never be sent to another origin just because an endpoint setting changed. A configuration change requires a
 separately fenced sign-out/reconfiguration flow; do not fall back to cleartext or another origin.
 
-Proposed durable activation protocol (no local-choice branch on a new empty personal installation; no legacy-data
-branch is authorized until its disposition is selected):
+Proposed durable activation protocol (no local-choice branch on a new empty personal installation; existing local-only
+data uses the approved P18 preserve/import policy after its bounded R13 implementation/gates):
 
 1. Drain/gate old UI mutations; reserve monotonic new device generation and transition operation in Room. Hide any
    preparing account; no new ordinary repository follows the provisional target. Freeze captured local choice inputs.
@@ -377,14 +380,17 @@ monotonic generations; overflow is a retained error, not wraparound.
 
 ### Import/replace and initial activation
 
-General import/replace choices and account switching below are deferred public workflows. Their preservation/collision
-rules also constrain any owner-selected one-time legacy migration; they do not authorize selecting it. Same-account
-reauthentication and complete initial bootstrap remain personal prerequisites.
+General import/replace choice and account-switching UI remain deferred public workflows. Their preservation/collision
+rules constrain the approved personal P18 one-time preserve/import migration; the personal path does not offer destructive
+replace as an alternative. Same-account reauthentication and complete initial bootstrap remain personal prerequisites.
+R13 must bind the captured local graph, configured origin, first service-confirmed target and durable progress so crashes,
+partial remote acceptance and repeated sign-in resume exact work without duplicate capture or a second import.
 
 - Gate new local admissions and drain finite actions before capturing the local graph/choice. Unsaved custom editor
   draft values are presentation state: require Save/Discard/Cancel before replacing its scope, not a hidden autosave.
-- Show choice whenever genuinely separate local roots exist without a completed decision for that graph. Account cache
-  is never recategorized as local-only, including a same-Google new service UUID.
+- Public choice applies whenever genuinely separate local roots lack a completed decision. The personal legacy path
+  uses the fixed approved import decision and records its durable scope/progress. Account cache is never recategorized
+  as local-only, including a same-Google new service UUID.
 - **Import:** in one Room preparation transaction associate the chosen local roots with the target and capture complete
   create-only imports in dependency order (customs, then routines/workouts; active replacement warning included).
   Preserve IDs and source snapshots/error context. This is a preparing/private account scope, not premature visible
@@ -398,8 +404,9 @@ reauthentication and complete initial bootstrap remain personal prerequisites.
   only that graph in the final publication transaction, rechecking captured IDs/generations, then publish complete
   cloud data. Middle/final download failure does not destroy local roots.
 - Same-account reauthentication with no new local data resumes the retained queue/cache. A complete existing cache and
-  valid checkpoint need not bootstrap again; no checkpoint always needs a snapshot. New local data still requires a
-  choice. Reauthentication refreshes the session fence, not root ownership.
+  valid checkpoint need not bootstrap again; no checkpoint always needs a snapshot. Any new separate local graph outside
+  the approved one-time migration requires separately authorized handling; public choice remains deferred.
+  Reauthentication refreshes the session fence, not root ownership.
 - Different-account sign-in explicitly warns about clearing the previous private account cache/pending work before
   proceeding. This implements the existing one-account cache contract, not permission to copy A's queue into B.
 
@@ -478,7 +485,7 @@ No entity change without KSP/export, preserved snapshots, all supported starts a
 | Global physical PK collision with local/bundled/foreign root/child never overwrites | Real Room full publication/import/switch; R05/R09 |
 | Refresh intent persisted before HTTP; each vault/Room journal crash boundary; late grant cannot cross generation/account | JVM state-machine + injected vault/Room failures; Android atomic-file/Keystore/backup checks R04/reduced R09 |
 | Initial gate, prepared activation, matching offline restart/edit/reconnect, same-account reauth; reject mismatched/new account UUID | Real Room + vault/identity scripted boundary, then Compose; reduced R09/R13 |
-| Legacy local-data preservation and selected one-time migration/clean-start behavior | Owner decision and bounded spec before affected activation; real Room/vault/publication gates R09/R13 |
+| P18 one-time legacy preservation/import | Bounded R13 specification; real Room transactions, identity/value preservation, create-only dependency order/collision/rejection, partial-acceptance/crash/restart idempotence and actual Room/HTTP import-before-activation publication gates |
 | General A/B/local privacy, sign-out/switch, import choice/collision and replace failure | Deferred public R09/R13 workflows; not personal acceptance claims |
 | Accepted routine/picker/history edits and failed timer drain cannot disappear on remote/scope changes | Virtual-time state tests and real Compose/app flows; R12 |
 | Current custom names, navigation/active pill and same-ID fields after remote updates | State + real Compose with Room; R12 |
