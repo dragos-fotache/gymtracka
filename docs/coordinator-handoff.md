@@ -6,68 +6,64 @@
 
 ## Current boundary and authority
 
-**R13a is accepted, inert/private only.** The [review](archive/remaining-work/R13a-review.md) owns durable legacy
-source/import capture, Room13 migration and scoped/fresh JVM evidence. R09a–h, Core R10a, personal deterministic R11a–b
-and R12a–c remain accepted dependencies; no foundation package is reopened. Default startup remains local-only.
+**R13a–b are accepted, private/explicitly opt-in only.** The [R13b review](archive/remaining-work/R13b-review.md) owns
+Room14, exact private import/delivery/complete activation, scoped local regressions and actual isolated Room/vault HTTP
+evidence. R09a–h, Core R10a, personal deterministic R11a–b and R12a–c remain accepted dependencies; no foundation package
+is reopened. Default startup remains local-only.
 
-**Next: R13b — private import delivery and complete activation/recovery**, second of the finite
-[personal R13a–d plan](remaining-work-roadmap.md#remaining-r13-plan). The owner lifted the planning-only stop by authorizing
-R13a; the standing slice rule supplies dependency-ready successor continuation after scoped local commit and verified
-fresh-coordinator ownership release. R13b–d remain pending. Do not specify/delegate/build before release, invent another
-major task, silently add splits, or reopen accepted foundations. Bring blockers, unresolved questions and missing required
-agents/inputs/gates to the owner.
+**Next: R13c — mandatory account gate and startup/account UI**, third of the finite
+[personal R13a–d plan](remaining-work-roadmap.md#remaining-r13-plan). The owner-authorized standing rule supplies
+dependency-ready continuation after the accepted slice's scoped local commit and verified fresh-coordinator ownership
+release. R13c–d remain pending. Do not specify/delegate/build before release, invent another major task, silently add splits,
+reopen accepted packages or waive unavailable gates. Bring missing inputs/required agents/tools and unresolved questions to
+the owner. Acceptance evidence alone is not permission outside the standing finite scope.
 
-No push, deployment, private-config discovery/change, signing/OAuth change or personal device/account operation is
-authorized. Actual Google/audience/signing, trusted deployed HTTPS and phone/account journeys remain separately authorized
-R17a. Deterministic R11 or synthetic R13 acceptance is not a live-resource/configuration grant.
+No push, deployment, private-config discovery/change, signing/OAuth change or personal device/account operation is licensed.
+Actual Google/audience/signing, trusted deployed HTTPS and phone/account journeys remain separately authorized R17a.
+Synthetic acceptance is never a live-resource/configuration grant.
 
-## Delivered boundary and R13b obligations
+## Delivered boundary and R13c obligations
 
-Explicit `LegacyImportStore` freezes genuinely local-only workouts/history, saved/draft routines and custom exercises
-with complete raw source/children/relationships, target origin/UUID/operation and exact ordered durable create-only
-requests. Valid capture privately associates roots and reserves PREPARING; invalid source retains blocked evidence and
-a private generation fence without association/outbox/cache/ledger. No ordinary null-account repository can access/edit
-retained migration evidence, including a newly constructed one. Empty bundled-only storage is a no-op.
-See [implemented capture](sync/implementation.md#durable-legacy-graph-and-private-import-capture).
+Room14 retains immutable original source/target/operation and exact dependency-ordered create-only requests, with separate
+current authority lineage and definitive accepted-batch receipts. Every raw row/parent and original local-only provenance
+is validated; family-qualified identity preserves independent UUID namespaces. Partial prefix/reopen retains exact source,
+requests and errors; an empty queue is not acceptance. Original active import requires durable matching warning consent.
+Same-account fresh grants advance current fences while preserving original capture provenance and encrypted superseded
+session evidence. Collision/rejection/invalid/foreign state stays private; no overwrite, remapping, clean start,
+reassignment or automatic evidence cleanup exists. Empty installs use complete activation without fabricated migration.
+See [implemented private boundary](sync/implementation.md#private-import-delivery-and-activation).
 
-Captured is **not** accepted/original-accepted settlement. Current strict recovery requires all original recorded work and
-unchanged retained source/metadata; request/domain removal or later legitimate post-ack state needs R13b's explicitly
-durable definitive progress and authority-transition integration. Repeat/reopen/uncertain return resumes original IDs,
-bytes and operation, never a second migration. Same-account recovery must retain original capture provenance while
-coordinating fresh vault/Room/process fences; a different account/origin is never adoptable.
+R13c replaces the default local editing root with configuration/sign-in/private preparation/recovery presentation and the
+existing exact-handle account runtime. Wire service-confirmed foreground sign-in, import warning/progress and same-account
+reauthentication; expose safe pending/last-success/error/retained-import state without private-data fallback. Matching
+established accounts reopen/edit offline without login every launch; mismatched/unreadable/missing binding stays private.
+Unavailable configuration is presented without discovering/inventing personal values or sending credentials to a new origin.
+Reuse the real finite-edit/rest/editor drain and existing facade/runtime/repository seams, not UI DAOs or another authority.
+No automatic foreground/edit/manual triggers, ordinary destructive rejection recovery, sign-out/switching or general
+chooser UI in R13c; those planned/deferred boundaries remain in the roadmap.
 
-R13b composes this storage with accepted foreground service grant/private preparation and prepared engine, real
-admission/rest/editor drain, cloud-active replacement warning/consent seams, exact import settlement, complete snapshot/
-protected publication and coherent vault/Room activation recovery. Preserve partial remote acceptance/frozen requests/
-source/errors through cancellation/restart/reauthentication. Collision/rejection/invalid source blocks activation;
-no overwrite, ID remapping, destructive clean start or foreign reassignment. No default startup/account screens or
-foreground/edit/manual automation in R13b. Empty installs use complete activation without a fabricated migration.
-Reuse existing narrow repository/facade/barrier/engine seams, not UI DAOs or another authority layer.
-
-P18 remains preserve/import once into the first service-confirmed account. P16/P17 privacy/account fencing and retained
-superseded encrypted evidence remain binding; foreign/unreadable/unknown provenance stays private. Google success is
-not service/account authority, private preparation is not visibility, and an empty queue is not definitive import success.
-The [legacy auth replay limitation](sync/implementation.md#legacy-auth-replay-limitation) and earlier unexplained R12c
-Private activation stop remain unrepaired limitations; investigate a recurrence instead of masking it with retries.
+P16–P18 and P17 encrypted-evidence retention remain binding. Google success is not service authority; private progress is
+not visibility. The [legacy accepted-auth replay limitation](sync/implementation.md#legacy-auth-replay-limitation) and earlier
+unexplained R12c real-HTTP Private activation stop remain unrepaired; R13b's passing journeys and scripted cursor correction
+are not retrospective repair. Investigate a recurrence rather than masking it with retries.
 
 ## Gates and resource discipline
 
-R13a passed fresh offline JVM, scoped headless current-API legacy/capture/authority tests, additive12→13 preservation,
-every supported1–12 start and copied v1 asset, Kotlin/KSP/export and instrumentation compilation. This is **not** a fresh
-unfiltered default layer, API24, full assembly/lint/security, HTTP import/activation, actual Google or phone-readiness claim.
-R13b owns real Room/vault and isolated black-box HTTP import-to-activation gates; R13c owns affected startup/API24 and full
-current-layer/security gates; R13d closes combined personal-package journeys. Declare each bounded risk/gate at pickup.
-Kotlin LSP initialization/empty indexing gave no clean diagnostics; if still unavailable use bounded allowed reads/compiler.
+R13b passed fresh offline JVM, scoped current-API sync/admission/migration and actual isolated HTTP whole-graph/prefix/
+collision/recovery gates plus assembly/lint/APK checks. This is not a fresh unfiltered default layer, API24 startup, actual
+Google, deployed HTTPS or phone-readiness claim. R13c owns full current-API default instrumentation, affected API24
+startup/import/recovery and assembly/lint/APK/backup/security; R13d closes combined personal-package journeys. Declare
+bounded risk/gates in the pickup specification. Kotlin LSP initialization/empty indexing supplied no clean diagnostics;
+if still unavailable use bounded allowed reads/compiler.
 
-Verify both live HEADs/trees/indexes/untracked files, model/roles and resources before readiness. Preserve user work;
-documentation planning is not itself an accepted implementation slice or authority to rotate. Fresh coordinator model is
-`openai-codex/gpt-6.1-sol`/high. Worker/QA require fresh independent
-`meta/muse-spark-1.3-contributor`/high sessions for each slice; completed R13a conversations are not R13b assignments.
-Reports are asynchronous/fire-and-forget, never acknowledgment polling. Every Gradle run needs one exclusive serialized
-slot; lint freezes both source layers.
+Outgoing owned Gradle/backend/relay/emulator work is settled before transfer. Rediscover live resources; prior test
+receipts do not allocate a service, device, endpoint or audience. Verify both repository HEADs/trees/indexes/untracked files,
+roles/models and resource ownership before readiness; preserve user work. Coordinator model is
+`openai-codex/gpt-6.1-sol`/high; Worker/QA require fresh independent `meta/muse-spark-1.3-contributor`/high native sessions per
+slice. Completed R13b sessions are not R13c assignments. Reports are asynchronous/fire-and-forget, never acknowledgment
+polling. Each Gradle run needs one exclusive serialized slot; lint freezes both layers.
 
-The owner requests coordinator left and Worker/QA stacked on the right half. Needed emulator/backend processes should
-run headlessly outside Herdr panes. Settle outgoing owned resources before transfer; allocate/verify future synthetic
-resources explicitly rather than reuse historical receipts. Backend access remains operational build/start and black-box
-HTTP under the [isolated procedure](testing-strategy.md#isolated-real-backend-procedure), never source/private-config
-review. Do not infer endpoint/audience from fixtures or discover personal configuration.
+Preserve coordinator left and Worker/QA stacked on the right half. Needed emulator/backend processes run headlessly
+outside Herdr panes. Backend access remains operational build/start and black-box HTTP under the
+[isolated procedure](testing-strategy.md#isolated-real-backend-procedure), never source/private-config review. Do not infer
+deployment endpoint/audience from fixtures or discover personal configuration.

@@ -28,6 +28,7 @@ import com.dragosfotache.gymtracka.data.sync.model.SyncModelException
 import com.dragosfotache.gymtracka.data.sync.model.UnsupportedDurableVersionException
 import com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid
 import com.dragosfotache.gymtracka.data.sync.session.PreparedSessionEnginePermit
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
@@ -388,6 +389,18 @@ class PushRun internal constructor(
         val dao = database.syncDao()
         val head = dao.getOutboxHead(accountId) ?: run {
             currentCoroutineContext().ensureActive()
+            try {
+                com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportGate.checkEmpty(
+                    database, accountId,
+                )?.let { return PushHeadResult.Blocked(it) }
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                return PushHeadResult.Blocked(PushBlockReason.CORRUPT)
+            }
+            currentCoroutineContext().ensureActive()
             return PushHeadResult.Empty
         }
         currentCoroutineContext().ensureActive()
@@ -456,6 +469,7 @@ class PushRun internal constructor(
             currentCoroutineContext().ensureActive()
             return PushHeadResult.Blocked(PushBlockReason.ATTEMPTS_EXHAUSTED)
         }
+        checkLegacyImportGate(head)?.let { return it }
         val retryAt = head.retryAfterMillis
         if (retryAt != null && retryAt > nowMillis) {
             currentCoroutineContext().ensureActive()
@@ -488,6 +502,32 @@ class PushRun internal constructor(
             row = frozen,
         )
         return PushHeadResult.Claimed(claim)
+    }
+
+    /**
+     * R13b legacy-import send gate. No legacy journal means ordinary
+     * behavior. With a journal, strictly validates settlement state
+     * (progress anchor, consecutive accepted prefix, outbox correspondence,
+     * frozen source/entries) before any HTTP/freeze effect beyond the
+     * already-read head. Corrupt evidence blocks CORRUPT; an original
+     * active import without durable matching consent blocks RETAINED_ERROR
+     * with zero remote effects. Reads only.
+     */
+    private suspend fun checkLegacyImportGate(head: com.dragosfotache.gymtracka.data.gym.SyncOutboxEntity): PushHeadResult.Blocked? {
+        currentCoroutineContext().ensureActive()
+        val legacyGate = try {
+            com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportGate.checkHead(
+                database, accountId, head,
+            )
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            return PushHeadResult.Blocked(PushBlockReason.CORRUPT)
+        }
+        currentCoroutineContext().ensureActive()
+        return legacyGate?.let { PushHeadResult.Blocked(it) }
     }
 
     /**
@@ -830,6 +870,9 @@ class PushRun internal constructor(
                             // released, so rollback or uncertain commit still
                             // requires fresh admission of the same frozen identity.
                             consumedClaims.add(claim)
+                            val legacyReceipt = com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportAck.precheck(
+                                database, accountId, claim.row, ownedBatch,
+                            )
                             val canonical = applyOwnedCanonicalBatch(
                                 database,
                                 accountId,
@@ -870,12 +913,22 @@ class PushRun internal constructor(
                             ) {
                                 throw IllegalStateException("Push head changed during transaction")
                             }
+                            if (legacyReceipt != null) {
+                                com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportAck.persistReceipt(
+                                    database, legacyReceipt,
+                                )
+                            }
                             database.syncCanonicalDao().insertAccountCache(accountId)
                             if (database.syncCanonicalDao().markProjectionDirty(accountId) != 1) {
                                 throw IllegalStateException("Account cache changed during transaction")
                             }
                             recheckAckMetadata(database, expectations)
                             recheckAckWatermarks(database, accountId, context.roots)
+                            if (legacyReceipt != null) {
+                                com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportAck.recheck(
+                                    database, accountId, legacyReceipt,
+                                )
+                            }
                             val outboxAfter = database.syncDao().getOutboxForAccount(accountId)
                             if (outboxAfter.size != outboxBefore.size - 1 ||
                                 outboxAfter.any { it.mutationId == claim.row.mutationId }
@@ -1404,6 +1457,16 @@ class PushRun internal constructor(
                         throw SnapshotStageIntentException()
                     }
                     currentCoroutineContext().ensureActive()
+                    val legacyPinned = try {
+                        com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportSettlement.pinSettled(database)
+                    } catch (e: CancellationException) {
+                        currentCoroutineContext().ensureActive()
+                        throw e
+                    } catch (_: Exception) {
+                        currentCoroutineContext().ensureActive()
+                        throw SnapshotStageStorageException()
+                    }
+                    currentCoroutineContext().ensureActive()
                     val sourceState = database.syncDao().getSyncState(accountId)
                     if (sourceState != null) {
                         validateSnapshotSourceState(sourceState)
@@ -1454,6 +1517,18 @@ class PushRun internal constructor(
                             ?: false
                     if (rereadBaseline != sourceBaselineComplete) {
                         throw StaleSnapshotStageException()
+                    }
+                    try {
+                        com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportSettlement.verifyPinnedUnchanged(
+                            database,
+                            legacyPinned,
+                        )
+                    } catch (e: CancellationException) {
+                        currentCoroutineContext().ensureActive()
+                        throw e
+                    } catch (_: Exception) {
+                        currentCoroutineContext().ensureActive()
+                        throw SnapshotStageStorageException()
                     }
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
@@ -1924,6 +1999,15 @@ class PushRun internal constructor(
                     requireExactSnapshotSource(database, accountId, validated.header)
                     currentCoroutineContext().ensureActive()
                     requireAdmitted()
+                    val legacyPinned = try {
+                        com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportSettlement.pinSettled(database)
+                    } catch (e: CancellationException) {
+                        currentCoroutineContext().ensureActive()
+                        throw e
+                    } catch (_: Exception) {
+                        currentCoroutineContext().ensureActive()
+                        throw SnapshotStageStorageException()
+                    }
                     val baseline = validated.header.baselineCursor
                     val staged = decodeStagedBaseline(validated.records)
                     val retained = loadValidatedRetained(database, accountId, oldEpoch)
@@ -2079,6 +2163,18 @@ class PushRun internal constructor(
                         state.lastSuccessMillis != validated.header.sourceLastSuccessMillis
                     ) {
                         throw IllegalStateException("Sync checkpoint changed during transaction")
+                    }
+                    try {
+                        com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportSettlement.verifyPinnedUnchanged(
+                            database,
+                            legacyPinned,
+                        )
+                    } catch (e: CancellationException) {
+                        currentCoroutineContext().ensureActive()
+                        throw e
+                    } catch (_: Exception) {
+                        currentCoroutineContext().ensureActive()
+                        throw SnapshotStageStorageException()
                     }
                     checkCanonicalFences(database, accountId, sessionGeneration, newEpoch, preparedPermit)
                     currentCoroutineContext().ensureActive()

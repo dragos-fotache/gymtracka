@@ -13,6 +13,7 @@ import com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid
 internal enum class ForegroundSignInIntent {
     INITIAL_SIGN_IN,
     SAME_ACCOUNT_REAUTHENTICATION,
+    PRIVATE_IMPORT_REAUTHENTICATION,
 }
 
 /**
@@ -203,16 +204,37 @@ internal fun canonicalForegroundOperation(
                 throw ForegroundSignInContextInvalidException()
             }
         }
+        ForegroundSignInIntent.PRIVATE_IMPORT_REAUTHENTICATION -> {
+            if (expected.cachedAccountId == null ||
+                expected.phase != RecoveryRoomPhase.PREPARING
+            ) {
+                throw ForegroundSignInContextInvalidException()
+            }
+            val identity = expected.identity
+                ?: throw ForegroundSignInContextInvalidException()
+            if (identity.binding.origin != configured) {
+                throw ForegroundSignInContextInvalidException()
+            }
+            if (identity.operationId == canonical) {
+                throw ForegroundSignInContextInvalidException()
+            }
+        }
     }
     when (expected.phase) {
         RecoveryRoomPhase.SIGNED_OUT -> {
             // Caller-supplied canonical operation, validated above.
         }
         RecoveryRoomPhase.PREPARING, RecoveryRoomPhase.TRANSITIONING -> {
-            val reserved = expected.identity?.operationId
-                ?: throw ForegroundSignInContextInvalidException()
-            if (reserved != canonical) {
-                throw ForegroundSignInContextInvalidException()
+            if (intent == ForegroundSignInIntent.PRIVATE_IMPORT_REAUTHENTICATION &&
+                expected.phase == RecoveryRoomPhase.PREPARING
+            ) {
+                // New canonical operation already validated different above.
+            } else {
+                val reserved = expected.identity?.operationId
+                    ?: throw ForegroundSignInContextInvalidException()
+                if (reserved != canonical) {
+                    throw ForegroundSignInContextInvalidException()
+                }
             }
         }
         RecoveryRoomPhase.ACTIVE -> {

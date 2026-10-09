@@ -532,6 +532,22 @@ internal class GymAppState(
      * owner dispatcher without adopting its Job.
      */
     fun transitionBarrier(): com.dragosfotache.gymtracka.data.sync.session.AppSessionTransitionBarrier =
+        transitionBarrierWithChecks()
+
+    /**
+     * R13b checked transition-barrier composition seam. Reuses the actual
+     * drain/claim body with optional synchronous checks that run on the
+     * existing app-state owner dispatcher: [beforeDrain] before pause/drain
+     * and [afterDrain] after the terminal drains before lease dispatch.
+     * Check failure/cancellation closes any acquired pause and propagates
+     * with caller-cancellation precedence; granted leases dispatch only
+     * after both checks pass. The no-arg [transitionBarrier] behavior is
+     * unchanged (no-op checks).
+     */
+    internal fun transitionBarrierWithChecks(
+        beforeDrain: () -> Unit = {},
+        afterDrain: () -> Unit = {},
+    ): com.dragosfotache.gymtracka.data.sync.session.AppSessionTransitionBarrier =
         com.dragosfotache.gymtracka.data.sync.session.AppSessionTransitionBarrier { previous ->
             if (previous != null && previous != session) {
                 throw IllegalStateException(
@@ -542,6 +558,7 @@ internal class GymAppState(
             try {
                 withContext(scope.coroutineContext.minusKey(Job)) {
                     scope.ensureActive()
+                    beforeDrain()
                     val lease: ProjectionPublicationLease = try {
                         edits.pauseAndDrainHeld()
                     } catch (error: CancellationException) {
@@ -559,6 +576,7 @@ internal class GymAppState(
                             )
                         }
                         edits.awaitTerminalWrites()
+                        afterDrain()
                         grantHeldLease(lease)
                     } catch (error: CancellationException) {
                         lease.close()

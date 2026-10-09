@@ -119,6 +119,417 @@ internal class LegacyImportStore(
         }
     }
 
+    /**
+     * R13b target-discovering advisory progress read. Returns null when no
+     * migration exists; throws closed CORRUPT_EVIDENCE on missing/corrupt
+     * evidence. Performs no HTTP, UUID generation, credential changes or
+     * cleanup. Must run outside a caller transaction.
+     */
+    suspend fun observeAny(): LegacyImportProgress? {
+        currentCoroutineContext().ensureActive()
+        runProcess()
+        if (database.inTransaction()) {
+            throw LegacyImportException(LegacyImportFailure.INVALID_INPUT)
+        }
+        try {
+            val result = try {
+                database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    runProcess()
+                    observeAnyInsideTransaction()
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: LegacyImportException) {
+                throw e
+            } catch (_: Exception) {
+                throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
+            }
+            currentCoroutineContext().ensureActive()
+            runProcess()
+            return result
+        } catch (t: Throwable) {
+            throw t
+        }
+    }
+
+    private suspend fun observeAnyInsideTransaction(): LegacyImportProgress? {
+        val journal = readJournalStrict()
+        val entries = readEntriesStrict()
+        if (journal == null) {
+            if (entries.isEmpty()) {
+                if (LegacyImportSettlement.readProgressStrict(database) != null ||
+                    LegacyImportSettlement.readAcceptancesStrict(database).isNotEmpty()
+                ) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+                return null
+            }
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
+        val target = try {
+            LegacyImportTarget(
+                origin = LegacyImportSource.parseCanonicalOrigin(journal.serviceOrigin),
+                accountId = requireWorkoutUuid(journal.accountId, "accountId"),
+                operationId = requireWorkoutUuid(journal.operationId, "operationId"),
+            )
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
+        val recovered = validateRecovered(journal, entries, target)
+        if (recovered.phase == LegacyImportPhase.BLOCKED) {
+            if (LegacyImportSettlement.readProgressStrict(database) != null ||
+                LegacyImportSettlement.readAcceptancesStrict(database).isNotEmpty()
+            ) {
+                throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            }
+            verifyBlockedRecovery(journal, target, recovered)
+            return LegacyImportProgress(
+                phase = LegacyImportProgressPhase.BLOCKED,
+                importCount = 0L,
+                acceptedCount = 0L,
+                activeReplacementRequired = false,
+                activeReplacementConsented = false,
+            )
+        }
+        val evidence = verifySettledRecovery(journal, entries, target)
+        val view = LegacyImportSettlement.validateView(database, journal, entries, target, evidence.room)
+        val activeRequired = view.activeMutationId != null
+        val activeConsented = view.activeMutationId != null &&
+            view.progress.activeConsentMutationId == view.activeMutationId
+        val phase = if (evidence.phase == LegacyImportPhase.SETTLED) {
+            LegacyImportProgressPhase.SETTLED
+        } else {
+            LegacyImportProgressPhase.CAPTURED
+        }
+        return LegacyImportProgress(
+            phase = phase,
+            importCount = journal.importCount,
+            acceptedCount = view.acceptedPrefix.toLong(),
+            activeReplacementRequired = activeRequired,
+            activeReplacementConsented = activeConsented,
+        )
+    }
+
+    /**
+     * R13b durable active-replacement consent. Records the exact original
+     * active mutation consent under the unchanged binding; rereads evidence
+     * after commit. Consent survives reopening for the same original
+     * request. Must run outside a caller transaction.
+     */
+    suspend fun recordActiveConsent(
+        target: LegacyImportTarget,
+        mutationId: String,
+        expected: RecoveryRoomSnapshot,
+    ) {
+        currentCoroutineContext().ensureActive()
+        runProcess()
+        if (database.inTransaction()) {
+            throw LegacyImportException(LegacyImportFailure.INVALID_INPUT)
+        }
+        try {
+            try {
+                database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    runProcess()
+                    recordActiveConsentInsideTransaction(target, mutationId, expected)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: LegacyImportException) {
+                throw e
+            } catch (_: Exception) {
+                throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
+            }
+            currentCoroutineContext().ensureActive()
+            runProcess()
+        } catch (t: Throwable) {
+            throw t
+        }
+    }
+
+    /**
+     * R13b consent-need probe. Returns the exact original active-import
+     * replacement request when the retained migration carries an active
+     * import without durable matching consent; null when no migration,
+     * blocked, no active import or already consented. Throws closed
+     * CORRUPT_EVIDENCE on missing/corrupt evidence. Reads only.
+     */
+    suspend fun consentRequestForActive(): LegacyImportReplacementRequest? {
+        currentCoroutineContext().ensureActive()
+        runProcess()
+        if (database.inTransaction()) {
+            throw LegacyImportException(LegacyImportFailure.INVALID_INPUT)
+        }
+        try {
+            val result = try {
+                database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    runProcess()
+                    consentRequestInsideTransaction()
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: LegacyImportException) {
+                throw e
+            } catch (_: Exception) {
+                throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
+            }
+            currentCoroutineContext().ensureActive()
+            runProcess()
+            return result
+        } catch (t: Throwable) {
+            throw t
+        }
+    }
+
+    private suspend fun consentRequestInsideTransaction(): LegacyImportReplacementRequest? {
+        val journal = readJournalStrict() ?: return null
+        val entries = readEntriesStrict()
+        if (journal.phase == LegacyImportSource.PHASE_BLOCKED) {
+            if (entries.isNotEmpty() ||
+                LegacyImportSettlement.readProgressStrict(database) != null ||
+                LegacyImportSettlement.readAcceptancesStrict(database).isNotEmpty()
+            ) {
+                throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            }
+            return null
+        }
+        val target = try {
+            LegacyImportTarget(
+                origin = LegacyImportSource.parseCanonicalOrigin(journal.serviceOrigin),
+                accountId = requireWorkoutUuid(journal.accountId, "accountId"),
+                operationId = requireWorkoutUuid(journal.operationId, "operationId"),
+            )
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
+        validateRecovered(journal, entries, target)
+        val current = currentAuthorityStrict()
+        val view = LegacyImportSettlement.validateView(database, journal, entries, target, current)
+        val active = view.activeMutationId ?: return null
+        if (view.progress.activeConsentMutationId == active) return null
+        if (view.progress.activeConsentMutationId != null) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
+        return LegacyImportReplacementRequest(target, active)
+    }
+
+    /**
+     * R13b retained migration target read. Returns the journal target
+     * (captured or blocked) or null when no journal exists. Throws closed
+     * CORRUPT_EVIDENCE on malformed journal evidence. Reads only.
+     */
+    suspend fun retainedTarget(): LegacyImportTarget? {
+        currentCoroutineContext().ensureActive()
+        runProcess()
+        if (database.inTransaction()) {
+            throw LegacyImportException(LegacyImportFailure.INVALID_INPUT)
+        }
+        try {
+            val result = try {
+                database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    runProcess()
+                    val journal = readJournalStrict() ?: return@withTransaction null
+                    try {
+                        LegacyImportTarget(
+                            origin = LegacyImportSource.parseCanonicalOrigin(journal.serviceOrigin),
+                            accountId = requireWorkoutUuid(journal.accountId, "accountId"),
+                            operationId = requireWorkoutUuid(journal.operationId, "operationId"),
+                        )
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: LegacyImportException) {
+                throw e
+            } catch (_: Exception) {
+                throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
+            }
+            currentCoroutineContext().ensureActive()
+            runProcess()
+            return result
+        } catch (t: Throwable) {
+            throw t
+        }
+    }
+
+    /**
+     * R13b reauth evidence read. Returns the strictly validated retained
+     * captured/settled evidence with current lineage for private-import
+     * reauthentication. Throws on absent/blocked/corrupt evidence.
+     */
+    suspend fun readForReauth(): LegacyImportEvidence {
+        currentCoroutineContext().ensureActive()
+        runProcess()
+        if (database.inTransaction()) {
+            throw LegacyImportException(LegacyImportFailure.INVALID_INPUT)
+        }
+        try {
+            val result = try {
+                database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    runProcess()
+                    val journal = readJournalStrict()
+                        ?: throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                    val entries = readEntriesStrict()
+                    if (journal.phase == LegacyImportSource.PHASE_BLOCKED) {
+                        throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                    }
+                    val target = try {
+                        LegacyImportTarget(
+                            origin = LegacyImportSource.parseCanonicalOrigin(journal.serviceOrigin),
+                            accountId = requireWorkoutUuid(journal.accountId, "accountId"),
+                            operationId = requireWorkoutUuid(journal.operationId, "operationId"),
+                        )
+                    } catch (_: Exception) {
+                        throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                    }
+                    validateRecovered(journal, entries, target)
+                    verifySettledRecovery(journal, entries, target)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: LegacyImportException) {
+                throw e
+            } catch (_: Exception) {
+                throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
+            }
+            currentCoroutineContext().ensureActive()
+            runProcess()
+            return result
+        } catch (t: Throwable) {
+            throw t
+        }
+    }
+
+    private suspend fun recordActiveConsentInsideTransaction(
+        target: LegacyImportTarget,
+        mutationId: String,
+        expected: RecoveryRoomSnapshot,
+    ) {
+        try {
+            requireWorkoutUuid(mutationId, "mutationId")
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.INVALID_INPUT)
+        }
+        val current = try {
+            RoomSessionAuthority(database).read()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: RoomSessionAuthorityException) {
+            throw mapAuthority(e)
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
+        }
+        if (current != expected) {
+            throw LegacyImportException(LegacyImportFailure.STALE_AUTHORITY)
+        }
+        val journal = readJournalStrict()
+            ?: throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        val entries = readEntriesStrict()
+        validateRecovered(journal, entries, target)
+        val view = LegacyImportSettlement.validateView(database, journal, entries, target, current)
+        val active = view.activeMutationId
+            ?: throw LegacyImportException(LegacyImportFailure.INVALID_INPUT)
+        if (active != mutationId) throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        val stored = view.progress.activeConsentMutationId
+        if (stored != null && stored != mutationId) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
+        if (stored == mutationId) {
+            verifySettledRecovery(journal, entries, target)
+            return
+        }
+        try {
+            val db = database.openHelper.writableDatabase
+            val values = android.content.ContentValues().apply {
+                put("active_consent_mutation_id", mutationId)
+            }
+            val expectedOp = expected.identity?.operationId
+            val affected = db.update(
+                "sync_legacy_import_progress",
+                android.database.sqlite.SQLiteDatabase.CONFLICT_ABORT,
+                values,
+                "id = 1 AND room_revision = ? AND room_session_generation = ? AND room_phase = ? AND " +
+                    (if (expectedOp == null) "operation_id IS NULL" else "operation_id = ?") +
+                    " AND active_consent_mutation_id IS NULL",
+                if (expectedOp == null) {
+                    arrayOf(
+                        expected.revision.toString(),
+                        expected.sessionGeneration.toString(),
+                        anchorPhaseName(expected.phase),
+                    )
+                } else {
+                    arrayOf(
+                        expected.revision.toString(),
+                        expected.sessionGeneration.toString(),
+                        anchorPhaseName(expected.phase),
+                        expectedOp,
+                    )
+                },
+            )
+            if (affected != 1) throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: LegacyImportException) {
+            throw e
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
+        }
+        currentCoroutineContext().ensureActive()
+        runProcess()
+        val reread = try {
+            RoomSessionAuthority(database).read()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: RoomSessionAuthorityException) {
+            throw mapAuthority(e)
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
+        }
+        if (reread != expected) {
+            throw LegacyImportException(LegacyImportFailure.STALE_AUTHORITY)
+        }
+        val progress = LegacyImportSettlement.readProgressStrict(database)
+            ?: throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        if (progress.roomRevision != expected.revision ||
+            progress.roomSessionGeneration != expected.sessionGeneration ||
+            progress.roomPhase != anchorPhaseName(expected.phase) ||
+            progress.operationId != expected.identity?.operationId ||
+            progress.activeConsentMutationId != mutationId
+        ) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
+        verifySettledRecovery(journal, entries, target)
+    }
+
+    private fun anchorPhaseName(phase: RecoveryRoomPhase): String =
+        when (phase) {
+            RecoveryRoomPhase.SIGNED_OUT -> "signed_out"
+            RecoveryRoomPhase.PREPARING -> "preparing"
+            RecoveryRoomPhase.TRANSITIONING -> "transitioning"
+            RecoveryRoomPhase.ACTIVE -> "active"
+        }
+
+    private suspend fun currentAuthorityStrict(): RecoveryRoomSnapshot {
+        try {
+            currentCoroutineContext().ensureActive()
+            return RoomSessionAuthority(database).read()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: RoomSessionAuthorityException) {
+            throw mapAuthority(e)
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
+        }
+    }
+
     private data class Recovered(
         val phase: LegacyImportPhase,
         val room: RecoveryRoomSnapshot,
@@ -293,23 +704,38 @@ internal class LegacyImportStore(
         val entries = readEntriesStrict()
         if (journal != null) {
             val recovered = validateRecovered(journal, entries, target)
-            if (recovered.room != expected) {
-                throw LegacyImportException(LegacyImportFailure.STALE_AUTHORITY)
-            }
             if (recovered.phase == LegacyImportPhase.BLOCKED) {
+                if (recovered.room != expected) {
+                    throw LegacyImportException(LegacyImportFailure.STALE_AUTHORITY)
+                }
+                if (LegacyImportSettlement.readProgressStrict(database) != null ||
+                    LegacyImportSettlement.readAcceptancesStrict(database).isNotEmpty()
+                ) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
                 verifyBlockedRecovery(journal, target, recovered)
                 return LegacyImportCaptureResult.Retained(
                     LegacyImportEvidence(target, recovered.phase, recovered.room, journal.sourceJson, 0L, journal.errorCode),
                 )
             }
-            verifyCapturedRecovery(journal, entries, target, recovered)
-            return LegacyImportCaptureResult.Retained(
-                LegacyImportEvidence(target, recovered.phase, recovered.room, journal.sourceJson, recovered.importCount, null),
-            )
+            val current = try {
+                RoomSessionAuthority(database).read()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: RoomSessionAuthorityException) {
+                throw mapAuthority(e)
+            } catch (_: Exception) {
+                throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
+            }
+            if (current != expected) {
+                throw LegacyImportException(LegacyImportFailure.STALE_AUTHORITY)
+            }
+            return LegacyImportCaptureResult.Retained(verifySettledRecovery(journal, entries, target))
         }
         if (entries.isNotEmpty()) {
             throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
         }
+        requireNoProgressOrReceipts()
 
         if (observed.phase != RecoveryRoomPhase.SIGNED_OUT ||
             observed.cachedAccountId != null ||
@@ -456,6 +882,7 @@ internal class LegacyImportStore(
         if (readEntriesStrict().isNotEmpty()) {
             throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
         }
+        requireNoProgressOrReceipts()
         val refreeze = try {
             LegacyImportSource.freeze(database)
         } catch (e: CancellationException) {
@@ -691,6 +1118,21 @@ internal class LegacyImportStore(
         } catch (_: Exception) {
             throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
         }
+        try {
+            legacyDao.insertProgress(
+                com.dragosfotache.gymtracka.data.gym.SyncLegacyImportProgressEntity(
+                    roomRevision = prepared.revision,
+                    roomSessionGeneration = prepared.sessionGeneration,
+                    roomPhase = "preparing",
+                    operationId = target.operationId,
+                    activeConsentMutationId = null,
+                ),
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
+        }
         currentCoroutineContext().ensureActive()
         runProcess()
         checkLease(lease)
@@ -769,24 +1211,524 @@ internal class LegacyImportStore(
             throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
         }
         if (rereadAuthority != prepared) throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        val progress = LegacyImportSettlement.readProgressStrict(database)
+            ?: throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        if (progress.roomRevision != prepared.revision ||
+            progress.roomSessionGeneration != prepared.sessionGeneration ||
+            progress.roomPhase != "preparing" ||
+            progress.operationId != target.operationId ||
+            progress.activeConsentMutationId != null
+        ) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
+        if (LegacyImportSettlement.readAcceptancesStrict(database).isNotEmpty()) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
     }
 
     private suspend fun readInsideTransaction(target: LegacyImportTarget): LegacyImportEvidence? {
         val journal = readJournalStrict()
         val entries = readEntriesStrict()
         if (journal == null) {
-            if (entries.isEmpty()) return null
+            if (entries.isEmpty()) {
+                if (LegacyImportSettlement.readProgressStrict(database) != null ||
+                    LegacyImportSettlement.readAcceptancesStrict(database).isNotEmpty()
+                ) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+                return null
+            }
             throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
         }
         val recovered = validateRecovered(journal, entries, target)
         if (recovered.phase == LegacyImportPhase.BLOCKED) {
+            if (LegacyImportSettlement.readProgressStrict(database) != null ||
+                LegacyImportSettlement.readAcceptancesStrict(database).isNotEmpty()
+            ) {
+                throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            }
             verifyBlockedRecovery(journal, target, recovered)
             return LegacyImportEvidence(target, recovered.phase, recovered.room, journal.sourceJson, 0L, journal.errorCode)
         }
-        verifyCapturedRecovery(journal, entries, target, recovered)
+        return verifySettledRecovery(journal, entries, target)
+    }
+
+    /**
+     * R13b progress-aware captured recovery. Validates the strict
+     * settlement view (progress anchor, consecutive accepted prefix,
+     * outbox correspondence, frozen source/entries/receipts) and returns
+     * evidence with the freshly verified current lineage tuple and
+     * definitive accepted count. SETTLED derives only from a complete
+     * valid receipt prefix. Partial settlement retains original business
+     * checks; complete settlement skips post-publication live-graph
+     * comparison while keeping frozen evidence immutable.
+     */
+    private suspend fun verifySettledRecovery(
+        journal: SyncLegacyImportEntity,
+        entries: List<SyncLegacyImportEntryEntity>,
+        target: LegacyImportTarget,
+    ): LegacyImportEvidence {
+        val current = try {
+            RoomSessionAuthority(database).read()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: RoomSessionAuthorityException) {
+            throw mapAuthority(e)
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
+        }
+        val view = LegacyImportSettlement.validateView(database, journal, entries, target, current)
+        if (current.cachedAccountId != target.accountId) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
+        if (view.acceptedPrefix < entries.size) {
+            verifySettledRootEffects(entries, view, target)
+            verifyRetainedSuffix(entries, view, target)
+            verifyBusinessValuesWithAckMetadata(journal, entries, view, target)
+            try {
+                LegacyImportSource.verifyLocalScopeEmpty(database)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: LegacyImportException) {
+                throw e
+            } catch (_: Exception) {
+                throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
+            }
+            verifyAccountCacheStrict(target.accountId)
+        }
+        val phase = if (view.acceptedPrefix == entries.size) LegacyImportPhase.SETTLED else LegacyImportPhase.CAPTURED
         return LegacyImportEvidence(
-            target, recovered.phase, recovered.room, journal.sourceJson, recovered.importCount, null,
+            target, phase, current, journal.sourceJson, journal.importCount, null,
+            acceptedCount = view.acceptedPrefix.toLong(),
         )
+    }
+
+    /**
+     * Settled-prefix verification from immutable evidence only: entry
+     * wrappers decode from retained bytes (no outbox needed), receipt
+     * batches already validated, and each accepted root's acknowledgment
+     * metadata/ledger is verified against its receipt revision. Never
+     * requires retained outbox rows for the settled prefix.
+     */
+    private suspend fun verifySettledRootEffects(
+        entries: List<SyncLegacyImportEntryEntity>,
+        view: LegacyImportSettlement.View,
+        target: LegacyImportTarget,
+    ) {
+        for (i in 0 until view.acceptedPrefix) {
+            val e = entries[i]
+            val type = try {
+                AggregateType.fromWire(e.aggregateType)
+            } catch (_: Exception) {
+                throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            }
+            val revision = receiptRevisionFor(view, e, type)
+            verifySyncedRootMetadataStrict(type, e.aggregateId, target.accountId, e.localGeneration, revision)
+            verifySettledLedgerStrict(type, e.aggregateId, target.accountId, e.localGeneration, revision)
+        }
+    }
+
+    private fun receiptRevisionFor(
+        view: LegacyImportSettlement.View,
+        e: SyncLegacyImportEntryEntity,
+        type: AggregateType,
+    ): Long {
+        try {
+            val batch = view.receiptBatches[e.ordinal.toInt()]
+            val change = batch.changes.firstOrNull {
+                it.aggregateType == type && it.aggregateId == e.aggregateId
+            } ?: throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            if (change.revision <= 0L) throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            return change.revision
+        } catch (e2: CancellationException) {
+            throw e2
+        } catch (e2: LegacyImportException) {
+            throw e2
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
+    }
+
+    private suspend fun verifySyncedRootMetadataStrict(
+        type: AggregateType,
+        id: String,
+        accountId: String,
+        expectedGeneration: Long,
+        expectedRevision: Long,
+    ) {
+        try {
+            val table = when (type) {
+                AggregateType.WORKOUT -> "workouts"
+                AggregateType.ROUTINE -> "routines"
+                AggregateType.CUSTOM_EXERCISE -> "exercises"
+            }
+            database.openHelper.writableDatabase.query(
+                "SELECT account_id, server_revision, local_generation, sync_state, deleted_at_millis FROM $table WHERE id = ?",
+                arrayOf<Any>(id),
+            ).use { c ->
+                if (!c.moveToFirst() || c.count != 1) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+                if (c.getType(0) != Cursor.FIELD_TYPE_STRING || c.getString(0) != accountId) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+                if (c.getType(1) != Cursor.FIELD_TYPE_INTEGER || c.getLong(1) != expectedRevision) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+                if (c.getType(2) != Cursor.FIELD_TYPE_INTEGER || c.getLong(2) != expectedGeneration) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+                if (c.getType(3) != Cursor.FIELD_TYPE_STRING || c.getString(3) != "synced") {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+                if (c.getType(4) != Cursor.FIELD_TYPE_NULL) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: LegacyImportException) {
+            throw e
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
+        }
+    }
+
+    private suspend fun verifySettledLedgerStrict(
+        type: AggregateType,
+        id: String,
+        accountId: String,
+        generation: Long,
+        revision: Long,
+    ) {
+        try {
+            database.openHelper.writableDatabase.query(
+                """SELECT server_revision, canonical_state, canonical_json,
+                    local_generation_watermark, cache_epoch FROM sync_canonical_roots
+                    WHERE account_id = ? AND aggregate_type = ? AND aggregate_id = ?""",
+                arrayOf<Any>(accountId, type.wireValue, id),
+            ).use { c ->
+                if (!c.moveToFirst() || c.count != 1) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+                if (c.getType(0) != Cursor.FIELD_TYPE_INTEGER || c.getLong(0) != revision) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+                if (c.getType(1) != Cursor.FIELD_TYPE_STRING || c.getString(1) != "upsert") {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+                if (c.getType(2) != Cursor.FIELD_TYPE_STRING) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+                if (c.getType(3) != Cursor.FIELD_TYPE_INTEGER || c.getLong(3) != generation) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+                if (c.getType(4) != Cursor.FIELD_TYPE_INTEGER || c.getLong(4) != 0L) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: LegacyImportException) {
+            throw e
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
+        }
+    }
+
+    /**
+     * Retained-suffix verification: exact original outbox rows with full
+     * envelope/affected-root checks, pending metadata and strict ledger.
+     * Only the unsettled suffix requires retained requests.
+     */
+    private suspend fun verifyRetainedSuffix(
+        entries: List<SyncLegacyImportEntryEntity>,
+        view: LegacyImportSettlement.View,
+        target: LegacyImportTarget,
+    ) {
+        for (i in view.acceptedPrefix until entries.size) {
+            val e = entries[i]
+            val type = try {
+                AggregateType.fromWire(e.aggregateType)
+            } catch (_: Exception) {
+                throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            }
+            verifyOutboxRowStrict(
+                type = type,
+                aggregateId = e.aggregateId,
+                mutationId = e.mutationId,
+                localGeneration = e.localGeneration,
+                intendedPayload = e.payloadJson,
+                accountId = target.accountId,
+            )
+            try {
+                val decoded = readDurableOutboxRowStrict(e.mutationId, target.accountId)
+                if (decoded.envelope.kind != MutationKind.AGGREGATE_IMPORT) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+                if (decoded.envelope.aggregateType != type ||
+                    decoded.envelope.aggregateId != e.aggregateId ||
+                    decoded.envelope.localGeneration != e.localGeneration
+                ) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+                if (decoded.affectedRoots.size != 1) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+                val effect = decoded.affectedRoots[0]
+                if (effect.aggregateType != type || effect.aggregateId != e.aggregateId ||
+                    effect.localGeneration != e.localGeneration
+                ) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+            } catch (e2: CancellationException) {
+                throw e2
+            } catch (e2: LegacyImportException) {
+                throw e2
+            } catch (_: Exception) {
+                throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            }
+            verifyRootMetadataStrict(type, e.aggregateId, target.accountId, "pending", e.localGeneration)
+            verifyLedgerStrict(type, e.aggregateId, target.accountId, e.localGeneration)
+        }
+    }
+
+    /**
+     * Business-values preservation with acknowledgment metadata: every
+     * business cell equals the frozen source exactly and no root is
+     * missing; per-root metadata follows settlement (synced + receipt
+     * revision for accepted roots, pending + null revision for the
+     * retained suffix). Legitimate canonical/metadata progress is
+     * required, source edits are refused.
+     */
+    private suspend fun verifyBusinessValuesWithAckMetadata(
+        journal: SyncLegacyImportEntity,
+        entries: List<SyncLegacyImportEntryEntity>,
+        view: LegacyImportSettlement.View,
+        target: LegacyImportTarget,
+    ) {
+        try {
+            currentCoroutineContext().ensureActive()
+            val original = try {
+                LegacyImportSource.validateSourceJson(journal.sourceJson)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            }
+            val live = try {
+                LegacyImportSource.validateSourceJson(
+                    LegacyImportSource.freezeTargetScope(database, target.accountId),
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
+            }
+            val byId = HashMap<Pair<AggregateType, String>, SyncLegacyImportEntryEntity>(entries.size)
+            for (e in entries) {
+                val type = try {
+                    AggregateType.fromWire(e.aggregateType)
+                } catch (_: Exception) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+                if (byId.put(type to e.aggregateId, e) != null) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+            }
+            val revisionById = HashMap<Pair<AggregateType, String>, Long>(view.acceptedPrefix)
+            for (i in 0 until view.acceptedPrefix) {
+                val e = entries[i]
+                val type = try {
+                    AggregateType.fromWire(e.aggregateType)
+                } catch (_: Exception) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+                revisionById[type to e.aggregateId] = receiptRevisionFor(view, e, type)
+            }
+            compareRootTable(original, live, "workouts", AggregateType.WORKOUT, 5, 6, 7, 8, byId, revisionById, target)
+            compareRootTable(original, live, "routines", AggregateType.ROUTINE, 3, 4, 5, 6, byId, revisionById, target)
+            compareRootTable(original, live, "exercises", AggregateType.CUSTOM_EXERCISE, 9, 10, 11, 12, byId, revisionById, target)
+            for (key in listOf("workout_exercises", "workout_sets", "routine_exercises", "routine_sets", "exercise_muscle_groups", "exercise_equipment")) {
+                compareChildTable(original, live, key)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: LegacyImportException) {
+            throw e
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
+    }
+
+    private fun compareRootTable(
+        original: JSONObject,
+        live: JSONObject,
+        key: String,
+        family: AggregateType,
+        accountIndex: Int,
+        revisionIndex: Int,
+        generationIndex: Int,
+        stateIndex: Int,
+        byId: Map<Pair<AggregateType, String>, SyncLegacyImportEntryEntity>,
+        revisionById: Map<Pair<AggregateType, String>, Long>,
+        target: LegacyImportTarget,
+    ) {
+        val oRows = try {
+            original.getJSONArray(key)
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
+        val tRows = try {
+            live.getJSONArray(key)
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
+        if (oRows.length() != tRows.length()) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
+        for (i in 0 until oRows.length()) {
+            val oRow = try {
+                oRows.getJSONArray(i)
+            } catch (_: Exception) {
+                throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            }
+            val tRow = try {
+                tRows.getJSONArray(i)
+            } catch (_: Exception) {
+                throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            }
+            if (oRow.length() != tRow.length()) {
+                throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            }
+            val id = cellText(oRow, 0)
+            if (cellText(tRow, 0) != id) {
+                throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            }
+            val entry = byId[family to id]
+                ?: throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            val settled = revisionById.containsKey(family to id)
+            for (c in 0 until oRow.length()) {
+                when (c) {
+                    accountIndex -> {
+                        if (cellType(tRow, c) != "text" || cellText(tRow, c) != target.accountId) {
+                            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                        }
+                    }
+                    revisionIndex -> {
+                        if (settled) {
+                            if (cellType(tRow, c) != "int" ||
+                                cellLong(tRow, c) != revisionById[family to id]
+                            ) {
+                                throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                            }
+                        } else {
+                            if (cellType(tRow, c) != "null") {
+                                throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                            }
+                        }
+                    }
+                    generationIndex -> {
+                        if (cellType(tRow, c) != "int" || cellLong(tRow, c) != entry.localGeneration) {
+                            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                        }
+                    }
+                    stateIndex -> {
+                        val want = if (settled) "synced" else "pending"
+                        if (cellType(tRow, c) != "text" || cellText(tRow, c) != want) {
+                            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                        }
+                    }
+                    else -> {
+                        if (!cellsEqual(oRow.getJSONObject(c), tRow.getJSONObject(c))) {
+                            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun compareChildTable(original: JSONObject, live: JSONObject, key: String) {
+        val oRows = try {
+            original.getJSONArray(key)
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
+        val tRows = try {
+            live.getJSONArray(key)
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
+        if (oRows.length() != tRows.length()) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
+        for (i in 0 until oRows.length()) {
+            val oRow = try {
+                oRows.getJSONArray(i)
+            } catch (_: Exception) {
+                throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            }
+            val tRow = try {
+                tRows.getJSONArray(i)
+            } catch (_: Exception) {
+                throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            }
+            if (oRow.length() != tRow.length()) {
+                throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            }
+            for (c in 0 until oRow.length()) {
+                if (!cellsEqual(oRow.getJSONObject(c), tRow.getJSONObject(c))) {
+                    throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                }
+            }
+        }
+    }
+
+    private fun cellType(row: org.json.JSONArray, index: Int): String {
+        try {
+            return row.getJSONObject(index).getString("t")
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
+    }
+
+    private fun cellText(row: org.json.JSONArray, index: Int): String {
+        try {
+            val cell = row.getJSONObject(index)
+            if (cell.getString("t") != "text") throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            return cell.getString("v")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: LegacyImportException) {
+            throw e
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
+    }
+
+    private fun cellLong(row: org.json.JSONArray, index: Int): Long {
+        try {
+            val cell = row.getJSONObject(index)
+            if (cell.getString("t") != "int") throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            return cell.getString("v").toLong()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: LegacyImportException) {
+            throw e
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
+    }
+
+    private fun cellsEqual(a: JSONObject, b: JSONObject): Boolean {
+        try {
+            if (a.getString("t") != b.getString("t")) return false
+            if (a.getString("t") == "null") return true
+            return a.getString("v") == b.getString("v")
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+        }
     }
 
     private suspend fun verifyCapturedRecovery(
@@ -919,6 +1861,30 @@ internal class LegacyImportStore(
             if (dao.hasJournal() || dao.hasEntries()) {
                 throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
             }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: LegacyImportException) {
+            throw e
+        } catch (_: Exception) {
+            throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
+        }
+        requireNoProgressOrReceipts()
+    }
+
+    /**
+     * Orphan check for journal-less/blocked states: any retained progress
+     * anchor or acceptance receipt without a captured journal is corrupt
+     * and must never read as clean empty/captured.
+     */
+    private suspend fun requireNoProgressOrReceipts() {
+        try {
+            currentCoroutineContext().ensureActive()
+            if (LegacyImportSettlement.readProgressStrict(database) != null ||
+                LegacyImportSettlement.readAcceptancesStrict(database).isNotEmpty()
+            ) {
+                throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+            }
+            currentCoroutineContext().ensureActive()
         } catch (e: CancellationException) {
             throw e
         } catch (e: LegacyImportException) {

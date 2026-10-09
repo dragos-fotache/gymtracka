@@ -3,8 +3,9 @@
 Default startup remains signed-out/local-only. An explicitly constructed account runtime now supplies real scoped
 root/edit/timer integration and guarded ACTIVE reconciliation over the delivered authority. Construction is private and
 runs no HTTP automatically. Explicit foreground Google acquisition/exchange and guarded private grant handoff are
-available. Inert P18 legacy source/import capture is implemented; import delivery/activation, account UI,
-foreground/edit/manual triggers and startup-policy replacement remain R13b–d.
+available. P18 legacy source/import capture and opt-in private delivery/complete activation are accepted on Room14.
+These explicitly constructed boundaries do not enable default startup or account UI.
+Account UI, foreground/edit/manual triggers and startup-policy replacement remain R13c–d.
 No Google UI, scheduler or live account/device action is wired into default startup.
 The [roadmap](../remaining-work-roadmap.md) owns delivery status; the
 [integration design](integration-design.md) owns approved future coordination. The
@@ -14,8 +15,8 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/data/
 
 ## Room and local capture
 
-Room v13 retains the v9 root metadata, v10 canonical ledger/publication bookkeeping, v11 staging and v12 authority
-journal; v13 adds independent legacy-import evidence. Independent
+Room v14 retains the v9 root metadata, v10 canonical ledger/publication bookkeeping, v11 staging and v12 authority
+journal; v13 adds immutable legacy-import capture evidence and v14 adds current lineage/accepted-batch receipts. Independent
 [staging](#frozen-snapshot-staging-storage) and [private authority/journal](#durable-private-room-account-authority) are
 described below. Root metadata remains: nullable account/server revision/deletion time, local generation, and sync state
 (default `local_only`). `sync_outbox` stores explicit sequence order, immutable mutation identity/version/payload and
@@ -45,7 +46,7 @@ privately cached account; `catalogue_state` stores catalogue metadata. These sto
 
 ### Durable legacy graph and private import capture
 
-`sync/legacy/LegacyImportStore` is an explicitly constructed internal Room13 boundary, not an app handle or service grant.
+`sync/legacy/LegacyImportStore` is an explicitly constructed internal storage boundary, not an app handle or service grant.
 Its target binds canonical configured HTTPS origin (explicit effective port), first service-confirmed account UUID and
 one durable operation. Production callers still need real pause/drain/process authority; default startup constructs none.
 The additive12→13 migration leaves old schema/rows/sequences and source asset unchanged; both evidence tables start empty.
@@ -58,7 +59,8 @@ The additive12→13 migration leaves old schema/rows/sequences and source asset 
   instructions or scalar types stay recoverable; no cleanup, renumbering, remapping, coercion or skipped drafts repairs them.
 - Valid source is associated and captured atomically through existing `SyncTransaction`/typed durable-v1 `aggregate.import`:
   custom UUID order, routine UUID order, finished-workout UUID order, active last. Saved blank/empty routines and empty
-  drafts remain their original snapshots. Optional custom metadata/quantity and nullable configured/recorded inputs survive.
+  drafts remain their original snapshots. Optional custom metadata/quantity and nullable set/recorded-rest inputs survive;
+  raw NULL configured rest remains blocked source evidence, never silently repaired.
   Generation keys include aggregate family; checked g+1 and retained sqlite_sequence high-water space prevent wraparound.
 - Raw business/source comparisons allow only account/generation/state metadata changes. Exact final outbox, root,
   unobserved-ledger, incomplete-dirty-cache, journal/device and source checks detect late SQL/trigger tampering and roll back
@@ -70,14 +72,46 @@ The additive12→13 migration leaves old schema/rows/sequences and source asset 
 - Strict matching reread/recapture validates target, Room tuple, source/entry count/order/g+1, exact original wrappers,
   import kind/affected-root identity and retained raw business evidence. Extra/orphan/corrupt/missing work fails closed and
   remains retained. Repeat/reopen or committed-but-cancelled result resumes the same capture, never allocates it again.
-  Pending/frozen/rejected retry fields may evolve; captured is not accepted. R13b must add definitive accepted progress
-  before permitting request/domain removal or legitimate post-ack state changes.
+  Pending/frozen/rejected retry fields may evolve; captured is not accepted. The separate delivery integration below
+  supplies definitive receipts before permitting original request removal or legitimate post-publication domain changes.
 - Errors/displays are closed/redacted; no credentials enter source or outbox. Caller cancellation, including during lease
   close, takes precedence; closing failure can hide a committed result but cannot imply rollback. Durable reread is the oracle.
 
-This boundary does not send imports, warn/consent to cloud-active replacement, install/promote a vault grant, bootstrap,
-activate an account, resolve collisions/rejections, or replace startup/UI. Those integration gates remain R13b–d; real
-Google/deployed HTTPS/personal-account/device evidence remains separately authorized R17a.
+Capture itself does not send imports, install credentials or grant visibility. The explicitly opt-in integration below
+composes those effects privately; default startup/UI remain unchanged. Real Google/deployed HTTPS/personal-account/device
+evidence remains separately authorized R17a.
+
+### Private import delivery and activation
+
+**Accepted, explicitly opt-in:** the [R13b review](../archive/remaining-work/R13b-review.md) owns real Room/vault/HTTP,
+source-preservation, migration and scoped regression evidence; the [archived specification](../archive/remaining-work/R13b-task.md)
+retains the bounded assignment. Default startup, account screens and automatic triggers remain absent.
+
+- `LegacyImportPolicy` opts an explicit `AppSessionCoordinator` into capture through its SAME held real transition lease
+  and existing private grant preparation. A borrowed check-only lease never closes the outer owner. Empty installs use
+  ordinary complete activation without migration records; invalid/foreign source stays private. Default/null-policy
+  capture refusal remains intact, and startup constructs no importer or network automation.
+- Room14 separates immutable source/target/original operation/entries from current authority lineage and acceptance receipts.
+  Captured source validation accounts for every row/parent and original local-only provenance, rejecting orphan/duplicate
+  or foreign metadata while retaining blocked raw evidence unchanged. Original durable wrappers are decoded and compared
+  to full source-reconstructed inputs, including children/relationships; family-qualified identity preserves cross-family UUID independence. Receipts require accepted/original-accepted complete batches
+  with the original root business data, never queue absence or duplicate rejection.
+- The existing acknowledgment transaction pins original evidence, commits canonical/metadata effects plus one receipt and
+  exact frozen-head removal, then verifies exact expected source/entry/prior-receipt/new-receipt bytes after final SQL.
+  Partial prefix recovery retains exact suffix requests and acknowledgment-aware metadata. All receipts permit legitimate
+  later publication/ordinary edits without comparing live domain forever to the original graph. Orphans/corruption/rejection
+  remain retained/private; no remapping, overwrite, destructive clean start or automatic cleanup exists.
+- Original active import needs durable matching replacement-warning consent before delivery. False/canceled/stale consent
+  sends no imports; true consent is transactionally bound to the exact expected current lineage and original active mutation.
+  Same-account private reauthentication uses a new current operation/generation through accepted P17 recovery, retaining
+  original migration provenance, request bytes, receipts, consent and encrypted superseded evidence.
+- Generic push Empty/head, snapshot establishment, combined publication/completion, completion-gap promotion and facade
+  admission revalidate evidence. Snapshot/publication transactions pin immutable evidence and compare it after final SQL;
+  completion allows only its exact known PREPARING→ACTIVE anchor advance. Existing complete snapshot/tail, paired publication
+  lease and coherent Room/vault readiness remain mandatory; progress objects authorize neither delivery nor visibility.
+- `GymAppState.legacyImportTransitionBarrier` uses the existing owner-dispatcher checked barrier composition seam. It drains
+  real finite work and terminal elapsed rest once, refuses explicit-save editors before/after drain without hidden save/discard,
+  and propagates close failures. There are no new dialogs, default account screens, triggers or timer redesign.
 
 ### Canonical ledger and capture watermarks
 
@@ -1037,8 +1071,8 @@ Transition and publication barriers are mandatory caller inputs with no permissi
   never compensate, erase evidence or restart generations. P17 evidence retention remains in the existing recovery seam.
 - Private bootstrap stops, retained stages and budgets do not launch another completion attempt. Actual bounded valid tail
   precedes required protected completion, and only COMPLETED plus fresh startup reconciliation yields an app handle.
-  Local-only roots still refuse unchanged until the approved P18 one-time preserve/import is implemented and verified
-  in R13; no import, deletion or reassignment is implemented by this facade.
+  Default/null-policy local-only roots still refuse unchanged. The separately opt-in accepted P18 integration above
+  composes exact private import; no deletion, reassignment or default-startup activation is inferred.
 - Facade repositories have an explicit process guard inside scoped transactions before effects/commit and after result
   dispatch. Process-only invalidation prevents stale reads/edits even at unchanged durable generation. Guarded constructor
   overloads preserve original legacy/default/trailing-lambda UUID/clock semantics; no supplier is coerced to a Unit guard.

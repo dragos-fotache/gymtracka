@@ -716,6 +716,17 @@ internal class PreparedSessionEngineCoordinator(
             ensureFenceCurrent(fence)
             return PreparedCompletionResult(PreparedCompletionStatus.NOT_READY, run.observedCacheEpoch(), delivery)
         }
+        ensureFenceCurrent(fence)
+        try {
+            com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportSettlement.requireSettled(database)
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            ensureFenceCurrent(fence)
+            throw PreparedEngineException(PreparedEngineFailure.AUTHORITY_UNAVAILABLE)
+        }
         lease.invalidate()
         ensureFenceCurrent(fence)
         val pinned = pinPostTailPrepared(fence, identity, permit.journalRevision)
@@ -886,10 +897,37 @@ internal class PreparedSessionEngineCoordinator(
                 ensureFenceCurrent(fence)
                 throw PreparedEngineException(PreparedEngineFailure.STALE_OPERATION)
             }
+            ensureFenceCurrent(fence)
+            val legacyPinned = try {
+                database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    authority.readActiveReadyInTransaction()
+                    com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportSettlement.pinSettled(database)
+                }
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                ensureFenceCurrent(fence)
+                throw PreparedEngineException(PreparedEngineFailure.AUTHORITY_UNAVAILABLE)
+            }
+            ensureFenceCurrent(fence)
             if (record.phase == VaultSessionPhase.PREPARED) {
                 if (vaultSnapshot.revision == Long.MAX_VALUE) {
                     ensureFenceCurrent(fence)
                     throw PreparedEngineException(PreparedEngineFailure.VAULT_UNAVAILABLE)
+                }
+                ensureFenceCurrent(fence)
+                try {
+                    com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportSettlement.requireSettled(database)
+                } catch (e: CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e
+                } catch (_: Exception) {
+                    currentCoroutineContext().ensureActive()
+                    ensureFenceCurrent(fence)
+                    throw PreparedEngineException(PreparedEngineFailure.AUTHORITY_UNAVAILABLE)
                 }
                 ensureFenceCurrent(fence)
                 verifyCompletionStable(fence, second, vaultSnapshot.revision, record)
@@ -905,10 +943,46 @@ internal class PreparedSessionEngineCoordinator(
                 }
                 verifyCompletionStable(fence, second, promoted.revision, promotedRecord)
                 ensureFenceCurrent(fence)
+                try {
+                    database.withTransaction {
+                        currentCoroutineContext().ensureActive()
+                        authority.readActiveReadyInTransaction()
+                        com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportSettlement.verifyPinnedUnchanged(
+                            database,
+                            legacyPinned,
+                        )
+                    }
+                } catch (e: CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e
+                } catch (_: Exception) {
+                    currentCoroutineContext().ensureActive()
+                    ensureFenceCurrent(fence)
+                    throw PreparedEngineException(PreparedEngineFailure.AUTHORITY_UNAVAILABLE)
+                }
+                ensureFenceCurrent(fence)
                 return@withLock PreparedCompletionResult(PreparedCompletionStatus.COMPLETED, readyEpoch, null)
             }
             if (record.phase == VaultSessionPhase.ACTIVE) {
                 verifyCompletionStable(fence, second, vaultSnapshot.revision, record)
+                ensureFenceCurrent(fence)
+                try {
+                    database.withTransaction {
+                        currentCoroutineContext().ensureActive()
+                        authority.readActiveReadyInTransaction()
+                        com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportSettlement.verifyPinnedUnchanged(
+                            database,
+                            legacyPinned,
+                        )
+                    }
+                } catch (e: CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e
+                } catch (_: Exception) {
+                    currentCoroutineContext().ensureActive()
+                    ensureFenceCurrent(fence)
+                    throw PreparedEngineException(PreparedEngineFailure.AUTHORITY_UNAVAILABLE)
+                }
                 ensureFenceCurrent(fence)
                 return@withLock PreparedCompletionResult(PreparedCompletionStatus.COMPLETED, readyEpoch, null)
             }
@@ -1097,6 +1171,15 @@ internal class PreparedSessionEngineCoordinator(
             throw StalePullCheckpointException()
         }
         currentCoroutineContext().ensureActive()
+        val legacyPinned = try {
+            com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportSettlement.pinSettled(database)
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            throw CanonicalStorageException()
+        }
         val publication = projection.publishPreparedInsideTransaction(
             accountId,
             expectedEpoch,
@@ -1164,6 +1247,19 @@ internal class PreparedSessionEngineCoordinator(
         }
         if (database.syncDao().hasOutboxForAccount(accountId)) {
             throw SnapshotStageIntentException()
+        }
+        try {
+            com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportSettlement.verifyPinnedAdvancedForCompletion(
+                database,
+                legacyPinned,
+                newRevision,
+            )
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            throw CanonicalStorageException()
         }
         ensureFenceCurrent(fence)
         currentCoroutineContext().ensureActive()

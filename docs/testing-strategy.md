@@ -80,7 +80,7 @@ future assignments. Total test count alone does not explain delivery time or jus
 | Area | Existing coverage / expansion boundary |
 |---|---|
 | Domain persistence | Finish cleanup/renumbering/rollback, cascades, history defaults, replacement identity, cloning, routines/custom guards |
-| Room v13, capture, canonical batches and publication | Every v1–12 start and real asset; additive legacy-evidence migration preserves old objects/rows/sequence; independent staging migration with exact prior-table/schema/sequence preservation; outbox order/identity/coalescing, scoped mutation families, independent generation ledger/cache bookkeeping, exact-byte migration preservation, fenced complete canonical batches/revisions/deletions/family bindings, strict retained evidence, deep-owned inputs, account-wide protection, complete-graph/physical collision validation, publication epoch/generation preservation, lease provenance and post-write rollback/cancellation/overflow/Room reopen |
+| Room v14, capture, canonical batches and publication | Every v1–13 start and real asset; additive legacy capture/progress migrations preserve old objects/rows/sequence without fabricated acceptance/consent; independent staging migration with exact prior-table/schema/sequence preservation; outbox order/identity/coalescing, scoped mutation families, independent generation ledger/cache bookkeeping, exact-byte migration preservation, fenced complete canonical batches/revisions/deletions/family bindings, strict retained evidence, deep-owned inputs, account-wide protection, complete-graph/physical collision validation, publication epoch/generation preservation, lease provenance and post-write rollback/cancellation/overflow/Room reopen |
 | Pure logic and feature state | Locale formatting, naming/filtering, validation, ordered autosave, failure/cancellation and stale-load guards |
 | Projection observation/selected refresh | Real Room distinct materialized epochs, nonpublication/foreign-progress isolation, revoked-session fences and current custom joins at unchanged parent revisions; virtual-time latest-load/accepted-draft/stream-failure/disposal races and pure queries during unrelated pending/failed writes; actual-screen real finite admission, same-ID fields/raw text, focus surviving row insertion, dialog drafts and quiescent wheel settling |
 | App/timer | Active discovery/replacement/finish/discard, shared finite admission and retained failures/cancellation, normal/terminal acceptance order, exclusive self-excluding versus external drains, request/session-bound leases and lost-return cancellation, ownership/at-most-once rest, clock/hardware behavior |
@@ -106,7 +106,8 @@ future assignments. Total test count alone does not explain delivery time or jus
 | App-facing authority/offline recovery | Real Room/Keystore/file reopen, constructor/unconfigured privacy, exact preparation/bootstrap/tail/completion admission, interrupted promotion, offline read/edit with expired credentials and queued intent, preserved uncertain evidence and foreign/local refusal, transition/cancellation cleanup, process-only stale reads/writes and post-insert rollback, bounded reconnect/no-publication, exact backoff retries, runtime binding faults and retained editing on transient/reauth stops; scoped runtime coverage below composes these primitives |
 | Scoped runtime/ACTIVE reconciliation | Actual scoped Compose privacy/repository binding and lease-safe reauthentication, real transition/timer/publication pipeline, canonical graph impact and final-metadata-write rollback, epoch observation/recovery/typed snapshot chaining, app pill/selection/consent/latest-load races including mixed active and nested deletion; isolated real scoped-facade/root HTTP convergence across independent Room/vault stores |
 | Legacy private capture/recovery | Real populated Room all-family preservation, independent complete import wire expectations/order/metadata, invalid/unknown source retention, raw business/trigger/type fencing, checked counters/sequence, cross-family UUIDs, stale/concurrent capture, file reopen and genuine held-dispatch committed-but-cancelled recovery; lease-close caller-cancellation precedence and null-account refusal; additive12→13/schema1–13/asset gates |
-| Still outstanding | P18 actual import delivery/partial acceptance/collision/rejection/HTTP and vault/Room activation gates (R13b), actual Google/account UI/startup/triggers (R13c–d), WorkManager and live deployment/lifecycle gates; expanded R10b remains public |
+| Private import delivery/activation | Real Room/Keystore and production adapters: source closure/local-only provenance, exact source/receipt correspondence, consent persistence and stale/refusal/cancellation, same-account lineage and offline edits, actual finite-edit/rest/editor barrier. Isolated file-Room/vault HTTP covers whole graph, prefix/lost-response/reopen/exact replay, collision, snapshot failure and clean/corrupt completion gaps; not actual Google/deployment |
+| Still outstanding | Mandatory account UI/startup/triggers and personal-package gates (R13c–d), actual Google and owner journeys (R17a), WorkManager and live deployment/lifecycle gates; expanded R10b remains public |
 
 ## Standard commands
 
@@ -230,7 +231,10 @@ Core R10 uses two independent file-backed Android Room stores through the delive
 publication drivers and production HTTP transport. The host JVM relay reuses the guarded fixture; its only opt-in
 controls provision disposable credentials and lose one token-specific response **after the real service answered**.
 The test-only `POST /__r10__/session` additionally performs synthetic setup followed by an actual service refresh and
-returns the complete service session/deadlines for fresh EMPTY Room/vault facade tests. Consume without logging bodies,
+returns the complete service session/deadlines for fresh EMPTY Room/vault facade tests. The host-only
+`POST /__r10__/same-account-session` consumes a relay-minted bearer, provisions a distinct disposable session for that same
+account and uses actual service refresh to supply complete deadlines; unknown bearer is401. R13b's accepted host/Room HTTP
+evidence uses this guarded setup boundary. No domain outcome is simulated. Consume without logging bodies,
 headers, tokens or configuration. The scoped journey renders one real account-root composition and verifies intended
 custom/routine IDs/names/references, both quiescent outboxes and paired materialized epochs. Readiness uses bounded normal
 Main scheduling, not snapshot observation without a composition. Normal missing-row reads are distinct from read errors;
@@ -344,7 +348,8 @@ stays in the linked reviews; consult only when assessing coverage freshness or i
 
 | Layer | Latest relevant recorded evidence | Limitation |
 |---|---|---|
-| Offline JVM/compilation | [R13a review](archive/remaining-work/R13a-review.md): fresh full offline JVM, production KSP/schema13 and default AndroidTest compilation | Inert capture/regression snapshot, not HTTP import/activation, real Google or phone readiness |
+| Offline JVM/compilation | [R13b review](archive/remaining-work/R13b-review.md): fresh full offline JVM, Kotlin/KSP/schema14 and default/opt-in AndroidTest compilation | Explicit private boundary, not default startup, actual Google or phone readiness |
+| Private import/activation | [R13b review](archive/remaining-work/R13b-review.md): scoped current-API sync/admission/migrations, actual isolated Room/vault HTTP whole-graph/prefix/collision/recovery, host controls, assembly/lint/APK checks | No fresh unfiltered default layer or API24 startup/package closure; broader gates remain R13c–d |
 | Legacy capture/migrations | [R13a review](archive/remaining-work/R13a-review.md): scoped headless current-API legacy capture plus separate additive12→13, all-supported/copy-v1-asset and capture/authority regression gates | No fresh unfiltered default layer, API24, full lint/security or HTTP import/activation; broad gates remain R13b–d |
 | Debug assembly/lint/APK | [R11b review](archive/remaining-work/R11b-review.md): verified current assembly artifact, frozen fresh lint analysis, fixture/backend/JDBC/config markers, binary min24/backup and merged-manifest checks, exact v1 asset and unchanged schemas | One newer-json dependency warning; no dependency change, release/OEM/cloud-transfer or real signing/audience claim |
 | Foreground Google adapter | [R11a review](archive/remaining-work/R11a-review.md): focused API24/current actual SDK parser/request gates; [R11b review](archive/remaining-work/R11b-review.md): adapter included in fresh full current-device package execution | Injected launch/client, not actual Google; no fresh full minAPI app regression |
@@ -366,8 +371,9 @@ stays in the linked reviews; consult only when assessing coverage freshness or i
 Full minimum-API app regression, hosted CI, successful real Google identity, expanded R10b and owner phone/laptop journeys
 remain unverified by these records. R11a verifies the scoped adapter on API24, not all app behavior. Core R10a convergence,
 R12a–c reconciliation and deterministic personal R11a–b are accepted; default startup remains local. Foreground
-exchange/private handoff and legacy private capture are explicitly constructible; import delivery/activation,
-account UI/startup/triggers and complete personal-package gates remain R13b–d.
+exchange/private handoff and legacy private capture are explicitly constructible. Opt-in private import delivery/activation
+is accepted with isolated real Room/vault HTTP evidence; account UI/startup/triggers and complete personal-package
+gates remain R13c–d.
 Broader/public gates are tracked in [the roadmap](remaining-work-roadmap.md), not inferred
 from the most recent JVM total. The [legacy replay limitation](sync/implementation.md#legacy-auth-replay-limitation) remains
 an explicit recovery/release risk, not a repaired case.

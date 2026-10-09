@@ -139,6 +139,7 @@ internal class RoomSessionAuthority(private val database: GymDatabase) : Session
             if (reread.snapshot != prepared) {
                 throw corrupt()
             }
+            advanceLegacyProgressLocked(observed.snapshot, prepared)
             currentCoroutineContext().ensureActive()
             reread.snapshot
         }
@@ -264,6 +265,7 @@ internal class RoomSessionAuthority(private val database: GymDatabase) : Session
             if (reread.snapshot != transitioning) {
                 throw corrupt()
             }
+            advanceLegacyProgressLocked(observed.snapshot, transitioning)
             currentCoroutineContext().ensureActive()
             reread.snapshot
         }
@@ -358,6 +360,7 @@ internal class RoomSessionAuthority(private val database: GymDatabase) : Session
             if (reread.snapshot != preparing) {
                 throw corrupt()
             }
+            advanceLegacyProgressLocked(observed.snapshot, preparing)
             currentCoroutineContext().ensureActive()
             reread.snapshot
         }
@@ -589,6 +592,7 @@ internal class RoomSessionAuthority(private val database: GymDatabase) : Session
             if (reread.snapshot != transitioning) {
                 throw corrupt()
             }
+            advanceLegacyProgressLocked(observed.snapshot, transitioning)
             currentCoroutineContext().ensureActive()
             reread.snapshot
         }
@@ -658,6 +662,7 @@ internal class RoomSessionAuthority(private val database: GymDatabase) : Session
             if (reread.snapshot != fenced) {
                 throw corrupt()
             }
+            advanceLegacyProgressLocked(observed.snapshot, fenced)
             currentCoroutineContext().ensureActive()
             reread.snapshot
         }
@@ -815,6 +820,7 @@ internal class RoomSessionAuthority(private val database: GymDatabase) : Session
         if (!permit.isCurrent()) {
             throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.STALE_AUTHORITY)
         }
+        advanceLegacyProgressForPermitLocked(snapshot)
         currentCoroutineContext().ensureActive()
         return newRevision
     }
@@ -1465,5 +1471,248 @@ internal class RoomSessionAuthority(private val database: GymDatabase) : Session
         const val PRIVATE_CACHE_STATE = "private"
         const val READY_CACHE_STATE = "ready"
         const val SINGLETON_ROW_ID = 1L
+    }
+
+    /**
+     * R13b current-lineage progress advancement. Runs inside the caller's
+     * active Room transaction alongside the journal/device write, so the
+     * anchor and authority commit atomically. No-op when no migration
+     * exists. Requires the stored anchor to equal the expected current
+     * tuple before advancement; preserves durable consent; fails closed
+     * as corruption on mismatch. Never fabricates consent/receipts.
+     */
+    private suspend fun advanceLegacyProgressLocked(
+        old: RecoveryRoomSnapshot,
+        new: RecoveryRoomSnapshot,
+    ) {
+        currentCoroutineContext().ensureActive()
+        val dao = database.syncSessionAuthorityDao()
+        val authorityBefore = try {
+            observeLocked(dao)
+        } catch (e: RoomSessionAuthorityException) {
+            throw e
+        } catch (_: Exception) {
+            throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.UNAVAILABLE)
+        }
+        val journal = readLegacyJournalRaw()
+        val stored = readLegacyProgressRaw()
+        if (journal == null) {
+            if (stored != null) throw corrupt()
+            return
+        }
+        if (journal.phase != com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportSource.PHASE_CAPTURED) {
+            if (stored != null) throw corrupt()
+            return
+        }
+        val anchor = stored ?: throw corrupt()
+        val journalOrigin = try {
+            parseCanonicalOrigin(journal.serviceOrigin)
+        } catch (_: Exception) {
+            throw corrupt()
+        }
+        val oldAccount = old.cachedAccountId ?: throw corrupt()
+        if (journal.accountId != oldAccount || journal.accountId != new.cachedAccountId) {
+            throw corrupt()
+        }
+        old.identity?.let {
+            if (it.binding.origin != journalOrigin || it.binding.accountId != oldAccount) throw corrupt()
+        }
+        new.identity?.let {
+            if (it.binding.origin != journalOrigin || it.binding.accountId != journal.accountId) throw corrupt()
+        }
+        val expectedOldPhase = when (old.phase) {
+            RecoveryRoomPhase.SIGNED_OUT -> SIGNED_OUT_PHASE
+            RecoveryRoomPhase.PREPARING -> PREPARING_PHASE
+            RecoveryRoomPhase.TRANSITIONING -> TRANSITIONING_PHASE
+            RecoveryRoomPhase.ACTIVE -> ACTIVE_PHASE
+        }
+        val expectedOldOp = old.identity?.operationId
+        if (anchor.revision != old.revision ||
+            anchor.generation != old.sessionGeneration ||
+            anchor.phase != expectedOldPhase ||
+            anchor.operationId != expectedOldOp
+        ) {
+            throw corrupt()
+        }
+        val newPhase = when (new.phase) {
+            RecoveryRoomPhase.SIGNED_OUT -> SIGNED_OUT_PHASE
+            RecoveryRoomPhase.PREPARING -> PREPARING_PHASE
+            RecoveryRoomPhase.TRANSITIONING -> TRANSITIONING_PHASE
+            RecoveryRoomPhase.ACTIVE -> ACTIVE_PHASE
+        }
+        val newOp = new.identity?.operationId
+        if (new.phase == RecoveryRoomPhase.SIGNED_OUT) {
+            if (newOp != null) throw corrupt()
+        } else {
+            if (newOp == null) throw corrupt()
+        }
+        val db = database.openHelper.writableDatabase
+        try {
+            val values = android.content.ContentValues().apply {
+                put("room_revision", new.revision)
+                put("room_session_generation", new.sessionGeneration)
+                put("room_phase", newPhase)
+                if (newOp == null) putNull("operation_id") else put("operation_id", newOp)
+            }
+            val affected = db.update(
+                "sync_legacy_import_progress",
+                android.database.sqlite.SQLiteDatabase.CONFLICT_ABORT,
+                values,
+                "id = 1 AND room_revision = ? AND room_session_generation = ? AND room_phase = ?" +
+                    if (expectedOldOp == null) " AND operation_id IS NULL" else " AND operation_id = ?",
+                if (expectedOldOp == null) {
+                    arrayOf(old.revision.toString(), old.sessionGeneration.toString(), expectedOldPhase)
+                } else {
+                    arrayOf(old.revision.toString(), old.sessionGeneration.toString(), expectedOldPhase, expectedOldOp)
+                },
+            )
+            if (affected != 1) throw corrupt()
+        } catch (e: RoomSessionAuthorityException) {
+            throw e
+        } catch (_: Exception) {
+            throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.UNAVAILABLE)
+        }
+        currentCoroutineContext().ensureActive()
+        val rereadAnchor = readLegacyProgressRaw() ?: throw corrupt()
+        if (rereadAnchor.revision != new.revision ||
+            rereadAnchor.generation != new.sessionGeneration ||
+            rereadAnchor.phase != newPhase ||
+            rereadAnchor.operationId != newOp ||
+            rereadAnchor.consent != anchor.consent
+        ) {
+            throw corrupt()
+        }
+        val journalAfter = readLegacyJournalRaw() ?: throw corrupt()
+        if (journalAfter != journal) throw corrupt()
+        val authorityAfter = try {
+            observeLocked(dao)
+        } catch (e: RoomSessionAuthorityException) {
+            throw e
+        } catch (_: Exception) {
+            throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.UNAVAILABLE)
+        }
+        if (authorityAfter.snapshot != new ||
+            authorityAfter.journal != authorityBefore.journal ||
+            authorityAfter.device != authorityBefore.device
+        ) {
+            throw corrupt()
+        }
+        currentCoroutineContext().ensureActive()
+    }
+
+    private suspend fun readLegacyJournalRaw(): com.dragosfotache.gymtracka.data.gym.SyncLegacyImportEntity? {
+        try {
+            database.syncLegacyImportDao().observeImportRows().use { c ->
+                if (c.count == 0) return null
+                if (c.count != 1) throw corrupt()
+                c.moveToFirst()
+                if (c.getType(0) != Cursor.FIELD_TYPE_INTEGER || c.getLong(0) != 1L) throw corrupt()
+                if (c.getType(1) != Cursor.FIELD_TYPE_INTEGER) throw corrupt()
+                for (i in 2..4) {
+                    if (c.getType(i) != Cursor.FIELD_TYPE_STRING) throw corrupt()
+                }
+                for (i in 5..8) {
+                    if (c.getType(i) != Cursor.FIELD_TYPE_INTEGER) throw corrupt()
+                }
+                if (c.getType(9) != Cursor.FIELD_TYPE_STRING ||
+                    c.getType(10) != Cursor.FIELD_TYPE_STRING ||
+                    c.getType(11) != Cursor.FIELD_TYPE_INTEGER
+                ) {
+                    throw corrupt()
+                }
+                if (c.getType(12) != Cursor.FIELD_TYPE_NULL && c.getType(12) != Cursor.FIELD_TYPE_STRING) {
+                    throw corrupt()
+                }
+                return com.dragosfotache.gymtracka.data.gym.SyncLegacyImportEntity(
+                    evidenceVersion = c.getLong(1),
+                    serviceOrigin = c.getString(2),
+                    accountId = c.getString(3),
+                    operationId = c.getString(4),
+                    sourceRevision = c.getLong(5),
+                    sourceSessionGeneration = c.getLong(6),
+                    roomRevision = c.getLong(7),
+                    roomSessionGeneration = c.getLong(8),
+                    phase = c.getString(9),
+                    sourceJson = c.getString(10),
+                    importCount = c.getLong(11),
+                    errorCode = if (c.getType(12) == Cursor.FIELD_TYPE_NULL) null else c.getString(12),
+                )
+            }
+        } catch (e: RoomSessionAuthorityException) {
+            throw e
+        } catch (_: Exception) {
+            throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.UNAVAILABLE)
+        }
+    }
+
+    private suspend fun readLegacyProgressRaw(): LegacyProgressAnchor? {
+        try {
+            database.openHelper.writableDatabase.query(
+                "SELECT id, room_revision, room_session_generation, room_phase, operation_id, active_consent_mutation_id FROM sync_legacy_import_progress",
+            ).use { c ->
+                if (c.count == 0) return null
+                if (c.count != 1) throw corrupt()
+                c.moveToFirst()
+                if (c.getType(0) != Cursor.FIELD_TYPE_INTEGER || c.getLong(0) != 1L) throw corrupt()
+                if (c.getType(1) != Cursor.FIELD_TYPE_INTEGER ||
+                    c.getType(2) != Cursor.FIELD_TYPE_INTEGER ||
+                    c.getType(3) != Cursor.FIELD_TYPE_STRING
+                ) {
+                    throw corrupt()
+                }
+                val opType = c.getType(4)
+                if (opType != Cursor.FIELD_TYPE_NULL && opType != Cursor.FIELD_TYPE_STRING) throw corrupt()
+                val consentType = c.getType(5)
+                if (consentType != Cursor.FIELD_TYPE_NULL && consentType != Cursor.FIELD_TYPE_STRING) throw corrupt()
+                return LegacyProgressAnchor(
+                    revision = c.getLong(1),
+                    generation = c.getLong(2),
+                    phase = c.getString(3),
+                    operationId = if (opType == Cursor.FIELD_TYPE_NULL) null else c.getString(4),
+                    consent = if (consentType == Cursor.FIELD_TYPE_NULL) null else c.getString(5),
+                )
+            }
+        } catch (e: RoomSessionAuthorityException) {
+            throw e
+        } catch (_: Exception) {
+            throw RoomSessionAuthorityException(RoomSessionAuthorityFailure.UNAVAILABLE)
+        }
+    }
+
+    private data class LegacyProgressAnchor(
+        val revision: Long,
+        val generation: Long,
+        val phase: String,
+        val operationId: String?,
+        val consent: String?,
+    )
+
+    /**
+     * Completion-path anchor advancement for the permit transaction. The
+     * old tuple is PREPARING at revision-1 with the same generation and
+     * operation; the new tuple is the just-written ACTIVE snapshot.
+     * No-op without migration; fails closed on mismatch.
+     */
+    private suspend fun advanceLegacyProgressForPermitLocked(new: RecoveryRoomSnapshot) {
+        currentCoroutineContext().ensureActive()
+        if (new.phase != RecoveryRoomPhase.ACTIVE) throw corrupt()
+        val identity = new.identity ?: throw corrupt()
+        if (new.revision == Long.MIN_VALUE) throw corrupt()
+        val old = RecoveryRoomSnapshot(
+            revision = new.revision - 1L,
+            sessionGeneration = new.sessionGeneration,
+            cachedAccountId = new.cachedAccountId,
+            phase = RecoveryRoomPhase.PREPARING,
+            identity = RecoveryIdentity(
+                binding = ServiceSessionBinding(
+                    origin = identity.binding.origin,
+                    accountId = identity.binding.accountId,
+                    sessionGeneration = identity.binding.sessionGeneration,
+                ),
+                operationId = identity.operationId,
+            ),
+            baselineComplete = false,
+        )
+        advanceLegacyProgressLocked(old, new)
     }
 }

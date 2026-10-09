@@ -49,7 +49,8 @@ exchange/handoff and account UI/triggers remain R11b/R13.
 
 `app/src/main/assets/databases/gym.db` is the unchanged **version-1 source catalogue**. Room copies it into app-private
 storage and migrates the runtime database. Never add user-data tables to the asset or use destructive migration fallback.
-Runtime `GymDatabase` is **version 13**; exported versions 1–13 are retained in `app/schemas/`.
+Runtime `GymDatabase` is **version 14**; exported versions 1–14 are retained in `app/schemas/`.
+R13b's private delivery integration is accepted but remains explicitly opt-in, never enabled at default startup.
 
 ### Catalogue and custom exercises
 
@@ -105,6 +106,7 @@ blank/empty autosaves are distinct from save/start eligibility validation.
 | 10 → 11 | Independent snapshot stage headers, whole records and durable continuation/page evidence; old tables/bytes/sequence unchanged, new tables empty |
 | 11 → 12 | Independent singleton account-authority/preparation journal; prior tables/bytes/sequence unchanged, new table empty; no fabricated activation |
 | 12 → 13 | Independent one-time legacy-import source/target journal and exact ordered request evidence; prior tables/bytes/sequence unchanged, new tables empty; no activation or network delivery |
+| 13 → 14 | Independent import lineage and accepted-batch receipts; prior tables/bytes/sequence unchanged; captured journals initialize exact PREPARING lineage, with no fabricated acceptance or consent |
 
 Each future entity change requires a version bump, data-preserving migration, schema export/KSP, all supported starting
 versions, and a copied real v1 asset test. Domain table UUID primary keys remain global within each physical table;
@@ -128,7 +130,7 @@ bootstrap stays canonical-only. No app activation/rebinding is constructed; see
 [completion boundaries](sync/implementation.md#private-completed-preparation-and-vault-promotion).
 R09e adds separate settled occupied ACTIVE reauthentication: exact private TRANSITIONING reservation at a new generation,
 full same-account PREPARED vault replacement, then PREPARING finalization at the same reserved generation. Existing Room12
-storage is reused; Room changes only journal/device, while retained intent/cache/domain remain untouched. Required shared run/credential
+storage is reused; Room changes journal/device and, when an import exists, its current-lineage anchor, while retained intent/cache/domain remain untouched. Required shared run/credential
 ownership, pending-predecessor refusal and advisory crash recovery remain inert; see
 [settled reauthentication](sync/implementation.md#inert-settled-occupied-credential-reauthentication).
 R09g adds broader inert retained-account recovery over the same Room12 journal/device tables and exact vault CAS.
@@ -142,8 +144,12 @@ create-only request evidence independently of domain/outbox FKs. Explicit inert 
 and creates dependency-ordered imports with private PREPARING authority, or retains invalid source/error evidence plus a
 private generation fence without association. It never creates ACTIVE, credentials, a cursor or a complete baseline.
 Once evidence exists, ordinary null-account repository reads/writes refuse; default startup never constructs the importer.
-Recovery is exact-target/authority/source/request fenced; missing work is not remotely accepted progress. Delivery and
-complete activation remain R13b. See [legacy capture](sync/implementation.md#durable-legacy-graph-and-private-import-capture).
+Recovery is exact-target/authority/source/request fenced; missing work is not remotely accepted progress.
+Room14's `sync_legacy_import_progress` binds the current authority lineage separately from immutable capture provenance;
+`sync_legacy_import_acceptances` retains the exact validated canonical batch for each definitively accepted original request.
+Receipt insertion, canonical acknowledgment and frozen-head removal share one transaction. These tables have no domain/outbox
+cascade, and source/requests/receipts are never automatically cleaned up. The opt-in private delivery/activation boundary
+is accepted at the explicit private boundary. See [private import integration](sync/implementation.md#private-import-delivery-and-activation).
 
 ## Persistence and state flow
 

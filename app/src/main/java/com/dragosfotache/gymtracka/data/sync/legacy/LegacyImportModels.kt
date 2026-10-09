@@ -33,7 +33,7 @@ internal fun interface LegacyImportCaptureBarrier {
     suspend fun acquire(expected: RecoveryRoomSnapshot): ProjectionPublicationLease
 }
 
-internal enum class LegacyImportPhase { CAPTURED, BLOCKED }
+internal enum class LegacyImportPhase { CAPTURED, BLOCKED, SETTLED }
 
 internal data class LegacyImportEvidence(
     val target: LegacyImportTarget,
@@ -42,6 +42,7 @@ internal data class LegacyImportEvidence(
     val sourceJson: String,
     val importCount: Long,
     val errorCode: String?,
+    val acceptedCount: Long = 0L,
 ) {
     override fun toString(): String = "LegacyImportEvidence(redacted)"
 }

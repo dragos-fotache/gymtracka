@@ -48,7 +48,7 @@ Use the [progressive reading policy](docs/README.md#progressive-reading-and-cont
 ## Persistence and domain safeguards
 
 - The bundled `app/src/main/assets/databases/gym.db` is a version-1 source asset. Room copies it into app-private storage and migrates the runtime database. Do not edit the asset to add user-data tables.
-- The runtime Room database is currently version 13. It combines the read-only bundled catalogue with custom exercises, workouts, routines, and sync storage foundations.
+- The runtime Room database is currently version 14. It combines the read-only bundled catalogue with custom exercises, workouts, routines, and sync storage foundations.
 - Bundled exercises are immutable. Creation, editing, and deletion apply only to rows marked `is_user_created`; keep repository/DAO guards intact.
 - IDs are client-generated UUID strings. Storage positions are zero-based and consecutive; UI numbering is one-based.
 - Weight is kilograms. The selected rest countdown (`rest_duration_seconds`) and actual elapsed rest (`rest_seconds`) are different values.

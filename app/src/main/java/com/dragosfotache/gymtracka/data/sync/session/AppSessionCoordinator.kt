@@ -14,8 +14,18 @@ import com.dragosfotache.gymtracka.data.sync.engine.SyncDeliveryLoop
 import com.dragosfotache.gymtracka.data.sync.engine.SyncDeliveryResult
 import com.dragosfotache.gymtracka.data.sync.http.ServiceHttpTransport
 import com.dragosfotache.gymtracka.data.sync.http.ServiceOrigin
+import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportCaptureBarrier
+import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportCaptureResult
+import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportException
+import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportPhase
+import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportPolicy
+import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportProgress
+import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportProgressPhase
+import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportStore
+import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportTarget
 import com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid
 import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationBarrier
+import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationLease
 import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationStatus
 import com.dragosfotache.gymtracka.data.sync.store.ProjectionStore
 import com.dragosfotache.gymtracka.data.sync.store.PushRunOwner
@@ -71,6 +81,7 @@ internal class AppSessionCoordinator(
     private val publicationBarrier: ProjectionPublicationBarrier,
     private val clockMillis: () -> Long = System::currentTimeMillis,
     private val uuidProvider: () -> String = { UUID.randomUUID().toString() },
+    private val legacyImportPolicy: LegacyImportPolicy? = null,
 ) : ForegroundGrantHandoff {
     private val authority = RoomSessionAuthority(database)
     private val credentialMutex = Mutex()
@@ -153,6 +164,11 @@ internal class AppSessionCoordinator(
                     return@withLock synchronized(stateLock) { _state.value }
                 }
                 ensureCurrent(observedFence)
+                if (!verifyAdmissionEvidence(observedFence)) {
+                    lockIfAlive(observedFence, retained.aliveToken())
+                    return@withLock synchronized(stateLock) { _state.value }
+                }
+                ensureCurrent(observedFence)
                 return@withLock synchronized(stateLock) {
                     val current = _state.value as? AppSessionState.Active
                     if (current != null && current.session === retained) {
@@ -179,7 +195,7 @@ internal class AppSessionCoordinator(
             ensureCurrent(observedFence)
             val activeSession = first as? SessionRecoveryState.Active
             if (activeSession != null) {
-                return@withLock admitActive(activeSession.session, observedFence)
+                return@withLock admitActiveIfEvidencePermits(activeSession.session, observedFence)
             }
             val engine = preparedEngine
             if (engine != null && first is SessionRecoveryState.Locked &&
@@ -210,12 +226,80 @@ internal class AppSessionCoordinator(
                 ensureCurrent(observedFence)
                 val secondActive = second as? SessionRecoveryState.Active
                 if (secondActive != null) {
-                    return@withLock admitActive(secondActive.session, observedFence)
+                    return@withLock admitActiveIfEvidencePermits(secondActive.session, observedFence)
                 }
                 return@withLock publishPrivateForRecovery(second, observedFence)
             }
             return@withLock publishPrivateForRecovery(first, observedFence)
         }
+    }
+
+    /**
+     * R13b centralized admission evidence gate. Returns true when no
+     * migration exists or retained evidence fully revalidates (ACTIVE
+     * rooms additionally require definitive settlement); false on any
+     * missing/corrupt/partial evidence. Callers maintain the
+     * process/handle privacy lock on false and never admit Active.
+     */
+    private suspend fun verifyAdmissionEvidence(fence: Any): Boolean {
+        ensureCurrent(fence)
+        val fenceCheck: () -> Unit = {
+            synchronized(stateLock) {
+                if (fence !== currentFence) throw AppSessionStaleException()
+            }
+        }
+        val store = LegacyImportStore(
+            database,
+            LegacyImportCaptureBarrier { throw LegacyImportException(com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportFailure.UNAVAILABLE) },
+            fenceCheck,
+            uuidProvider,
+        )
+        return try {
+            val progress = store.observeAny()
+            ensureCurrent(fence)
+            if (progress != null && progress.phase != LegacyImportProgressPhase.SETTLED) {
+                val current = try {
+                    authority.read()
+                } catch (e: CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e
+                } catch (_: Exception) {
+                    return false
+                }
+                if (current.phase == RecoveryRoomPhase.ACTIVE) return false
+            }
+            true
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (e: AppSessionStaleException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            ensureCurrent(fence)
+            false
+        }
+    }
+
+    /**
+     * Centralized Active admission: fresh-checks retained evidence before
+     * installing the handle. Evidence fault publishes Private without
+     * admission, preserving the process/handle privacy lock.
+     */
+    private suspend fun admitActiveIfEvidencePermits(
+        recovered: RecoveredSession,
+        fence: Any,
+    ): AppSessionState {
+        ensureCurrent(fence)
+        if (!verifyAdmissionEvidence(fence)) {
+            return publishIfCurrent(
+                AppSessionState.Private(AppSessionReason.UNAVAILABLE, advisoryRoom()),
+                fence,
+            )
+        }
+        ensureCurrent(fence)
+        return admitActive(recovered, fence)
     }
 
     /**
@@ -284,7 +368,105 @@ internal class AppSessionCoordinator(
         } catch (_: Exception) {
             throw AppSessionException(AppSessionReason.UNAVAILABLE)
         }
+        if (request.intent == ForegroundSignInIntent.PRIVATE_IMPORT_REAUTHENTICATION) {
+            return reauthenticateWithFence(request.expected, targetOperation, session, binding.fence)
+        }
         return acceptGrantWithFence(request.expected, targetOperation, session, binding.fence)
+    }
+
+    /**
+     * R13b opt-in private-import progress observation. Strictly validates
+     * retained original source/entries/progress/current lineage under
+     * configured process authority; null means no migration, never a
+     * fabricated empty migration. Performs no HTTP, UUID generation,
+     * credential changes or cleanup. Unconfigured refuses
+     * CONFIGURATION_UNAVAILABLE without migration reads; missing/corrupt
+     * evidence throws closed UNAVAILABLE.
+     */
+    suspend fun observeLegacyImport(): LegacyImportProgress? {
+        currentCoroutineContext().ensureActive()
+        val observedFence = synchronized(stateLock) { currentFence }
+        return operationMutex.withLock {
+            ensureCurrent(observedFence)
+            val configured = origin
+                ?: throw AppSessionException(AppSessionReason.CONFIGURATION_UNAVAILABLE)
+            ensureCurrent(observedFence)
+            val fenceCheck: () -> Unit = {
+                synchronized(stateLock) {
+                    if (observedFence !== currentFence) throw AppSessionStaleException()
+                }
+            }
+            val store = LegacyImportStore(
+                database,
+                LegacyImportCaptureBarrier { throw LegacyImportException(com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportFailure.UNAVAILABLE) },
+                fenceCheck,
+                uuidProvider,
+            )
+            val retained = try {
+                store.retainedTarget()
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (e: AppSessionStaleException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (e: LegacyImportException) {
+                currentCoroutineContext().ensureActive()
+                ensureCurrent(observedFence)
+                throw AppSessionException(AppSessionReason.UNAVAILABLE)
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                ensureCurrent(observedFence)
+                throw AppSessionException(AppSessionReason.UNAVAILABLE)
+            }
+            ensureCurrent(observedFence)
+            if (retained != null && retained.origin != configured) {
+                throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
+            }
+            val progress = try {
+                store.observeAny()
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (e: AppSessionStaleException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (e: LegacyImportException) {
+                currentCoroutineContext().ensureActive()
+                ensureCurrent(observedFence)
+                throw AppSessionException(AppSessionReason.UNAVAILABLE)
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                ensureCurrent(observedFence)
+                throw AppSessionException(AppSessionReason.UNAVAILABLE)
+            }
+            ensureCurrent(observedFence)
+            progress
+        }
+    }
+
+    /**
+     * R13b explicit private-import reauthentication. Requires opt-in, a
+     * valid retained captured/settled import, same configured origin and
+     * service UUID, the exact current private PREPARING expectation and a
+     * NEW operation distinct from current. Composes existing same-account
+     * prepare/supersede; retains original migration operation, source, IDs,
+     * requests, receipts and consent. Fresh supplied grants are service
+     * evidence, not Google assertions.
+     */
+    suspend fun reauthenticateLegacyImport(
+        expected: RecoveryRoomSnapshot,
+        operationId: String,
+        session: ServiceSession,
+    ): AppSessionState {
+        currentCoroutineContext().ensureActive()
+        val targetOperation = try {
+            requireWorkoutUuid(operationId, "id")
+        } catch (_: Exception) {
+            throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
+        }
+        val observedFence = synchronized(stateLock) { currentFence }
+        return reauthenticateWithFence(expected, targetOperation, session, observedFence)
     }
 
     /**
@@ -323,6 +505,260 @@ internal class AppSessionCoordinator(
             canonical,
             ForegroundSignInAuthorityBinding(this, fence),
         )
+    }
+
+    /**
+     * R13b private-import reauthentication critical section over the exact
+     * supplied fence. Shares the operation mutex and captured process fence
+     * discipline with [acceptGrantWithFence]: every guard, lease and error
+     * path runs under the same serialized exclusion.
+     */
+    private suspend fun reauthenticateWithFence(
+        expected: RecoveryRoomSnapshot,
+        targetOperation: String,
+        session: ServiceSession,
+        observedFence: Any,
+    ): AppSessionState {
+        return operationMutex.withLock {
+            ensureCurrent(observedFence)
+            val configured = origin
+                ?: throw AppSessionException(AppSessionReason.CONFIGURATION_UNAVAILABLE)
+            if (legacyImportPolicy == null) {
+                throw AppSessionException(AppSessionReason.UNAVAILABLE)
+            }
+            if (expected.phase != RecoveryRoomPhase.PREPARING) {
+                throw AppSessionException(AppSessionReason.PREPARATION_REQUIRED)
+            }
+            val identity = expected.identity
+                ?: throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
+            if (identity.operationId == targetOperation) {
+                throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
+            }
+            ensureCurrent(observedFence)
+            val reread = try {
+                authority.read()
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                ensureCurrent(observedFence)
+                throw AppSessionException(AppSessionReason.UNAVAILABLE)
+            }
+            ensureCurrent(observedFence)
+            if (reread != expected) {
+                throw AppSessionStaleException()
+            }
+            val grantAccount = try {
+                requireWorkoutUuid(session.account.accountId, "accountId")
+            } catch (_: Exception) {
+                throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
+            }
+            if (expected.cachedAccountId == null || grantAccount != expected.cachedAccountId) {
+                throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
+            }
+            if (identity.binding.origin != configured ||
+                identity.binding.accountId != grantAccount
+            ) {
+                throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
+            }
+            ensureCurrent(observedFence)
+            val fenceCheck: () -> Unit = {
+                synchronized(stateLock) {
+                    if (observedFence !== currentFence) throw AppSessionStaleException()
+                }
+            }
+            val legacyStore = LegacyImportStore(
+                database,
+                LegacyImportCaptureBarrier { throw LegacyImportException(com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportFailure.UNAVAILABLE) },
+                fenceCheck,
+                uuidProvider,
+            )
+            val evidence = try {
+                legacyStore.readForReauth()
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (e: AppSessionStaleException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                ensureCurrent(observedFence)
+                throw AppSessionException(AppSessionReason.UNAVAILABLE)
+            }
+            ensureCurrent(observedFence)
+            if (evidence.target.origin != configured ||
+                evidence.target.accountId != grantAccount ||
+                evidence.target.accountId != expected.cachedAccountId
+            ) {
+                throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
+            }
+            if (evidence.phase != LegacyImportPhase.CAPTURED &&
+                evidence.phase != LegacyImportPhase.SETTLED
+            ) {
+                throw AppSessionException(AppSessionReason.UNAVAILABLE)
+            }
+            if (evidence.room != expected) {
+                throw AppSessionStaleException()
+            }
+            ensureCurrent(observedFence)
+            val previous = synchronized(stateLock) { currentHandle }
+            val previousSession = previous?.let {
+                RepositorySession(it.identity.binding.accountId, it.identity.binding.sessionGeneration)
+            }
+            val lease = try {
+                transitionBarrier.acquire(previousSession)
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                ensureCurrent(observedFence)
+                throw AppSessionException(AppSessionReason.UNAVAILABLE)
+            }
+            var outcome: PreparedSessionObservation? = null
+            var failure: Throwable? = null
+            try {
+                try {
+                    lease.checkValid()
+                } catch (e: CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e
+                } catch (_: Exception) {
+                    currentCoroutineContext().ensureActive()
+                    ensureCurrent(observedFence)
+                    throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                }
+                ensureCurrent(observedFence)
+                invalidateForReplacement(observedFence)
+                val fresh = try {
+                    authority.read()
+                } catch (e: CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e
+                } catch (_: Exception) {
+                    currentCoroutineContext().ensureActive()
+                    ensureCurrent(observedFence)
+                    publishIfCurrent(
+                        AppSessionState.Private(AppSessionReason.UNAVAILABLE, advisoryRoom()),
+                        observedFence,
+                    )
+                    throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                }
+                ensureCurrent(observedFence)
+                if (fresh != expected) {
+                    publishIfCurrent(
+                        AppSessionState.Private(AppSessionReason.PREPARATION_REQUIRED, advisoryRoom()),
+                        observedFence,
+                    )
+                    throw AppSessionStaleException()
+                }
+                try {
+                    lease.checkValid()
+                } catch (e: CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e
+                } catch (_: Exception) {
+                    currentCoroutineContext().ensureActive()
+                    ensureCurrent(observedFence)
+                    publishIfCurrent(
+                        AppSessionState.Private(AppSessionReason.UNAVAILABLE, advisoryRoom()),
+                        observedFence,
+                    )
+                    throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                }
+                outcome = try {
+                    val retained = sameAccount
+                        ?: throw AppSessionException(AppSessionReason.CONFIGURATION_UNAVAILABLE)
+                    try {
+                        retained.prepare(expected, targetOperation, session)
+                    } catch (e: CancellationException) {
+                        currentCoroutineContext().ensureActive()
+                        throw e
+                    } catch (e: SessionReauthenticationException) {
+                        currentCoroutineContext().ensureActive()
+                        throw mapReauthFailure(e)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: AppSessionStaleException) {
+                    currentCoroutineContext().ensureActive()
+                    ensureCurrent(observedFence)
+                    publishIfCurrent(
+                        AppSessionState.Private(AppSessionReason.PREPARATION_REQUIRED, advisoryRoom()),
+                        observedFence,
+                    )
+                    throw e
+                } catch (e: AppSessionException) {
+                    currentCoroutineContext().ensureActive()
+                    ensureCurrent(observedFence)
+                    publishIfCurrent(
+                        AppSessionState.Private(e.reason, advisoryRoom()),
+                        observedFence,
+                    )
+                    throw e
+                }
+                try {
+                    lease.checkValid()
+                } catch (e: CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e
+                } catch (_: Exception) {
+                    currentCoroutineContext().ensureActive()
+                    ensureCurrent(observedFence)
+                    publishIfCurrent(
+                        AppSessionState.Private(AppSessionReason.UNAVAILABLE, advisoryRoom()),
+                        observedFence,
+                    )
+                    throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                }
+                ensureCurrent(observedFence)
+            } catch (e: CancellationException) {
+                failure = e
+            } catch (e: Throwable) {
+                failure = e
+            }
+            try {
+                lease.close()
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                if (failure == null) {
+                    ensureCurrent(observedFence)
+                    publishIfCurrent(
+                        AppSessionState.Private(AppSessionReason.UNAVAILABLE, advisoryRoom()),
+                        observedFence,
+                    )
+                    throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                }
+            }
+            currentCoroutineContext().ensureActive()
+            failure?.let { throw it }
+            val prepared = outcome ?: throw AppSessionException(AppSessionReason.UNAVAILABLE)
+            ensureCurrent(observedFence)
+            val freshRoom = try {
+                authority.read()
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                ensureCurrent(observedFence)
+                publishIfCurrent(
+                    AppSessionState.Private(AppSessionReason.PREPARATION_REQUIRED, prepared.room),
+                    observedFence,
+                )
+                throw AppSessionException(AppSessionReason.UNAVAILABLE)
+            }
+            ensureCurrent(observedFence)
+            return@withLock publishIfCurrent(
+                AppSessionState.Private(AppSessionReason.PREPARATION_REQUIRED, freshRoom),
+                observedFence,
+            )
+        }
     }
 
     /**
@@ -454,7 +890,9 @@ internal class AppSessionCoordinator(
                     throw AppSessionException(AppSessionReason.UNAVAILABLE)
                 }
                 outcome = try {
-                    reserveGrant(expected, targetOperation, session, observedFence)
+                    legacyCaptureOutcomeIfOptIn(
+                        expected, targetOperation, session, configured, lease, observedFence,
+                    ) ?: reserveGrant(expected, targetOperation, session, observedFence)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: AppSessionStaleException) {
@@ -542,6 +980,138 @@ internal class AppSessionCoordinator(
     }
 
     /**
+     * R13b pre-delivery consent seam. Validates migration again; when an
+     * original active import lacks durable consent, invokes the required
+     * consent seam under exact facade/process/current authority BEFORE any
+     * prepared delivery. False (or refusal/cancellation/stale) returns
+     * false with zero remote effects; stale/canceled/error responses never
+     * record consent. True records the exact original active mutation
+     * consent durably under the unchanged binding with fresh rereads.
+     * No active import means no warning call (true).
+     */
+    private suspend fun requestLegacyImportConsentIfNeeded(
+        expected: RecoveryRoomSnapshot,
+        fence: Any,
+    ): Boolean {
+        ensureCurrent(fence)
+        val fenceCheck: () -> Unit = {
+            synchronized(stateLock) {
+                if (fence !== currentFence) throw AppSessionStaleException()
+            }
+        }
+        val store = LegacyImportStore(
+            database,
+            LegacyImportCaptureBarrier { throw LegacyImportException(com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportFailure.UNAVAILABLE) },
+            fenceCheck,
+            uuidProvider,
+        )
+        val request = try {
+            store.consentRequestForActive()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (e: AppSessionStaleException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            ensureCurrent(fence)
+            throw AppSessionException(AppSessionReason.UNAVAILABLE)
+        }
+        ensureCurrent(fence)
+        if (request == null) return true
+        val policy = legacyImportPolicy
+            ?: return false
+        val confirmed = try {
+            policy.replacementConsent.confirm(request)
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            ensureCurrent(fence)
+            return false
+        }
+        ensureCurrent(fence)
+        if (!confirmed) return false
+        val current = try {
+            authority.read()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            ensureCurrent(fence)
+            throw AppSessionException(AppSessionReason.UNAVAILABLE)
+        }
+        ensureCurrent(fence)
+        if (current != expected) {
+            throw AppSessionStaleException()
+        }
+        try {
+            store.recordActiveConsent(request.target, request.mutationId, expected)
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (e: AppSessionStaleException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            ensureCurrent(fence)
+            val reread = try {
+                authority.read()
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (_: Exception) {
+                throw AppSessionException(AppSessionReason.UNAVAILABLE)
+            }
+            if (reread != expected) throw AppSessionStaleException()
+            throw AppSessionException(AppSessionReason.UNAVAILABLE)
+        }
+        ensureCurrent(fence)
+        return true
+    }
+
+    /**
+     * R13b post-tail settlement validation. Requires complete matching
+     * receipts when a migration exists (SETTLED advisory progress);
+     * returns true when no migration or fully settled, false for partial
+     * settlement. Corrupt evidence throws closed UNAVAILABLE.
+     */
+    private suspend fun verifyLegacyImportSettled(fence: Any): Boolean {
+        ensureCurrent(fence)
+        val fenceCheck: () -> Unit = {
+            synchronized(stateLock) {
+                if (fence !== currentFence) throw AppSessionStaleException()
+            }
+        }
+        val store = LegacyImportStore(
+            database,
+            LegacyImportCaptureBarrier { throw LegacyImportException(com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportFailure.UNAVAILABLE) },
+            fenceCheck,
+            uuidProvider,
+        )
+        val progress = try {
+            store.observeAny()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (e: AppSessionStaleException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            ensureCurrent(fence)
+            throw AppSessionException(AppSessionReason.UNAVAILABLE)
+        }
+        ensureCurrent(fence)
+        if (progress == null) return true
+        return progress.phase == LegacyImportProgressPhase.SETTLED
+    }
+
+    /**
      * Privately bootstraps the exact PREPARING expectation with the supplied
      * bounded budget and restart flag, then completes with the mandatory
      * publication barrier. A wrong completion phase throws
@@ -592,6 +1162,12 @@ internal class AppSessionCoordinator(
             if (expected.phase != RecoveryRoomPhase.PREPARING) {
                 throw AppSessionException(AppSessionReason.PREPARATION_REQUIRED)
             }
+            if (!requestLegacyImportConsentIfNeeded(expected, observedFence)) {
+                return@withLock publishIfCurrent(
+                    AppSessionState.Private(AppSessionReason.PREPARATION_REQUIRED, advisoryRoom()),
+                    observedFence,
+                )
+            }
             val bootstrap = try {
                 engine.bootstrap(
                     stageId, maxSnapshotPages, restartRetainedStage = restartRetainedStage,
@@ -616,6 +1192,12 @@ internal class AppSessionCoordinator(
                 tail.pull?.stop is PullDeliveryStop.Tail &&
                 tail.hasOutstandingLocalWork == false
             if (!tailClean) {
+                return@withLock publishIfCurrent(
+                    AppSessionState.Private(AppSessionReason.PREPARATION_REQUIRED, advisoryRoom()),
+                    observedFence,
+                )
+            }
+            if (!verifyLegacyImportSettled(observedFence)) {
                 return@withLock publishIfCurrent(
                     AppSessionState.Private(AppSessionReason.PREPARATION_REQUIRED, advisoryRoom()),
                     observedFence,
@@ -658,7 +1240,7 @@ internal class AppSessionCoordinator(
                     AppSessionState.Private(AppSessionReason.PREPARATION_REQUIRED, advisoryRoom()),
                     observedFence,
                 )
-            return@withLock admitActive(activeSession.session, observedFence)
+            return@withLock admitActiveIfEvidencePermits(activeSession.session, observedFence)
         }
     }
 
@@ -1535,6 +2117,100 @@ internal class AppSessionCoordinator(
                 throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
             }
         }
+    }
+
+    /**
+     * R13b opt-in private import capture inside the shared acceptGrant
+     * critical section. Returns null when inapplicable (no opt-in policy,
+     * non-fresh shape, or genuinely empty local storage) so the caller
+     * falls back to ordinary preparation. Uses the SAME held transition
+     * lease through an explicitly borrowed check-only wrapper whose close
+     * never closes the outer owner; the facade still closes the actual
+     * owner exactly once. No network/vault/clock calls inside Room. Valid
+     * capture already reserved PREPARING, so the returned grant installs
+     * through existing preparation resume at its exact tuple.
+     */
+    private suspend fun legacyCaptureOutcomeIfOptIn(
+        expected: RecoveryRoomSnapshot,
+        targetOperation: String,
+        session: ServiceSession,
+        configured: ServiceOrigin,
+        outerLease: ProjectionPublicationLease,
+        fence: Any,
+    ): PreparedSessionObservation? {
+        if (legacyImportPolicy == null) return null
+        if (expected.phase != RecoveryRoomPhase.SIGNED_OUT || expected.cachedAccountId != null) {
+            return null
+        }
+        ensureCurrent(fence)
+        val grantAccount = try {
+            requireWorkoutUuid(session.account.accountId, "accountId")
+        } catch (_: Exception) {
+            throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
+        }
+        val target = try {
+            LegacyImportTarget(configured, grantAccount, targetOperation)
+        } catch (_: Exception) {
+            throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
+        }
+        ensureCurrent(fence)
+        val fenceCheck: () -> Unit = {
+            synchronized(stateLock) {
+                if (fence !== currentFence) throw AppSessionStaleException()
+            }
+        }
+        val borrowed = LegacyImportCaptureBarrier { BorrowedCheckOnlyLease(outerLease) }
+        val store = LegacyImportStore(database, borrowed, fenceCheck, uuidProvider)
+        val captured = try {
+            store.capture(expected, target)
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (e: AppSessionStaleException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (e: LegacyImportException) {
+            currentCoroutineContext().ensureActive()
+            ensureCurrent(fence)
+            throw AppSessionException(AppSessionReason.UNAVAILABLE)
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            ensureCurrent(fence)
+            throw AppSessionException(AppSessionReason.UNAVAILABLE)
+        }
+        ensureCurrent(fence)
+        when (captured) {
+            is LegacyImportCaptureResult.NoLocalData -> return null
+            is LegacyImportCaptureResult.Retained -> {
+                val evidence = captured.evidence
+                if (evidence.phase == LegacyImportPhase.BLOCKED) {
+                    ensureCurrent(fence)
+                    publishIfCurrent(
+                        AppSessionState.Private(AppSessionReason.UNAVAILABLE, advisoryRoom()),
+                        fence,
+                    )
+                    throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                }
+                val prep = preparation
+                    ?: throw AppSessionException(AppSessionReason.CONFIGURATION_UNAVAILABLE)
+                try {
+                    return prep.resume(evidence.room, session)
+                } catch (e: CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e
+                } catch (e: SessionPreparationException) {
+                    currentCoroutineContext().ensureActive()
+                    throw mapPreparationFailure(e)
+                }
+            }
+        }
+    }
+
+    private class BorrowedCheckOnlyLease(
+        private val outer: ProjectionPublicationLease,
+    ) : ProjectionPublicationLease {
+        override fun checkValid() = outer.checkValid()
+        override fun close() = Unit
     }
 
     private suspend fun reserveGrant(

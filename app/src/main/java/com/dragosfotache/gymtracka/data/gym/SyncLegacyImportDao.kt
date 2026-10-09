@@ -124,4 +124,29 @@ interface SyncLegacyImportDao {
             WHERE is_user_created = 1 AND account_id IS NULL ORDER BY id""",
     )
     suspend fun localCustomIds(): List<String>
+
+    @Query(
+        """SELECT id, room_revision, room_session_generation, room_phase,
+            operation_id, active_consent_mutation_id
+            FROM sync_legacy_import_progress""",
+    )
+    fun observeProgressRows(): android.database.Cursor
+
+    @Query(
+        """SELECT ordinal, mutation_id, batch_json
+            FROM sync_legacy_import_acceptances ORDER BY ordinal""",
+    )
+    fun observeAcceptanceRows(): android.database.Cursor
+
+    @Query("SELECT * FROM sync_legacy_import_progress WHERE id = 1")
+    suspend fun getProgress(): SyncLegacyImportProgressEntity?
+
+    @Query("SELECT * FROM sync_legacy_import_acceptances ORDER BY ordinal")
+    suspend fun getAcceptances(): List<SyncLegacyImportAcceptanceEntity>
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertProgress(row: SyncLegacyImportProgressEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAcceptance(row: SyncLegacyImportAcceptanceEntity): Long
 }

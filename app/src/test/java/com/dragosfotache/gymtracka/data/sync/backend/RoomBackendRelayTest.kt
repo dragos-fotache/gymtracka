@@ -47,6 +47,62 @@ class RoomBackendRelayTest {
     }
 
     @Test
+    fun sameAccountSessionRequiresMintedBearerAndReturnsDistinctRealGrant() {
+        RealBackendFixture.load().use { fixture ->
+            RealBackendHttpBridge(fixture.baseUrl, RoomRelayControls(fixture)).use { relay ->
+                val cert = CertificateFactory.getInstance("X.509").generateCertificate(
+                    Base64.getDecoder().decode(relay.certificateBase64).inputStream(),
+                ) as X509Certificate
+                val trust = HandshakeCertificates.Builder().addTrustedCertificate(cert).build()
+                val client = newServiceHttpClient(
+                    builder = okhttp3.OkHttpClient.Builder()
+                        .sslSocketFactory(trust.sslSocketFactory(), trust.trustManager),
+                )
+                try {
+                    fun call(path: String, token: String? = null, body: String = ""): Pair<Int, String> {
+                        val builder = Request.Builder()
+                            .url("https://localhost:${relay.origin.port}$path")
+                            .post(body.toRequestBody("application/json".toMediaType()))
+                        token?.let { builder.header("Authorization", "Bearer $it") }
+                        return client.newCall(builder.build()).execute().use {
+                            it.code to it.body.string()
+                        }
+                    }
+                    val path = "/__r10__/same-account-session"
+                    assertEquals(401, call(path).first)
+                    assertEquals(401, call(path, "unknown-test-bearer").first)
+                    val initial = call("/__r10__/session")
+                    assertEquals(200, initial.first)
+                    val first = JSONObject(initial.second)
+                    val replacement = call(path, first.getString("accessToken"))
+                    assertEquals(200, replacement.first)
+                    val second = JSONObject(replacement.second)
+                    assertEquals(first.getString("accountId"), second.getString("accountId"))
+                    assertTrue(
+                        "Distinct setup session must have distinct access credentials",
+                        first.getString("accessToken") != second.getString("accessToken"),
+                    )
+                    assertTrue(
+                        "Distinct setup session must have distinct refresh credentials",
+                        first.getString("refreshToken") != second.getString("refreshToken"),
+                    )
+                    assertTrue(second.getLong("accessExpiresAtMillis") > 0L)
+                    assertTrue(second.getLong("refreshExpiresAtMillis") > second.getLong("accessExpiresAtMillis"))
+                    // Credentials come from actual service rotation, not merely fixture
+                    // JSON: the real service accepts the distinct new bearer over TLS.
+                    val accepted = call("/v1/sync/push", second.getString("accessToken"), "{\"mutations\":[]}")
+                    assertEquals(200, accepted.first)
+                    assertEquals(0, JSONObject(accepted.second).getJSONArray("results").length())
+                } finally {
+                    client.dispatcher.cancelAll()
+                    client.connectionPool.evictAll()
+                    client.dispatcher.executorService.shutdown()
+                }
+            }
+        }
+    }
+
+    @Test
     fun responseLossIsOptInTokenScopedAndFollowsRealCommit() {
         RealBackendFixture.load().use { fixture ->
             RealBackendHttpBridge(fixture.baseUrl, RoomRelayControls(fixture)).use { relay ->

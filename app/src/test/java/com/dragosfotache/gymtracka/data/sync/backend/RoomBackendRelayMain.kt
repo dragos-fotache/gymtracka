@@ -17,6 +17,7 @@ import org.json.JSONObject
 /** Narrow opt-in controls for synthetic credentials and downstream response loss only. */
 internal class RoomRelayControls(private val fixture: RealBackendFixture) {
     private val tokens = ConcurrentHashMap.newKeySet<String>()
+    private val accountsByAuthorization = ConcurrentHashMap<String, RealBackendFixture.TestAccount>()
     private val responseLoss = ConcurrentHashMap.newKeySet<String>()
 
     fun dispatch(request: RecordedRequest): MockResponse? {
@@ -27,6 +28,7 @@ internal class RoomRelayControls(private val fixture: RealBackendFixture) {
                 // The JDBC fixture is host-only and already checks its live run guard.
                 val account = synchronized(fixture) { fixture.newAccount() }
                 tokens.add("Bearer ${account.accessToken}")
+                accountsByAuthorization["Bearer ${account.accessToken}"] = account
                 response(
                     200,
                     JSONObject()
@@ -43,6 +45,8 @@ internal class RoomRelayControls(private val fixture: RealBackendFixture) {
                     fixture.authApi().refresh(UUID.randomUUID().toString(), seed.refreshToken)
                 }
                 tokens.add("Bearer ${grant.accessToken.value}")
+                accountsByAuthorization["Bearer ${grant.accessToken.value}"] =
+                    RealBackendFixture.TestAccount(grant.account.accountId, grant.accessToken.value)
                 response(
                     200,
                     JSONObject()
@@ -53,6 +57,37 @@ internal class RoomRelayControls(private val fixture: RealBackendFixture) {
                         .put("refreshExpiresAtMillis", grant.refreshExpiresAtMillis)
                         .toString(),
                 )
+            }
+            "/__r10__/same-account-session" -> {
+                val authorization = request.headers["Authorization"]
+                val account = authorization?.let(accountsByAuthorization::get)
+                if (account == null) {
+                    response(401)
+                } else {
+                    // Same guarded disposable account, distinct setup session; real
+                    // service refresh supplies the complete grant/deadlines. Never
+                    // accepts a caller-supplied account ID or writes domain rows.
+                    val seed = synchronized(fixture) {
+                        fixture.newAuthSession(existingAccount = account)
+                    }
+                    val grant = runBlocking {
+                        fixture.authApi().refresh(UUID.randomUUID().toString(), seed.refreshToken)
+                    }
+                    val bearer = "Bearer ${grant.accessToken.value}"
+                    tokens.add(bearer)
+                    accountsByAuthorization[bearer] =
+                        RealBackendFixture.TestAccount(grant.account.accountId, grant.accessToken.value)
+                    response(
+                        200,
+                        JSONObject()
+                            .put("accountId", grant.account.accountId)
+                            .put("accessToken", grant.accessToken.value)
+                            .put("accessExpiresAtMillis", grant.accessExpiresAtMillis)
+                            .put("refreshToken", grant.refreshToken.value)
+                            .put("refreshExpiresAtMillis", grant.refreshExpiresAtMillis)
+                            .toString(),
+                    )
+                }
             }
             "/__r10__/lose-next-push" -> {
                 val authorization = request.headers["Authorization"]
