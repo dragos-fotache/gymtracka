@@ -131,10 +131,14 @@ class R12cAccountRootPrivacyTest {
     }
 
     @Test
-    fun legacyLocalRootShowsNoAccountPrivacyGate() {
+    fun unconfiguredDefaultShowsBothPrivacyAndConfigurationGates() {
         composeRule.setContent { GymApp() }
-        composeRule.runOnIdle { }
-        composeRule.onNodeWithTag("account-privacy-gate").assertDoesNotExist()
+        composeRule.onNodeWithTag("account-privacy-gate").assertIsDisplayed()
+        composeRule.onNodeWithTag("account-configuration-unavailable").assertIsDisplayed()
+        composeRule.onNodeWithTag("account-sign-in").assertDoesNotExist()
+        composeRule.onNodeWithTag("nav-workout").assertDoesNotExist()
+        composeRule.onNodeWithTag("nav-exercises").assertDoesNotExist()
+        composeRule.onNodeWithTag("nav-history").assertDoesNotExist()
     }
 
     private class TestClock : GymAppClock {

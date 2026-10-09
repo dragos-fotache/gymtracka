@@ -25,6 +25,7 @@ import com.dragosfotache.gymtracka.data.sync.session.AppSessionCoordinator
 import com.dragosfotache.gymtracka.data.sync.session.AppSessionReason
 import com.dragosfotache.gymtracka.data.sync.session.AppSessionStaleException
 import com.dragosfotache.gymtracka.data.sync.session.AppSessionState
+import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportPolicy
 import com.dragosfotache.gymtracka.data.sync.session.AppSessionTransitionBarrier
 import com.dragosfotache.gymtracka.data.sync.session.SessionVault
 import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationBarrier
@@ -67,6 +68,7 @@ internal class AccountGymAppState(
     private val clock: GymAppClock,
     private val timerHardware: RestTimerHardware,
     private val uuidProvider: () -> String = { UUID.randomUUID().toString() },
+    private val legacyImportPolicy: LegacyImportPolicy? = null,
 ) {
     val sessionCoordinator: AppSessionCoordinator
 
@@ -113,6 +115,7 @@ internal class AccountGymAppState(
             publicationBarrier,
             { clock.wallTimeMillis() },
             uuidProvider,
+            legacyImportPolicy,
         )
         observerJob = scope.launch {
             try {
@@ -560,7 +563,11 @@ internal class AccountGymAppState(
  * on hide; the runtime owns final retirement.
  */
 @Composable
-internal fun GymApp(accountState: AccountGymAppState) {
+internal fun GymApp(
+    accountState: AccountGymAppState,
+    accountTab: (@Composable androidx.compose.foundation.layout.RowScope.() -> Unit)? = null,
+    accountDialog: (@Composable () -> Unit)? = null,
+) {
     // Recompose signal and negative gate only; positive selection stays solely with
     // visibleBinding's synchronous exact-live authority/liveness recheck.
     val authoritySnapshot = accountState.sessionCoordinator.state.collectAsState().value
@@ -579,7 +586,7 @@ internal fun GymApp(accountState: AccountGymAppState) {
                 LocalGymRepositoryOverride provides selected.handle.repository,
                 LocalFiniteEditCoordinator provides selected.app.edits,
             ) {
-                GymAppContent(selected.app)
+                GymAppContent(selected.app, accountTab = accountTab, accountDialog = accountDialog)
             }
         }
     } else {
@@ -601,12 +608,13 @@ internal fun rememberAccountGymAppState(
     authApi: ServiceAuthApi,
     transport: ServiceHttpTransport,
     runOwner: PushRunOwner,
+    legacyImportPolicy: LegacyImportPolicy? = null,
 ): AccountGymAppState {
     val context = LocalContext.current.applicationContext
     val scope = rememberCoroutineScope()
     val clock = remember { SystemGymAppClock }
     val hardware = remember(context) { androidRestTimerHardware(context) }
-    val state = remember(database, origin, vault, authApi, transport, runOwner, scope) {
+    val state = remember(database, origin, vault, authApi, transport, runOwner, scope, legacyImportPolicy) {
         AccountGymAppState(
             database = database,
             origin = origin,
@@ -617,6 +625,7 @@ internal fun rememberAccountGymAppState(
             scope = scope,
             clock = clock,
             timerHardware = hardware,
+            legacyImportPolicy = legacyImportPolicy,
         )
     }
     DisposableEffect(state) {

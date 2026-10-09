@@ -3,6 +3,7 @@ package com.dragosfotache.gymtracka.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -26,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.dragosfotache.gymtracka.ui.account.AccountStartupApp
 import com.dragosfotache.gymtracka.ui.activeworkout.ActiveWorkoutPill
 import com.dragosfotache.gymtracka.ui.activeworkout.ActiveWorkoutScreen
 import com.dragosfotache.gymtracka.ui.exercises.ExercisePickerScreen
@@ -42,7 +44,12 @@ import com.dragosfotache.gymtracka.ui.workouts.WorkoutHistoryScreen
 import com.dragosfotache.gymtracka.ui.workouts.WorkoutScreen
 
 @Composable
-internal fun GymApp(appState: GymAppState = rememberGymAppState()) {
+internal fun GymApp() {
+    AccountStartupApp()
+}
+
+@Composable
+internal fun GymApp(appState: GymAppState) {
     DisposableEffect(appState) {
         onDispose(appState::dispose)
     }
@@ -54,7 +61,11 @@ internal fun GymApp(appState: GymAppState = rememberGymAppState()) {
 }
 
 @Composable
-internal fun GymAppContent(appState: GymAppState) {
+internal fun GymAppContent(
+    appState: GymAppState,
+    accountTab: (@Composable RowScope.() -> Unit)? = null,
+    accountDialog: (@Composable () -> Unit)? = null,
+) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
@@ -101,6 +112,7 @@ internal fun GymAppContent(appState: GymAppState) {
                             },
                             label = { Text("History") },
                         )
+                        accountTab?.let { tab -> tab() }
                     }
                     appState.activeWorkout?.let { workout ->
                         ActiveWorkoutPill(
@@ -254,6 +266,7 @@ internal fun GymAppContent(appState: GymAppState) {
     }
 
     GymAppDialogs(appState)
+    accountDialog?.invoke()
 }
 
 @Composable

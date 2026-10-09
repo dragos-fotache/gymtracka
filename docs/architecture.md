@@ -14,9 +14,10 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/`.
 | Component | Responsibility |
 |---|---|
 | `MainActivity.kt` | Edge-to-edge/Compose/theme setup; calls `GymApp` |
-| `ui/GymApp.kt` | Root scaffold, destinations, bottom navigation, active-workout pill, app dialogs |
+| `ui/GymApp.kt` | Mandatory no-argument startup entry; explicit scoped scaffold, destinations, bottom navigation, active-workout pill and dialogs |
+| `ui/account/` | Configuration/privacy gates, composition-scoped startup controller, foreground sign-in/reauthentication, import consent/progress and account status |
 | `ui/GymAppState.kt` | Navigation/active-pill materialization reconciliation, catalogue restoration, real edit/timer barriers and rest timer |
-| `ui/AccountGymAppState.kt` | Explicit account runtime/root, exact-handle repository binding, privacy gate and lease-safe scope retirement |
+| `ui/AccountGymAppState.kt` | Explicit account runtime/root, exact-handle repository binding, real import-policy barriers, privacy gate and lease-safe scope retirement |
 | `ui/exercises/` | Catalogue/detail/custom editor, picker variants, feature state |
 | `ui/workouts/` | Workout landing, history/detail, feature state |
 | `ui/routines/` | Routine list/detail/editor and feature state |
@@ -27,8 +28,11 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/`.
 
 `FeatureRepositories.kt` exposes narrow interfaces to state holders; reusable/leaf composables receive values and callbacks.
 `ui/GymRepositoryProvider.kt` supplies `rememberGymRepository()` and optional internal `LocalGymRepositoryOverride` for
-real-Room tests and the account root. With no override, it remembers `GymRepository(applicationContext)`. Default
-startup still binds the signed-out/local session. The explicit account root provides the exact live handle repository
+real-Room tests and the account root. With no override, it remembers `GymRepository(applicationContext)` for explicit
+standalone/local compatibility paths, not a production signed-out fallback. No-argument `GymApp()` calls
+`ui/account/AccountStartupApp`: absent/invalid service origin renders configuration/privacy gates without database,
+vault or HTTP reads; a configured origin constructs the runtime and performs read-only recovery. Missing audience
+disables foreground sign-in only, not matching established-account offline recovery. The account root provides the exact live handle repository
 and shared edits around every feature factory, with no local fallback. The
 [startup recovery seams](sync/implementation.md#startup-recovery-seams) use the inert durable Room-authority
 adapter. R09b's [prepared vault/Room coordinator](sync/implementation.md#prepared-vaultroom-coordination-and-recovery)
@@ -41,16 +45,21 @@ real Android clock/hardware and composition scope; construction starts private a
 `GymApp(accountState)` selects only the synchronously current live handle, keys reconstruction by handle identity and
 otherwise renders `account-privacy-gate`. Same-handle delivery status updates preserve navigation/timers. Retiring
 state stays pinned while a transition/publication lease is held, even after privacy hide; whole-runtime disposal
-revokes the facade and cancels owned child scopes. Default startup remains local. The explicitly constructed
-[foreground Google adapter](sync/implementation.md#foreground-android-google-identity) is inert until called; service
-exchange/handoff and account UI/triggers remain R11b/R13.
+revokes the facade and cancels owned child scopes. The default factory reuses one application-process vault/run owner,
+with an Activity-owned [Google adapter](sync/implementation.md#foreground-android-google-identity) and
+composition-owned runtime/controller. Sign-in is explicit; it consumes a service-confirmed grant, opts into private P18
+capture/consent and makes at most one complete activation attempt. Matching complete Room/vault bindings reopen/edit
+offline without HTTP or deadline checks. No-argument startup never renders the explicit local/test `GymApp(appState)`
+path. See [startup/account presentation](sync/implementation.md#mandatory-startup-and-account-presentation) for lifecycle,
+configuration and read-only metadata details; automatic foreground/edit/manual sync remains separate.
 
 ## Room database
 
 `app/src/main/assets/databases/gym.db` is the unchanged **version-1 source catalogue**. Room copies it into app-private
 storage and migrates the runtime database. Never add user-data tables to the asset or use destructive migration fallback.
 Runtime `GymDatabase` is **version 14**; exported versions 1–14 are retained in `app/schemas/`.
-R13b's private delivery integration is accepted but remains explicitly opt-in, never enabled at default startup.
+Private delivery is opt-in at the facade boundary; the mandatory startup factory supplies the approved P18 policy
+for explicit service-confirmed sign-in/activation. Startup recovery itself never captures or delivers imports.
 
 ### Catalogue and custom exercises
 
@@ -143,7 +152,8 @@ owners and unchanged domain/cache/intent remain mandatory. See
 create-only request evidence independently of domain/outbox FKs. Explicit inert capture either binds validated local roots
 and creates dependency-ordered imports with private PREPARING authority, or retains invalid source/error evidence plus a
 private generation fence without association. It never creates ACTIVE, credentials, a cursor or a complete baseline.
-Once evidence exists, ordinary null-account repository reads/writes refuse; default startup never constructs the importer.
+Once evidence exists, ordinary null-account repository reads/writes refuse. Startup performs no capture; explicit
+sign-in uses the facade's real held transition lease and the approved import policy.
 Recovery is exact-target/authority/source/request fenced; missing work is not remotely accepted progress.
 Room14's `sync_legacy_import_progress` binds the current authority lineage separately from immutable capture provenance;
 `sync_legacy_import_acceptances` retains the exact validated canonical batch for each definitively accepted original request.
@@ -188,7 +198,7 @@ is accepted at the explicit private boundary. See [private import integration](s
   returned epoch (actual publication advances again). Retained stages cannot be adopted after restart; durable complete
   dirty baselines can publish under a fresh run at the observed epoch without redownload. See
   [complete baseline/recovery](sync/implementation.md#complete-snapshot-baseline-and-publication-recovery).
-  Default startup constructs none of it. R09a/b private authority/preparation and R09c private engine admission/canonical bootstrap
+  Configured startup constructs the facade privately, with no automatic engine invocation. R09a/b private authority/preparation and R09c private engine admission/canonical bootstrap
   are delivered separately, with exact durable and process fences. R09d completes inert protected projection/Room-ready
   and exact vault promotion/gap recovery under those fences. R09e/f add inert settled occupied replacement and its exact
   established ACTIVE pending-refresh replay prerequisite. R09g adds retained-account signed-out/missing-vault and
@@ -198,7 +208,7 @@ is accepted at the explicit private boundary. See [private import integration](s
   projection publication. Its explicit foreground request factory and grant handoff retain actual configured origin,
   caller intent/expected authority/operation and an immutable captured process fence through that same preparation
   critical section. The [bounded foreground exchange](sync/implementation.md#bounded-foreground-exchange-and-guarded-grant-handoff)
-  composes identity/auth without default startup, reusable grants or activation. Its repositories additionally check
+  composes identity/auth without reusable grants or visibility; the startup controller separately completes activation. Its repositories additionally check
   process revocation before effects/commit and after Room result dispatch; legacy UUID/clock trailing-lambda constructor
   behavior remains unchanged. Repositories never follow
   private preparation. Explicit `AppSessionCoordinator.reconcile` holds one admitted owner through push/pull, typed
@@ -215,8 +225,8 @@ is accepted at the explicit private boundary. See [private import integration](s
   visible domain data or outbox/cursor state. The inert protected publisher requires an injected pause/drain lease,
   protects the entire account graph while any account outbox row remains, and publishes a validated complete baseline
   atomically with generation preservation and a checked account epoch signal. A real app-owned barrier now exists,
-  with the explicit account runtime supplying canonical impact and process guards. Default startup and account UI
-  do not trigger publication. See [capture boundaries](sync/implementation.md#room-and-local-capture),
+  with the account runtime supplying canonical impact and process guards. Startup recovery does not publish;
+  explicit private activation uses the paired protected completion path. See [capture boundaries](sync/implementation.md#room-and-local-capture),
   [canonical batches](sync/implementation.md#fenced-canonical-batches) and [protected publication](sync/implementation.md#protected-publication).
 - `ActiveWorkoutState.awaitPendingEdits()` delegates to the shared finite-edit coordinator, never the endless elapsed-time
   ticker. The screen retains its workout/owner-specific finish-drain registration; disposal detaches only the matching
@@ -255,7 +265,8 @@ impact callback. Acquisition and timer claims run on the app-state owner dispatc
 caller cancellation. `AccountGymAppState` supplies the request-bound, process-fenced canonical reader and real
 transition barrier. Open explicit-save custom editors refuse normal account transitions without discarding drafts;
 emergency invalidation hides immediately. The publisher still rechecks authority, lease and account-wide outbox
-protection, including after final SQL at its newly advanced epoch. No publisher/engine runs at default startup.
+protection, including after final SQL at its newly advanced epoch. Startup recovery runs no HTTP, engine bootstrap or
+projection publication; explicit sign-in/activation uses those existing guarded seams.
 
 ## Projection observation and feature refresh
 

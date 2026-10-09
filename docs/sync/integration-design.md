@@ -320,8 +320,9 @@ permanently fence exact encrypted predecessor evidence while installing distinct
 [R09g](implementation.md#inert-retained-account-recovery-and-superseded-evidence) delivers this and signed-out/missing-vault
 recovery privately, including nonadjacent older-evidence reservation gaps with a fresh grant. The delivered
 [app-facing authority/offline-recovery boundary](implementation.md#app-facing-authority-and-offline-recovery) composes these
-seams with required transition/publication inputs and process-fenced repositories. It does not activate current startup
-screens/publisher; R12c retains scoped rebinding and canonical timer-impact integration. R12a/core R10 are the accepted
+seams with required transition/publication inputs and process-fenced repositories. The
+[mandatory startup/account presentation](implementation.md#mandatory-startup-and-account-presentation) now composes
+these boundaries; scoped rebinding and canonical timer-impact integration remain in the account runtime. R12a/core R10 are the accepted
 named prerequisites, not substitute live-integration permission. No old evidence supplies credentials/visibility. See
 [implemented settled boundary](implementation.md#inert-settled-occupied-credential-reauthentication).
 Existing canonical-only engine recovery is reused, not recreated for completed preparation.
@@ -338,10 +339,12 @@ mismatched vault binding still fails closed/private, and another service UUID ca
 No signed-out editing, account switching, sign-out UI or general import/replace UI is required for personal delivery.
 [P18](../../shared-docs/docs/backend-contract/open-decisions.md#confirmed-product-decisions) approves preserving and
 importing existing local-only workouts/history, routines and custom exercises once into the first service-confirmed
-account, not a destructive clean/cloud-only start. Implement this as a bounded **R13 import/activation workstream** with
-its own specification and migration/recovery gates, reusing the closed R09/R12 authority and barrier foundations rather
-than reopening them or adding another major R task. Approval is not implementation or permission for ad hoc personal-data
-operations: current activation must still refuse local roots until that work is delivered. The protocol below retains
+account, not a destructive clean/cloud-only start. The delivered
+[private capture/delivery boundary](implementation.md#private-import-delivery-and-activation) and
+[mandatory account controller](implementation.md#mandatory-startup-and-account-presentation) reuse the authority/barrier
+foundations and require their preservation, migration and complete-activation gates. Default/null-policy primitive
+activation still refuses local roots; the personal factory explicitly opts into P18. Delivery is not permission for
+ad hoc personal-data or live operations. The protocol below retains
 durable account authority/journal, crash recovery and late-result fences; broader choice/switching workflows remain public.
 
 ### Startup and activation
@@ -349,7 +352,7 @@ durable account authority/journal, crash recovery and late-result fences; broade
 ```text
 PrivacyLocked -> reconcile Room journal with vault
    match + ready phase + complete cache -> selected authenticated account scope
-   recoverable prepared transition    -> resume preparation privately, no ordinary account UI
+   recoverable prepared transition    -> retained private recovery UI; guarded explicit resume only
    missing/unreadable/mismatched vault -> fence active identity off, retain private cache, require sign-in
    configuration unavailable          -> setup/sign-in gate for initial use; never activate against another origin
 ```
@@ -359,7 +362,7 @@ must never be sent to another origin just because an endpoint setting changed. A
 separately fenced sign-out/reconfiguration flow; do not fall back to cleartext or another origin.
 
 Proposed durable activation protocol (no local-choice branch on a new empty personal installation; existing local-only
-data uses the approved P18 preserve/import policy after its bounded R13 implementation/gates):
+data uses the delivered P18 preserve/import boundary with its complete-activation gates):
 
 1. Drain/gate old UI mutations; reserve monotonic new device generation and transition operation in Room. Hide any
    preparing account; no new ordinary repository follows the provisional target. Freeze captured local choice inputs.
@@ -383,7 +386,7 @@ monotonic generations; overflow is a retained error, not wraparound.
 General import/replace choice and account-switching UI remain deferred public workflows. Their preservation/collision
 rules constrain the approved personal P18 one-time preserve/import migration; the personal path does not offer destructive
 replace as an alternative. Same-account reauthentication and complete initial bootstrap remain personal prerequisites.
-R13 must bind the captured local graph, configured origin, first service-confirmed target and durable progress so crashes,
+The private import boundary binds the captured local graph, configured origin, first service-confirmed target and durable progress so crashes,
 partial remote acceptance and repeated sign-in resume exact work without duplicate capture or a second import.
 
 - Gate new local admissions and drain finite actions before capturing the local graph/choice. Unsaved custom editor

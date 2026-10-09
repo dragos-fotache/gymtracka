@@ -36,12 +36,16 @@ import com.dragosfotache.gymtracka.data.sync.store.CanonicalStorageException
 import com.dragosfotache.gymtracka.data.sync.store.StaleSessionException
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
+import androidx.room.InvalidationTracker
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -1518,6 +1522,256 @@ internal class AppSessionCoordinator(
                 ensureCurrent(observedFence)
                 throw AppSessionException(AppSessionReason.UNAVAILABLE)
             }
+        }
+    }
+
+    /**
+     * R13c cold read-only selected-account metadata observation for presentation.
+     * No HTTP/UUID/clock/cleanup/admission. Each initial/invalidation reread and
+     * return/emission requires exact current live handle/process and transactional
+     * Room authority/baseline checks. Observes sync_outbox, sync_state and
+     * account/device/authority metadata needed for fencing; registered before the
+     * initial read. Counts all selected-account outbox rows, including
+     * frozen/rejected; retained error is rejected or stored error presence, never
+     * raw code/message. Last-success comes only from selected sync_state;
+     * negative/inconsistent data closes to fixed UNAVAILABLE, never normalization.
+     * Uses scalar DAO observations over full payloads. Checks caller cancellation
+     * and synchronous exact currentness before emission; old status never binds
+     * to a new handle. Foreign metadata remains private. Presentation only.
+     */
+    fun observeSyncStatus(session: AppAccountSession): Flow<AccountSyncStatus> = flow {
+        currentCoroutineContext().ensureActive()
+        val observedFence = synchronized(stateLock) { currentFence }
+        if (origin == null) {
+            throw AppSessionException(AppSessionReason.CONFIGURATION_UNAVAILABLE)
+        }
+        val admitted = synchronized(stateLock) { currentHandle }
+        if (admitted == null || admitted !== session) {
+            throw AppSessionStaleException()
+        }
+        ensureCurrent(observedFence)
+        try {
+            session.checkCurrent()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            throw AppSessionStaleException()
+        }
+        ensureCurrent(observedFence)
+        val signals = Channel<Unit>(Channel.CONFLATED)
+        val observer = object : InvalidationTracker.Observer(
+            arrayOf(
+                "sync_outbox",
+                "sync_state",
+                "sync_device_state",
+                "sync_account_cache",
+                "sync_session_authority",
+            ),
+        ) {
+            override fun onInvalidated(tables: Set<String>) {
+                signals.trySend(Unit)
+            }
+        }
+        database.invalidationTracker.addObserver(observer)
+        try {
+            emit(readSyncStatusOnce(session, observedFence))
+            while (true) {
+                try {
+                    signals.receive()
+                } catch (e: CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e
+                }
+                currentCoroutineContext().ensureActive()
+                val live = _state.value
+                if (live !is AppSessionState.Active || live.session !== session) {
+                    throw AppSessionStaleException()
+                }
+                ensureCurrent(observedFence)
+                emit(readSyncStatusOnce(session, observedFence))
+            }
+        } finally {
+            try {
+                database.invalidationTracker.removeObserver(observer)
+            } catch (_: Exception) {
+            }
+            try {
+                signals.close()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    private suspend fun readSyncStatusOnce(
+        session: AppAccountSession,
+        fence: Any,
+    ): AccountSyncStatus {
+        currentCoroutineContext().ensureActive()
+        ensureCurrent(fence)
+        val current = synchronized(stateLock) { currentHandle }
+        if (current == null || current !== session) {
+            throw AppSessionStaleException()
+        }
+        try {
+            current.checkCurrent()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            throw AppSessionStaleException()
+        }
+        ensureCurrent(fence)
+        val binding = current.identity.binding
+        val facadeCheck: () -> Unit = {
+            if (!current.isAlive() || !isFacadeCurrent(fence, current)) {
+                throw AppSessionStaleException()
+            }
+        }
+        try {
+            facadeCheck()
+            val status = database.withTransaction {
+                currentCoroutineContext().ensureActive()
+                facadeCheck()
+                // Full ready journal/device/cache tuple, transactionally
+                // coherent: strict ACTIVE journal with the ready device tuple
+                // plus the selected-account cache row.
+                val ready = try {
+                    authority.readActiveReadyInTransaction()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: RoomSessionAuthorityException) {
+                    when (e.failure) {
+                        RoomSessionAuthorityFailure.STALE_AUTHORITY,
+                        RoomSessionAuthorityFailure.ACCOUNT_MISMATCH,
+                        -> throw StaleSessionException(
+                            binding.accountId,
+                            binding.sessionGeneration,
+                            null,
+                            0L,
+                        )
+                        else -> throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                    }
+                }
+                currentCoroutineContext().ensureActive()
+                facadeCheck()
+                // Exact admission identity/revision: the coherent journal
+                // observation must still equal the handle's admitted room.
+                if (ready.snapshot != session.room) {
+                    throw StaleSessionException(
+                        binding.accountId,
+                        binding.sessionGeneration,
+                        ready.snapshot.identity?.binding?.accountId,
+                        ready.snapshot.sessionGeneration,
+                    )
+                }
+                // Coherent selected-account cache: complete baseline with
+                // sane epochs. Anything else fails closed unavailable.
+                val cache = ready.cache
+                if (cache == null || !cache.baselineComplete) {
+                    throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                }
+                if (cache.accountId != binding.accountId ||
+                    cache.cacheEpoch < 0 || cache.materializedEpoch < 0 ||
+                    cache.materializedEpoch > cache.cacheEpoch
+                ) {
+                    throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                }
+                val pending = database.syncDao().countOutboxForAccount(binding.accountId)
+                if (pending < 0) {
+                    throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                }
+                val retained = database.syncDao().hasRetainedOutboxError(binding.accountId)
+                // Storage-type validation in the same transaction: a typed
+                // getter may coerce nonnumeric TEXT/REAL/BLOB to 0 and
+                // fabricate epoch-zero success, so only absent row/SQL null
+                // or stored integer >= 0 is accepted. Anything else refuses
+                // closed UNAVAILABLE with no normalization or cleanup.
+                val lastStorageType = try {
+                    database.syncDao().getLastSuccessStorageType(binding.accountId)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                }
+                val lastRaw = if (lastStorageType == null || lastStorageType == "null") {
+                    null
+                } else if (lastStorageType == "integer") {
+                    val stored = try {
+                        database.syncDao().getLastSuccessMillis(binding.accountId)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                    }
+                    if (stored == null || stored < 0) {
+                        throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                    }
+                    stored
+                } else {
+                    throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                }
+                currentCoroutineContext().ensureActive()
+                facadeCheck()
+                AccountSyncStatus(pending, lastRaw, retained)
+            }
+            currentCoroutineContext().ensureActive()
+            facadeCheck()
+            try {
+                current.checkCurrent()
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                throw AppSessionStaleException()
+            }
+            ensureCurrent(fence)
+            val live = _state.value
+            if (live !is AppSessionState.Active || live.session !== session) {
+                throw AppSessionStaleException()
+            }
+            return status
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (e: AppSessionStaleException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (e: AppSessionException) {
+            currentCoroutineContext().ensureActive()
+            ensureCurrent(fence)
+            try {
+                current.checkCurrent()
+            } catch (e2: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e2
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                throw AppSessionStaleException()
+            }
+            ensureCurrent(fence)
+            throw e
+        } catch (e: StaleSessionException) {
+            currentCoroutineContext().ensureActive()
+            lockIfAlive(fence, current.aliveToken())
+            throw AppSessionStaleException()
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            ensureCurrent(fence)
+            try {
+                current.checkCurrent()
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                throw AppSessionStaleException()
+            }
+            ensureCurrent(fence)
+            throw AppSessionException(AppSessionReason.UNAVAILABLE)
         }
     }
 

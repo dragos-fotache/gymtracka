@@ -4,6 +4,29 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// Nonsecret, explicitly supplied build inputs only. Empty defaults keep initial
+// startup private; no endpoint/audience is discovered from personal configuration.
+fun buildConfigString(value: String): String = buildString {
+    append('"')
+    value.forEach { character ->
+        when (character) {
+            '\\' -> append("\\\\")
+            '"' -> append("\\\"")
+            '\n' -> append("\\n")
+            '\r' -> append("\\r")
+            '\t' -> append("\\t")
+            else -> if (character.code < 32) {
+                append("\\" + character.code.toString(8).padStart(3, '0'))
+            } else if (character.code > 126) {
+                append("\\u" + character.code.toString(16).padStart(4, '0'))
+            } else {
+                append(character)
+            }
+        }
+    }
+    append('"')
+}
+
 android {
     namespace = "com.dragosfotache.gymtracka"
     compileSdk {
@@ -18,6 +41,16 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField(
+            "String",
+            "GYMTRACKA_SERVICE_ORIGIN",
+            buildConfigString(providers.gradleProperty("gymtracka.serviceOrigin").getOrElse("")),
+        )
+        buildConfigField(
+            "String",
+            "GYMTRACKA_GOOGLE_SERVER_CLIENT_ID",
+            buildConfigString(providers.gradleProperty("gymtracka.googleServerClientId").getOrElse("")),
+        )
     }
 
     buildTypes {
@@ -34,6 +67,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     sourceSets {
         getByName("androidTest").assets.directories.add(

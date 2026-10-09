@@ -171,6 +171,44 @@ interface SyncDao {
     @Query("SELECT EXISTS(SELECT 1 FROM sync_outbox WHERE account_id = :accountId)")
     suspend fun hasOutboxForAccount(accountId: String): Boolean
 
+    /**
+     * R13c selected-account outbox size for presentation only. Counts every row
+     * for the account, including frozen/rejected; foreign rows never match.
+     * Additive scalar observation; no schema change.
+     */
+    @Query("SELECT COUNT(*) FROM sync_outbox WHERE account_id = :accountId")
+    suspend fun countOutboxForAccount(accountId: String): Long
+
+    /**
+     * R13c retained-error presence for presentation only. True when any selected
+     * row is rejected or carries stored error presence; never exposes codes.
+     * Additive scalar observation; no schema change.
+     */
+    @Query(
+        "SELECT EXISTS(SELECT 1 FROM sync_outbox WHERE account_id = :accountId " +
+            "AND (state = 'rejected' OR error_code IS NOT NULL OR error_message IS NOT NULL))",
+    )
+    suspend fun hasRetainedOutboxError(accountId: String): Boolean
+
+    /**
+     * R13c selected-account last-success observation for presentation only.
+     * Null when no row or null column; foreign rows never match. Negative
+     * values are returned so callers fail closed, never normalized.
+     * Additive scalar observation; no schema change.
+     */
+    @Query("SELECT last_success_millis FROM sync_state WHERE account_id = :accountId")
+    suspend fun getLastSuccessMillis(accountId: String): Long?
+
+    /**
+     * R13c selected-account last-success storage-type observation for presentation
+     * only. SQLite INTEGER-affinity columns can hold nonnumeric TEXT/REAL/BLOB,
+     * which a typed getter may coerce; callers must check this type first in the
+     * same transaction and refuse non-integer storage. Null when no row matches.
+     * Additive scalar observation; no schema change.
+     */
+    @Query("SELECT typeof(last_success_millis) FROM sync_state WHERE account_id = :accountId")
+    suspend fun getLastSuccessStorageType(accountId: String): String?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDeviceState(state: SyncDeviceStateEntity)
 

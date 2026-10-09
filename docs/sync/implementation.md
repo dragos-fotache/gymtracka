@@ -1,17 +1,56 @@
 # Implemented Android sync components
 
-Default startup remains signed-out/local-only. An explicitly constructed account runtime now supplies real scoped
-root/edit/timer integration and guarded ACTIVE reconciliation over the delivered authority. Construction is private and
-runs no HTTP automatically. Explicit foreground Google acquisition/exchange and guarded private grant handoff are
-available. P18 legacy source/import capture and opt-in private delivery/complete activation are accepted on Room14.
-These explicitly constructed boundaries do not enable default startup or account UI.
-Account UI, foreground/edit/manual triggers and startup-policy replacement remain R13c–d.
-No Google UI, scheduler or live account/device action is wired into default startup.
+Default `GymApp()` is the mandatory account/configuration gate. A configured factory constructs private authority,
+real scoped edit/timer barriers and foreground identity/exchange seams; startup performs read-only recovery, never
+HTTP or Google UI automatically. Explicit service-confirmed sign-in uses approved P18 capture/consent, exact delivery
+and complete Room14 activation. Matching established accounts reopen/edit offline without login every launch.
+Automatic foreground/edit/manual synchronization and ordinary confirmed rejection/stage recovery remain separate;
+no sign-out/switching, scheduler, deployment or personal account/device operation is inferred.
 The [roadmap](../remaining-work-roadmap.md) owns delivery status; the
 [integration design](integration-design.md) owns approved future coordination. The
 [shared contract](../../shared-docs/docs/backend-contract/README.md) remains the service authority.
 
 Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/data/`.
+
+## Mandatory startup and account presentation
+
+`../ui/account/AccountStartupApp` owns the default factory/presentation; MainActivity remains setup only.
+Explicit `GymApp(appState)` is an internal feature/test path, never a production signed-out fallback.
+
+- Nonsecret build inputs `gymtracka.serviceOrigin` and `gymtracka.googleServerClientId` generate BuildConfig strings
+  with empty defaults. Strict original HTTPS root-origin parsing never discovers an endpoint/audience, trims invalid
+  inputs or transfers old credentials to another origin. Missing/invalid origin renders privacy/configuration gates
+  without database/vault/HTTP reads. A valid origin with missing audience still recovers a matching offline account;
+  only foreground sign-in is unavailable. Actual provider/signing/audience/trusted deployment remain separate gates.
+- Production reuses one application-process vault and physical-DB run owner, an Activity-owned Google adapter and a
+  composition-owned runtime/controller. Startup invokes one recovery, including exact clean completion-gap promotion,
+  not private bootstrap or preparation retries. Visibility is exclusively the runtime's synchronous exact live handle
+  plus complete matching Room/vault evidence; collected DTOs, Google success and private progress never grant it.
+- `AccountStartupState` nonqueues explicit sign-in/reauthentication/continue with lazy owned jobs registered before
+  dispatch, generation fencing and cancellation-safe occupation release. Fresh advisory recovery precedes effects;
+  failed fresh recovery cannot fall back to an old snapshot. Initial and ordinary/private-import reauthentication
+  choose the existing exact intent/operation contracts; service grant consumption is followed by at most one activation
+  attempt. Existing real editor/edit/timer barriers drain accepted work and whole-second rest once. Open explicit-save
+  editors refuse before Google launch and after drain; no hidden Save/Discard or guessed scope substitutes for a lease.
+- `AccountImportConsent` suspends for the original-active replacement warning. Each answer captures one opaque decision
+  token; stale callbacks cannot consent a later invocation. Cancel/dismiss never proceeds or claims remote rollback.
+  Confirmed consent is durably pinned by the facade to exact retained import lineage/mutation. Validated accepted/total
+  progress and closed errors remain private during blocked, cancelled or incomplete preparation; no queue-empty shortcut,
+  collision overwrite, ID remapping, cleanup, account reassignment or local editing fallback exists.
+- The account tab/status dialog exposes selected pending count (including frozen/rejected), nullable recorded last-success,
+  retained-error presence and closed delivery/error states. `AppSessionCoordinator.observeSyncStatus` is a cold, read-only
+  metadata Flow: observer registration precedes initial read; each reread uses transactional exact ready journal/device/
+  cache checks and process/handle checks after dispatch. Last-success requires SQL-null/missing or a nonnegative INTEGER
+  storage cell; TEXT/REAL/BLOB refuses unavailable before a typed getter can fabricate epoch-zero success. No HTTP,
+  clock, UUID, cleanup, rebind or reusable authority is emitted. Private/new-handle transitions clear the old DTO before
+  a new collector emits. Unknown status is never zero/success; missing audience disables reauthentication, not offline UI.
+- Cancellation/disposal fences owned operations/status/consent, closes foreground/provider/runtime ownership and preserves
+  durable source, exact requests, vault and retained errors. It never invokes credential-state clear/logout or compensates
+  a committed remote prefix. Recoverable pre-grant/delivery stops preserve the healthy exact offline handle. Prepared
+  bindings remain private until coherent complete activation. Retained stages are displayed, not implicitly restarted.
+
+See [runtime architecture](../architecture.md#application-structure), [private import](#private-import-delivery-and-activation),
+[app authority](#app-facing-authority-and-offline-recovery) and [foreground exchange](#bounded-foreground-exchange-and-guarded-grant-handoff).
 
 ## Room and local capture
 
@@ -48,7 +87,8 @@ privately cached account; `catalogue_state` stores catalogue metadata. These sto
 
 `sync/legacy/LegacyImportStore` is an explicitly constructed internal storage boundary, not an app handle or service grant.
 Its target binds canonical configured HTTPS origin (explicit effective port), first service-confirmed account UUID and
-one durable operation. Production callers still need real pause/drain/process authority; default startup constructs none.
+one durable operation. Production callers need real pause/drain/process authority; configured startup supplies it
+only for explicit sign-in, never during startup recovery.
 The additive12→13 migration leaves old schema/rows/sequences and source asset unchanged; both evidence tables start empty.
 
 - Capture acquires one caller-owned admission/drain lease before reading local source and rechecks lease/process/cancellation
@@ -78,14 +118,16 @@ The additive12→13 migration leaves old schema/rows/sequences and source asset 
   close, takes precedence; closing failure can hide a committed result but cannot imply rollback. Durable reread is the oracle.
 
 Capture itself does not send imports, install credentials or grant visibility. The explicitly opt-in integration below
-composes those effects privately; default startup/UI remain unchanged. Real Google/deployed HTTPS/personal-account/device
+composes those effects privately; the mandatory account controller invokes it only for explicit sign-in/activation.
+Real Google/deployed HTTPS/personal-account/device
 evidence remains separately authorized R17a.
 
 ### Private import delivery and activation
 
-**Accepted, explicitly opt-in:** the [R13b review](../archive/remaining-work/R13b-review.md) owns real Room/vault/HTTP,
+**Explicitly opt-in storage/delivery boundary:** the [R13b review](../archive/remaining-work/R13b-review.md) owns real Room/vault/HTTP,
 source-preservation, migration and scoped regression evidence; the [archived specification](../archive/remaining-work/R13b-task.md)
-retains the bounded assignment. Default startup, account screens and automatic triggers remain absent.
+retains the bounded assignment. The mandatory startup factory supplies this policy for explicit foreground actions;
+automatic foreground/edit/manual triggers remain absent.
 
 - `LegacyImportPolicy` opts an explicit `AppSessionCoordinator` into capture through its SAME held real transition lease
   and existing private grant preparation. A borrowed check-only lease never closes the outer owner. Empty installs use
@@ -248,7 +290,8 @@ remain outstanding.
 ## Single-head push outcomes and retry/error handling
 
 R06b extends inert `PushRun` with `handleResult`/`handleFailure`, owned `PushOutcomeResult` snapshots and a pure bounded
-retry policy. It reuses Room v10 without entity/schema changes; default startup constructs none of it.
+retry policy. It reuses Room v10 without entity/schema changes; configured facade actions compose it explicitly,
+never as automatic startup delivery.
 
 - Typed results are deeply owned before the first suspension and fully protocol-validated. Exactly one outcome must
   match the claimed mutation ID. Accepted/duplicate-accepted batches must contain the envelope target: DELETE for
@@ -320,7 +363,8 @@ Room v10 without schema/entity changes. The app constructs no push store or engi
 ## Bounded push delivery
 
 `sync/engine/PushDeliveryLoop` is an inert, explicitly constructed driver over `PushStore` and `GymSyncApi`.
-Default startup constructs none of it. The caller must pair the API with the same authorized service/account/session as the
+The configured facade composes this driver only on explicit activation/reconciliation. The caller must pair the API
+with the same authorized service/account/session as the
 store and share one required `PushRunOwner` per physical database; the driver creates no owner, credentials or scope.
 
 - The standalone `deliver(expectedCacheEpoch, maxMutations)` holds one `withRun` lease. Its compatible
@@ -350,14 +394,14 @@ This is bounded push orchestration, not a complete running sync engine or durabl
 exist and the [shared driver](#shared-push-before-pull-and-valid-tail) composes them uninterrupted with valid-tail
 bookkeeping. R08c supplies inert complete-snapshot baseline/recovery; the separate [app-facing authority boundary](#app-facing-authority-and-offline-recovery)
 composes the Room/session journal and prepared bootstrap. Explicit ACTIVE reconciliation and scoped UI/timer integration
-are described below; default startup remains local.
+are described below; the mandatory startup factory runs no delivery automatically.
 
 ## Incremental checkpoint transactions
 
 R07a extends the existing admitted `PushRun` with inert `readPullCheckpoint`, `checkPullCheckpoint` and
 `applyNextPullBatch` operations over Room v10. There is no separate pull owner or lock: callers share the required
 `PushRunOwner` per physical database, and push settlement/checkpoint admission share the run's short handling Mutex.
-Default startup constructs none of it.
+Startup runs no checkpoint delivery automatically.
 
 - Read coherently requires a complete selected-account baseline and nonnull persisted cursor. Missing/incomplete
   baseline or absent/null cursor returns null, never authorization for null-cursor retained-history bootstrap. A present
@@ -391,7 +435,7 @@ expiry/bootstrap recovery, publication, last-success update or convergence claim
 `sync/engine/PullDeliveryLoop(api).pull(run, maxPages, pageLimit)` is an inert explicitly constructed HTTP pull driver.
 It receives an **already admitted `PushRun`**, owns no store admission/mutex/owner, and composes within
 [shared driver](#shared-push-before-pull-and-valid-tail) uninterrupted ownership. The caller must pair API/store with the
-same authorized service/account/session and share one `PushRunOwner` per physical database. Default startup constructs none of it.
+same authorized service/account/session and share one `PushRunOwner` per physical database. Startup runs no pull automatically.
 
 - Strict page budget 1..100 and page limit 1..200 (both default 100) reject before checkpoint/HTTP work. Limits count
   complete pages/batches, never bytes or changes; no domain-size cap/truncation is introduced. Seen IDs/cursors are
@@ -423,8 +467,7 @@ callback failures propagate rather than becoming transport failures. The shared 
 
 ## Shared push-before-pull and valid tail
 
-`sync/engine/SyncDeliveryLoop(store, api, nowMillis)` is inert and explicitly constructed. Default startup constructs none
-of it. One required application-owned `PushRunOwner` per physical DB serializes its entire `deliver` invocation,
+`sync/engine/SyncDeliveryLoop(store, api, nowMillis)` is inert and explicitly constructed; startup never invokes delivery automatically. One required application-owned `PushRunOwner` per physical DB serializes its entire `deliver` invocation,
 including push, all pull HTTP/commits and terminal bookkeeping. API/store must bind the same authorized service/account/
 session. It uses the admitted push overload and the internal pull terminal callback on one uninterrupted `withRun`;
 there is no nested admission, release/reacquire gap, additional owner or background work.
@@ -462,7 +505,7 @@ activate those APIs.
 ## Frozen-snapshot staging storage
 
 R08a adds a data-preserving **Room10→11** migration and inert storage on the SAME admitted `PushRun`/handling Mutex.
-Default startup constructs no store/driver. One required application-owned `PushRunOwner` per physical DB remains mandatory;
+No snapshot is started by startup recovery. One required application-owned `PushRunOwner` per physical DB remains mandatory;
 there is no second owner, public unguarded writer or network transaction.
 
 - `sync_snapshot_stages` has a unique account and stage UUID, origin generation/epoch, fixed1..500 page limit,
@@ -545,7 +588,7 @@ and hold ONE application-owned `PushRunOwner` per physical DB uninterrupted acro
 Downloaded now summarizes actual validated terminal transport/staging progress for that uninterrupted chain, NOT full
 account graph validation, canonical baseline/absence, bootstrap, last-success, publication or convergence. The existing
 incremental shared driver's recovery signal is not automatically routed here. R08c supplies the separate completion
-boundary below; R09/R10/R12 and activation remain dependent gates. Default startup constructs none of these drivers.
+boundary below; delivered R09/R10/R12 and complete activation remain prerequisites. Startup never downloads automatically.
 
 ## Complete snapshot baseline and publication recovery
 
@@ -589,8 +632,8 @@ later write failure cannot reuse it. Staging/checkpoint tokens retire before wri
   lease-close failure after commit is not rollback evidence. Snapshot completion/publication preserve last-success;
   only the existing actual valid pull-tail seam establishes it later.
 
-Default startup constructs none of this. Durable Room/vault authority/journal (R09), real finite edit/timer barriers (R12a),
-engine convergence (R10), account/import/sign-out actions and activation remain separate prerequisites. Exact uncertain
+Startup recovery does not invoke this publication path. Delivered Room/vault authority/journal, real finite edit/timer
+barriers, engine convergence and complete private account/import activation remain prerequisites; sign-out is separate. Exact uncertain
 legacy accepted-auth replay limitations are unchanged.
 
 ## Models, codecs, and durable identity
@@ -624,7 +667,7 @@ configured versus actual rest remain distinct. Bundled exercises are not uploada
 
 `data/sync/identity/AndroidGoogleIdentityProvider` implements the existing SDK-independent `GoogleIdentityProvider`.
 It is explicitly constructed on Android Main for one `ComponentActivity`, with an injected web/server audience and
-optional `GoogleCredentialClient`; default startup constructs none. The production client delegates to Credential
+optional `GoogleCredentialClient`; configured startup constructs it without launching UI. The production client delegates to Credential
 Manager using application context for the manager and the captured current Activity for UI. Dependencies are matched
 Credentials/Play Services bridge 1.6.0 and Google ID 1.2.1; no actual OAuth/service/signing configuration is packaged.
 
@@ -633,7 +676,7 @@ Credentials/Play Services bridge 1.6.0 and Google ID 1.2.1; no actual OAuth/serv
   a RESUMED, nonfinishing/nondestroyed Activity; provider UI may temporarily pause/stop it without invalidating the result.
 - Only the Google custom credential type is accepted, parsed through the real Google ID parser. A nonblank opaque token
   is returned unchanged, never decoded as account authority. No challenge, HTTP exchange, vault/Room write or activation
-  follows Google success in this adapter; the separate foreground exchange below consumes it, while activation remains R13.
+  follows Google success in this adapter; foreground exchange consumes it and the account controller separately completes activation.
 - One nonqueueing slot covers get and explicit clear. Operations have a two-minute default timeout, caller cancellation
   precedence and fixed safe SDK-independent failure reasons. No provider details/causes, tokens, nonces, audiences or
   identity data enter diagnostics. No automatic fallback/retry or credential-state cleanup is performed.
@@ -649,7 +692,7 @@ Default local startup/account visibility policy is unchanged; no interactive aut
 ## Bounded foreground exchange and guarded grant handoff
 
 `data/sync/session/ForegroundSignInCoordinator` is explicitly constructed with one configured origin, Google provider,
-auth API and guarded private handoff. Default startup constructs none. `signIn(request)` obtains one SIGN_IN challenge,
+auth API and guarded private handoff. The configured account factory constructs it; only an explicit foreground action invokes it. `signIn(request)` obtains one SIGN_IN challenge,
 passes its exact nonce once, captures one immutable `GoogleExchangeAttempt` and consumes the original service grant once
 through `AppSessionCoordinator.acceptForegroundGrant`; it returns private preparation, never a reusable grant or ACTIVE
 authority. Initial sign-in requires an empty signed-out expectation; reauthentication requires the retained account.
@@ -673,8 +716,8 @@ authority. Initial sign-in requires an empty signed-out expectation; reauthentic
   explicit fresh recovery, not compensation or automatic activation, settles observation. Displays/errors are closed.
 
 [R11b acceptance](../archive/remaining-work/R11b-review.md) closes deterministic personal R11a–b/package gates, not real
-Google/signing/HTTPS/phone verification. R13 still owns UI/triggers, complete activation and P18 legacy import;
-local-only roots continue to refuse until that work is delivered. R11c lifecycle proofs remain deferred public.
+Google/signing/HTTPS/phone verification. The mandatory account controller composes private P18 import and complete
+activation; foreground/edit/manual triggers remain separate. Null-policy local-root refusal and deferred public lifecycle proofs remain intact.
 
 ## API and secure HTTP
 
@@ -763,8 +806,8 @@ primitive compatibility path; recovered sessions always supply their bound autho
 
 `SessionRecoveryCoordinator` is an inert, reads-only reconciler. Its required `SessionRecoveryAuthority` supplies immutable
 nonsecret observations of revision, session generation, private cached identity, activation operation, phase and complete
-baseline. R09a supplies the [inert real Room adapter](#durable-private-room-account-authority); default startup still constructs
-none of this machinery.
+baseline. The configured account facade uses the [inert real Room adapter](#durable-private-room-account-authority)
+for mandatory startup recovery, without HTTP or interactive sign-in.
 
 - Starts privacy-locked. Unconfigured use is local-only without I/O; signed-out observations never inspect/adopt orphan
   vault credentials. Preparing/transitional state, incomplete baseline, missing/unreadable vault, changed origin or
@@ -829,7 +872,7 @@ exported1–11 and bundled v1 asset bytes remain unchanged. No legacy device/cac
 
 `SessionPreparationCoordinator(origin, authority, vault)` provides internal preparation and the narrow
 `SessionPreparationAuthority` extension implemented by the unchanged R09a reservation method. No new schema or Room
-writer exists. Default startup constructs none of it; results are nonsecret private observations, never leases or engine,
+writer exists. Configured account preparation composes it explicitly; results are nonsecret private observations, never leases or engine,
 repository, refresh, publication or account-visibility admission.
 
 - `prepare` requires exact SIGNED_OUT authority and empty revision0/positive tombstone vault. Any occupied grant,
@@ -1044,16 +1087,16 @@ asset, HTTP/Google, clock/UUID, app construction, ordinary repository/UI rebindi
 [R09g review](../archive/remaining-work/R09g-review.md) owns fresh JVM/full instrumentation/lint/APK evidence. Stopped at
 inert safely recoverable same-account preparation eligibility. R12a real edit/timer drains and core R10 two-store actual
 engine/HTTP convergence are the named prerequisites for the [app-facing boundary](#app-facing-authority-and-offline-recovery).
-Its delivery does not activate default startup. Explicit scoped integration is delivered below; approved P18 legacy
-preserve/import implementation, identity/account UI/triggers and live milestone gates remain open.
+These recovery primitives do not grant UI visibility alone. Scoped runtime and mandatory account presentation are
+delivered separately; automatic synchronization and live milestone gates remain open.
 
 ## App-facing authority and offline recovery
 
 `AppSessionCoordinator` explicitly composes the delivered private authority/preparation, retained-account recovery,
 bootstrap/completion and startup/refresh components. Construction performs no I/O and exposes one stable read-only
-`StateFlow`, initially privacy-locked. Default startup still constructs signed-out/local repositories. The explicit
-account runtime supplies scoped UI/timer integration and ACTIVE reconciliation. Foreground exchange/captured grant
-handoff is available above; R13 owns account UI/triggers, P18 import and startup-policy replacement.
+`StateFlow`, initially privacy-locked. Configured mandatory startup constructs it with the exact-handle account runtime,
+real scoped UI/timer integration and the approved P18 policy. Foreground exchange/grant handoff and complete private
+activation are invoked by the account controller; automatic foreground/edit/manual synchronization remains separate.
 Transition and publication barriers are mandatory caller inputs with no permissive defaults.
 
 - One operation mutex serializes facade work, one supplied physical-DB run owner serializes engine work, and one shared
@@ -1126,7 +1169,8 @@ canonical timer impact and lease-safe retirement, including hidden reauthenticat
 private with no automatic HTTP. Open explicit-save custom editors refuse normal transitions until explicitly closed;
 emergency invalidation hides immediately. App/feature epochs reconcile selected models, active pill and request-bound
 consent without late history writes or timer resurrection. See [runtime/refresh architecture](../architecture.md#projection-observation-and-feature-refresh).
-Default startup remains local; no sign-out/switch/import/deletion policy, Google/account UI or scheduling is inferred.
+Mandatory startup/account presentation composes this runtime without automatic delivery. Public sign-out/switch/general
+import-choice/deletion UI and background scheduling remain absent.
 
 ## Legacy auth replay limitation
 
@@ -1154,5 +1198,5 @@ simulate successful domain outcomes. Procedures are in [testing strategy](../tes
 The new scoped-facade/root real journey starts fresh independent Room/vault stores, obtains a current synthetic service
 session through the test-only relay's actual refresh, and verifies intended custom/routine IDs/names/references, quiescent
 outboxes and paired materialization over real HTTP. The relay never simulates domain success and stays outside the app
-APK. Default startup remains unchanged; neither Core nor scoped synthetic evidence proves process death, expanded R10b,
+APK. Neither Core nor scoped synthetic evidence proves process death, expanded R10b,
 service retention pruning, deployed TLS, real Google or personal-phone readiness.

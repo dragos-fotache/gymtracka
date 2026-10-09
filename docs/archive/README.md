@@ -59,6 +59,7 @@ Enduring Android design is maintained in [the active integration design](../sync
 | R12b projection observation and feature refresh | [Spec](remaining-work/R12b-task.md) | [Review](remaining-work/R12b-review.md) |
 | R13a durable legacy graph and private import capture | [Spec](remaining-work/R13a-task.md) | [Review](remaining-work/R13a-review.md) |
 | R13b private import delivery and complete activation/recovery | [Spec](remaining-work/R13b-task.md), [harness facts](remaining-work/R13b-harness.md) | [Review](remaining-work/R13b-review.md) |
+| R13c mandatory account gate and startup/account UI | [Spec](remaining-work/R13c-task.md) | [Review](remaining-work/R13c-review.md) |
 
 [R03 split](remaining-work/R03-task.md) and [R04 split](remaining-work/R04-task.md) are historical planning records;
 outstanding lifecycle and durable account-integration requirements remain in the active roadmap. The
