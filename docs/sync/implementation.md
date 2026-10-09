@@ -3,7 +3,8 @@
 Default startup remains signed-out/local-only. An explicitly constructed account runtime now supplies real scoped
 root/edit/timer integration and guarded ACTIVE reconciliation over the delivered authority. Construction is private and
 runs no HTTP automatically. Explicit foreground Google acquisition/exchange and guarded private grant handoff are
-available; account UI, foreground/edit/manual triggers, P18 import and startup-policy replacement remain R13.
+available. Inert P18 legacy source/import capture is implemented; import delivery/activation, account UI,
+foreground/edit/manual triggers and startup-policy replacement remain R13b–d.
 No Google UI, scheduler or live account/device action is wired into default startup.
 The [roadmap](../remaining-work-roadmap.md) owns delivery status; the
 [integration design](integration-design.md) owns approved future coordination. The
@@ -13,7 +14,8 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/data/
 
 ## Room and local capture
 
-Room v12 retains the v9 root metadata, v10 canonical ledger/publication bookkeeping and v11 staging. Independent
+Room v13 retains the v9 root metadata, v10 canonical ledger/publication bookkeeping, v11 staging and v12 authority
+journal; v13 adds independent legacy-import evidence. Independent
 [staging](#frozen-snapshot-staging-storage) and [private authority/journal](#durable-private-room-account-authority) are
 described below. Root metadata remains: nullable account/server revision/deletion time, local generation, and sync state
 (default `local_only`). `sync_outbox` stores explicit sequence order, immutable mutation identity/version/payload and
@@ -40,6 +42,42 @@ privately cached account; `catalogue_state` stores catalogue metadata. These sto
 - Stale set entities cannot change parent or stored position. Negative repetitions and negative/nonfinite weights
   sanitize to null; configured rest clamps nonnegative. Invalid selections fail atomically before inserts. Completion
   returns an actual transition result for UI/timer coordination.
+
+### Durable legacy graph and private import capture
+
+`sync/legacy/LegacyImportStore` is an explicitly constructed internal Room13 boundary, not an app handle or service grant.
+Its target binds canonical configured HTTPS origin (explicit effective port), first service-confirmed account UUID and
+one durable operation. Production callers still need real pause/drain/process authority; default startup constructs none.
+The additive12→13 migration leaves old schema/rows/sequences and source asset unchanged; both evidence tables start empty.
+
+- Capture acquires one caller-owned admission/drain lease before reading local source and rechecks lease/process/cancellation
+  through the transaction and result dispatch. It refuses caller-owned transactions, foreign/unknown account storage and
+  stale expected Room observations. Bundled-only empty storage makes no record, counter advance or UUID allocation.
+- Frozen v1 local evidence retains all root/child/relationship rows in fixed ordered arrays. Cells preserve NULL, exact
+  INTEGER decimal strings, FLOAT raw-double-bit decimal strings, TEXT and BLOB base64. Invalid metadata/IDs/relationships,
+  instructions or scalar types stay recoverable; no cleanup, renumbering, remapping, coercion or skipped drafts repairs them.
+- Valid source is associated and captured atomically through existing `SyncTransaction`/typed durable-v1 `aggregate.import`:
+  custom UUID order, routine UUID order, finished-workout UUID order, active last. Saved blank/empty routines and empty
+  drafts remain their original snapshots. Optional custom metadata/quantity and nullable configured/recorded inputs survive.
+  Generation keys include aggregate family; checked g+1 and retained sqlite_sequence high-water space prevent wraparound.
+- Raw business/source comparisons allow only account/generation/state metadata changes. Exact final outbox, root,
+  unobserved-ledger, incomplete-dirty-cache, journal/device and source checks detect late SQL/trigger tampering and roll back
+  together. The ordinary authority refusal stays intact: capture reuses `beginPreparation` only after association removes
+  local roots inside the same outer transaction. No ACTIVE/cursor/baseline or vault write is fabricated.
+- Invalid source instead commits `blocked`/`invalid_source` with immutable source and a private generation fence, but no
+  association, imports, cache or canonical ledger. A retained journal/entry locks ordinary null-account `SyncStore` reads
+  and writes, including a newly constructed null-account repository. No-journal behavior is unchanged.
+- Strict matching reread/recapture validates target, Room tuple, source/entry count/order/g+1, exact original wrappers,
+  import kind/affected-root identity and retained raw business evidence. Extra/orphan/corrupt/missing work fails closed and
+  remains retained. Repeat/reopen or committed-but-cancelled result resumes the same capture, never allocates it again.
+  Pending/frozen/rejected retry fields may evolve; captured is not accepted. R13b must add definitive accepted progress
+  before permitting request/domain removal or legitimate post-ack state changes.
+- Errors/displays are closed/redacted; no credentials enter source or outbox. Caller cancellation, including during lease
+  close, takes precedence; closing failure can hide a committed result but cannot imply rollback. Durable reread is the oracle.
+
+This boundary does not send imports, warn/consent to cloud-active replacement, install/promote a vault grant, bootstrap,
+activate an account, resolve collisions/rejections, or replace startup/UI. Those integration gates remain R13b–d; real
+Google/deployed HTTPS/personal-account/device evidence remains separately authorized R17a.
 
 ### Canonical ledger and capture watermarks
 

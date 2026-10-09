@@ -49,7 +49,7 @@ exchange/handoff and account UI/triggers remain R11b/R13.
 
 `app/src/main/assets/databases/gym.db` is the unchanged **version-1 source catalogue**. Room copies it into app-private
 storage and migrates the runtime database. Never add user-data tables to the asset or use destructive migration fallback.
-Runtime `GymDatabase` is **version 12**; exported versions 1–12 are retained in `app/schemas/`.
+Runtime `GymDatabase` is **version 13**; exported versions 1–13 are retained in `app/schemas/`.
 
 ### Catalogue and custom exercises
 
@@ -104,6 +104,7 @@ blank/empty autosaves are distinct from save/start eligibility validation.
 | 9 → 10 | Independent account/type/root canonical ledger and separate account publication bookkeeping; unobserved generation reservations backfilled without fabricating canonical records/baselines |
 | 10 → 11 | Independent snapshot stage headers, whole records and durable continuation/page evidence; old tables/bytes/sequence unchanged, new tables empty |
 | 11 → 12 | Independent singleton account-authority/preparation journal; prior tables/bytes/sequence unchanged, new table empty; no fabricated activation |
+| 12 → 13 | Independent one-time legacy-import source/target journal and exact ordered request evidence; prior tables/bytes/sequence unchanged, new tables empty; no activation or network delivery |
 
 Each future entity change requires a version bump, data-preserving migration, schema export/KSP, all supported starting
 versions, and a copied real v1 asset test. Domain table UUID primary keys remain global within each physical table;
@@ -135,6 +136,14 @@ Archive-free vault records keep v1 bytes; archive-bearing v2 atomically retains 
 predecessor evidence while installing a fresh same-account grant. Known origin/UUID, strict phase/device tuples, shared
 owners and unchanged domain/cache/intent remain mandatory. See
 [retained-account recovery](sync/implementation.md#inert-retained-account-recovery-and-superseded-evidence).
+
+`sync_legacy_import` and `sync_legacy_import_entries` retain one private source/target/capture operation and exact
+create-only request evidence independently of domain/outbox FKs. Explicit inert capture either binds validated local roots
+and creates dependency-ordered imports with private PREPARING authority, or retains invalid source/error evidence plus a
+private generation fence without association. It never creates ACTIVE, credentials, a cursor or a complete baseline.
+Once evidence exists, ordinary null-account repository reads/writes refuse; default startup never constructs the importer.
+Recovery is exact-target/authority/source/request fenced; missing work is not remotely accepted progress. Delivery and
+complete activation remain R13b. See [legacy capture](sync/implementation.md#durable-legacy-graph-and-private-import-capture).
 
 ## Persistence and state flow
 

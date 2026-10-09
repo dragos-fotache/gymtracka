@@ -57,6 +57,7 @@ Enduring Android design is maintained in [the active integration design](../sync
 | R11b bounded foreground exchange and guarded grant handoff | [Spec](remaining-work/R11b-task.md) | [Review](remaining-work/R11b-review.md) |
 | R12a real finite-edit admission and timer barriers | [Spec](remaining-work/R12a-task.md) | [Review](remaining-work/R12a-review.md) |
 | R12b projection observation and feature refresh | [Spec](remaining-work/R12b-task.md) | [Review](remaining-work/R12b-review.md) |
+| R13a durable legacy graph and private import capture | [Spec](remaining-work/R13a-task.md) | [Review](remaining-work/R13a-review.md) |
 
 [R03 split](remaining-work/R03-task.md) and [R04 split](remaining-work/R04-task.md) are historical planning records;
 outstanding lifecycle and durable account-integration requirements remain in the active roadmap. The

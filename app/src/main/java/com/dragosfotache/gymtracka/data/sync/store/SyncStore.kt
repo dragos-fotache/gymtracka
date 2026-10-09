@@ -5,6 +5,8 @@ import com.dragosfotache.gymtracka.data.gym.GymDatabase
 import com.dragosfotache.gymtracka.data.gym.SyncOutboxEntity
 import com.dragosfotache.gymtracka.data.sync.codec.captureDurableRequest
 import com.dragosfotache.gymtracka.data.sync.codec.encodeDurableRequest
+import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportException
+import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportFailure
 import com.dragosfotache.gymtracka.data.sync.model.AffectedRootModel
 import com.dragosfotache.gymtracka.data.sync.model.AggregateType
 import com.dragosfotache.gymtracka.data.sync.model.DURABLE_PAYLOAD_VERSION
@@ -69,6 +71,25 @@ class SyncStore(
         val result = database.withTransaction {
             currentCoroutineContext().ensureActive()
             processCheck?.invoke()
+            if (session.accountId == null) {
+                try {
+                    val legacy = database.syncLegacyImportDao()
+                    val journals = legacy.journalRowCount()
+                    val entries = legacy.entryRowCount()
+                    if (journals > 0L || entries > 0L) {
+                        if (journals > 1L || (journals == 0L && entries > 0L)) {
+                            throw LegacyImportException(LegacyImportFailure.CORRUPT_EVIDENCE)
+                        }
+                        throw LegacyImportException(LegacyImportFailure.STALE_AUTHORITY)
+                    }
+                } catch (e: LegacyImportException) {
+                    throw e
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    throw LegacyImportException(LegacyImportFailure.UNAVAILABLE)
+                }
+            }
             val device = database.syncDao().getDeviceState()
             val actualAccountId = device?.activeAccountId
             val actualGeneration = device?.sessionGeneration ?: 0L

@@ -31,8 +31,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SyncSnapshotRecordEntity::class,
         SyncSnapshotTokenEntity::class,
         SyncSessionAuthorityEntity::class,
+        SyncLegacyImportEntity::class,
+        SyncLegacyImportEntryEntity::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = true,
 )
 @TypeConverters(GymTypeConverters::class)
@@ -48,6 +50,7 @@ abstract class GymDatabase : RoomDatabase() {
     abstract fun syncProjectionDao(): SyncProjectionDao
     abstract fun syncSnapshotDao(): SyncSnapshotDao
     abstract fun syncSessionAuthorityDao(): SyncSessionAuthorityDao
+    abstract fun syncLegacyImportDao(): SyncLegacyImportDao
 
     companion object {
         private const val DATABASE_NAME = "gym.db"
@@ -322,6 +325,7 @@ abstract class GymDatabase : RoomDatabase() {
             CanonicalStorageMigration,
             SnapshotStorageMigration,
             SessionAuthorityStorageMigration,
+            LegacyImportStorageMigration,
         )
 
     }

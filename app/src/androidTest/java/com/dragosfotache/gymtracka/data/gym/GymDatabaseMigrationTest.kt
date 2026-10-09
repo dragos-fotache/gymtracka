@@ -30,15 +30,15 @@ class GymDatabaseMigrationTest {
 
     @Test
     fun everySupportedVersion_migratesToCurrentSchemaAndPreservesAvailableData() {
-        for (startVersion in 1..11) {
-            val databaseName = "migration-$startVersion-to-12.db"
+        for (startVersion in 1..12) {
+            val databaseName = "migration-$startVersion-to-13.db"
             migrationHelper.createDatabase(databaseName, startVersion).use { database ->
                 seedLegacyDatabase(database, startVersion)
             }
 
             migrationHelper.runMigrationsAndValidate(
                 databaseName,
-                12,
+                13,
                 true,
                 *GymDatabase.MIGRATIONS,
             ).use { database ->
@@ -83,6 +83,8 @@ class GymDatabaseMigrationTest {
             assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM sync_snapshot_records"))
             assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM sync_snapshot_tokens"))
             assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM sync_session_authority"))
+            assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM sync_legacy_import"))
+            assertEquals(0, sqliteDatabase.singleInt("SELECT COUNT(*) FROM sync_legacy_import_entries"))
         } finally {
             database.close()
         }
@@ -771,6 +773,8 @@ class GymDatabaseMigrationTest {
         assertEquals(0, database.singleInt("SELECT COUNT(*) FROM sync_snapshot_stages"))
         assertEquals(0, database.singleInt("SELECT COUNT(*) FROM sync_snapshot_records"))
         assertEquals(0, database.singleInt("SELECT COUNT(*) FROM sync_snapshot_tokens"))
+        assertEquals(0, database.singleInt("SELECT COUNT(*) FROM sync_legacy_import"))
+        assertEquals(0, database.singleInt("SELECT COUNT(*) FROM sync_legacy_import_entries"))
     }
 
     private fun assertEmptyCanonicalTables(database: SupportSQLiteDatabase) {
