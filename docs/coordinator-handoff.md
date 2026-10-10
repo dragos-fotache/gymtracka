@@ -6,52 +6,51 @@
 
 ## Current boundary and authority
 
-**R13c is accepted: mandatory account gate and startup/account UI.** Its
-[review](archive/remaining-work/R13c-review.md) owns independent review, final JVM/current/API24 and packaging/security
-evidence. No-argument startup is now configuration/private/account gated, never signed-out local editing. Empty build
-configuration is deliberately unavailable; actual Google/audience/signing/deployed HTTPS/phone use is not claimed.
-R13a–b and the accepted R09/Core R10a/personal R11/R12 foundations remain dependencies, not reopened packages.
+**R13a–d are accepted; the finite personal R13 package is closed.** The final
+[R13d review](archive/remaining-work/R13d-review.md) owns independent review, historical failures/evidence limits and
+fresh final-source gates; its [task](archive/remaining-work/R13d-task.md) is archived. R13c and the accepted R09/Core R10a/
+personal R11/R12 foundations are not reopened. No R13e or extra personal slice is implied.
 
-**Owner stop: finish R13c, then stop.** No active implementation assignment or successor transfer is released.
-R13d — foreground/edit/manual sync and confirmed recovery/package closure — remains pending in the finite
-[personal R13a–d plan](remaining-work-roadmap.md#remaining-r13-plan). Renewed owner continuation authority is required
-before specifying, delegating, building or launching/transferring a coordinator for it. Acceptance evidence and the
-standing rotation rule do not override this explicit stop. Do not invent another split or pull forward public work.
+**R17a is dependency-ready for planning, not live execution.** Obtain explicit owner inputs/authorization for actual
+Google/audience/installed signing, trusted deployed HTTPS and phone/account journeys before effects. Empty build
+configuration remains deliberately private/unavailable. Personal acceptance does not allocate a service, endpoint,
+audience, account or device, and never licenses push, deployment, private-config discovery/change or signing/OAuth change.
+Public lifecycle, expanded R10b, general sign-out/switch/import-choice/export/deletion and background work stay deferred.
+Bring missing inputs, unavailable required gates or unresolved destructive/scope decisions to the owner.
 
-No push, deployment, private-config discovery/change, signing/OAuth change or personal account/device operation is
-licensed. Synthetic acceptance never allocates a live service, endpoint, audience or account. Bring any unresolved
-scope/configuration/destructive decision, missing input, required agent/tool or unavailable gate to the owner.
+## Delivered current state
 
-## Delivered boundary and remaining obligations
+[Startup/account presentation](sync/implementation.md#mandatory-startup-and-account-presentation) gates initial access
+on configured service-confirmed sign-in and complete activation. Matching established accounts reopen/edit offline;
+private/corrupt/foreign evidence never permits a signed-out local fallback. Original import source/errors and encrypted
+superseded credentials remain retained, not erased or reassigned.
 
-The [implemented startup/account boundary](sync/implementation.md#mandatory-startup-and-account-presentation) owns
-configuration, exact-handle visibility, HTTP-free matching offline reopen, foreground sign-in/reauthentication,
-original-active import consent/progress and safe read-only status. The
-[private import boundary](sync/implementation.md#private-import-delivery-and-activation) owns immutable original
-source/target/requests, current lineage, definitive receipts and complete Room14 activation. P16–P18 remain binding:
-Google success/progress/queue absence grants no visibility; private/corrupt/foreign evidence is never a local fallback.
-Original source/errors and encrypted superseded credential evidence are retained, not cleaned up or reassigned.
+[Foreground sync/ordinary recovery](sync/implementation.md#foreground-synchronization-and-ordinary-recovery) serializes
+exact-handle foreground/edit/manual demand, deliberate retained-stage restart and captured confirmed ordinary recovery.
+Successful finite-edit counters, first-counter readiness, retirement and handle-scoped coverage preserve newer demand.
+Same-H missing observation is repaired without turnover/reset. Strict no-effect preflight precedes real drain; full rows,
+ready authority, absent/settled import proof and final SQL/lease fences protect discard. Original imports are never targets.
+A completed tail with newer intent reports protected without publication/drain, preserving the whole visible graph.
 
-R13d still owns serialized foreground/edit/manual triggers, deliberate retained-stage restart, confirmed ordinary
-rejection recovery and combined personal-package actual HTTP journeys. Legacy import rejection is not an ordinary
-intent-discard target. Sign-out/switch/general chooser/export/deletion/background and broader public gates remain separate.
 The [legacy auth replay limitation](sync/implementation.md#legacy-auth-replay-limitation) and earlier unexplained R12c
-real-HTTP Private stop remain unrepaired. New deterministic successful import/reauthentication is not retrospective
-repair; investigate a recurrence instead of hiding it with retries, rounding or weakened assertions.
+real-HTTP Private stop remain unrepaired. New passing journeys are not retrospective repair; investigate recurrence.
 
 ## Verification and resource discipline
 
-The review records fresh full offline JVM, unfiltered current default instrumentation, affected API24 startup/import/
-recovery plus adapter/admission, assembly/lint and APK/config/asset/backup/security checks. This is not full minAPI,
-actual Google, deployed TLS, phone readiness, expanded public convergence or unattended-use evidence.
+R13d final-source evidence: **JVM1076/69 suites; current-default1127 including38 R13d and no relay classes; actual
+Room/vault/HTTP2; affected API24 160/14 individually verified classes; fresh assembly/lint and APK/config/assets/backup/
+security audits.** All final native gates have zero failures/errors/skips. Lint has two dependency-update warnings.
+This is not full minAPI, hosted CI, real Google/installed signing/deployed TLS/phone readiness or unattended use.
+Failed native witnesses, earlier-source totals and an API24 no-XML UNKNOWN timeout are scoped honestly in the review.
 
-Owned emulator work is stopped, temporary synthetic configurations removed and Gradle slots released. No resource is
-allocated for future work; rediscover both repository HEADs/trees/indexes/untracked files, roles/models and ownership
-before any renewed pickup. Preserve user work and the coordinator-left/Worker-QA right-half layout. Coordinator model
-is `openai-codex/gpt-6.1-sol`/high; any renewed slice needs fresh independent
-`meta/muse-spark-1.3-contributor`/high Worker/QA native sessions, not completed R13c conversations.
+Worker remained production-only and QA tests-only; one disclosed filename-only main-directory grep conveyed no source
+content/diff. Coordinator bridged APIs and assessed both layers. Final source/tests are frozen after acceptance; preserve
+user work and inspect scoped diffs before edits. Android and nested shared-docs changes receive separate scoped commits,
+never a push. Active docs describe current state; session evidence belongs only in archives.
 
-Reports remain asynchronous/fire-and-forget, never acknowledgment polling. Every Gradle invocation needs an exclusive
-serialized slot; lint freezes both layers. LSP empty indexing supplies no clean-diagnostics claim. Backend access remains
-operational build/start and black-box HTTP under the [isolated procedure](testing-strategy.md#isolated-real-backend-procedure),
-never backend source/private-config review. No unavailable required gate may be silently waived.
+Disposable current/API24 emulators and the isolated backend/host relay used for R13d are test-owned, not personal.
+Do not assume archived resources are still live: rediscover exact ownership before reuse/cleanup. Backend access remains
+operational build/start plus black-box HTTP under the [isolated procedure](testing-strategy.md#isolated-real-backend-procedure),
+never backend source/private-config review. Every Gradle invocation needs an explicitly exclusive slot; lint freezes both
+layers. LSP empty indexing is not a clean-diagnostics claim. Agent reports stay asynchronous/fire-and-forget, never
+acknowledgment polling. Scoped acceptance permits only dependency-ready planning, not externally gated operations.

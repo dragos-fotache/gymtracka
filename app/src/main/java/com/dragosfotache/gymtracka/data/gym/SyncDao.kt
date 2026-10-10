@@ -220,4 +220,30 @@ interface SyncDao {
 
     @Query("SELECT * FROM catalogue_state WHERE id = 1")
     suspend fun getCatalogueState(): CatalogueStateEntity?
+
+    /**
+     * R13d removes exactly one captured ordinary row. Predicates pin the delete to the
+     * full-row observation (sequence/state/attempts) made in the same fenced decision;
+     * callers verify the affected count is exactly one per row and recheck post-write state.
+     */
+    @Query(
+        """DELETE FROM sync_outbox
+            WHERE mutation_id = :mutationId AND account_id = :accountId
+                AND sequence = :sequence AND state = :expectedState
+                AND attempt_count = :expectedAttempts""",
+    )
+    suspend fun deleteCapturedOrdinaryRow(
+        mutationId: String,
+        accountId: String,
+        sequence: Long,
+        expectedState: String,
+        expectedAttempts: Int,
+    ): Int
+
+    /**
+     * R13d resets only the selected pull cursor to null after a confirmed ordinary discard.
+     * Last-success is preserved untouched; callers verify it post-write. Never inserts a row.
+     */
+    @Query("UPDATE sync_state SET cursor = NULL WHERE account_id = :accountId")
+    suspend fun nullCursorPreservingLastSuccess(accountId: String): Int
 }

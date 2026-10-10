@@ -42,6 +42,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -73,7 +76,6 @@ internal class AccountGymAppState(
     val sessionCoordinator: AppSessionCoordinator
 
     private var boundAppState: GymAppState? by mutableStateOf(null)
-
     /**
      * Public visibility selection: returns the bound app state only when the
      * synchronous exact-live authority still admits it. A queued collector alone
@@ -84,6 +86,29 @@ internal class AccountGymAppState(
 
     private val stateLock = Any()
     private var boundHandle: AppAccountSession? = null
+
+    /**
+     * R13d binding-revision signal. Bumped under the state lock on every bound
+     * handle/app-state installation, removal or disposal so event-driven observers can
+     * follow the synchronous exact-live selection without polling. Saturates rather
+     * than wrapping; values are opaque revisions, never authorities.
+     */
+    private val bindingRevision = MutableStateFlow(0L)
+
+    private fun noteBindingChangedLocked() {
+        val observed = bindingRevision.value
+        bindingRevision.value = if (observed == Long.MAX_VALUE) Long.MAX_VALUE else observed + 1
+    }
+
+    /**
+     * R13d cold event-driven exact-live binding observation. Re-evaluates
+     * [visibleBinding] on every binding revision; emits null while no runtime is bound
+     * for the current authority (for example ACTIVE before the feature runtime binds).
+     * Collectors delegate to the matching handle's committed edits only, ending that
+     * delegation when the selection moves on. No polling, no alternate scope.
+     */
+    internal fun observeBinding(): Flow<VisibleBinding?> =
+        bindingRevision.map { visibleBinding() }
     private var boundScope: CoroutineScope? = null
     private val retiring = mutableListOf<RetiredEntry>()
     private val liveTransitionLeases = mutableSetOf<ProjectionPublicationLease>()
@@ -178,6 +203,7 @@ internal class AccountGymAppState(
             boundAppState = null
             boundHandle = null
             boundScope = null
+            noteBindingChangedLocked()
             toDispose = retiring.toList() +
                 (if (current != null && currentScope != null) listOf(RetiredEntry(current, currentScope)) else emptyList())
             retiring.clear()
@@ -286,6 +312,7 @@ internal class AccountGymAppState(
             boundHandle = handle
             boundScope = childScope
             boundAppState = next
+            noteBindingChangedLocked()
         }
         disposeRetiredWithoutLiveLeases()
     }
@@ -304,6 +331,7 @@ internal class AccountGymAppState(
             boundHandle = null
             boundScope = null
             boundAppState = null
+            noteBindingChangedLocked()
         }
         if (hasLiveLeases()) {
             return

@@ -2,9 +2,11 @@ package com.dragosfotache.gymtracka.data.sync.session
 
 import com.dragosfotache.gymtracka.data.gym.GymDatabase
 import com.dragosfotache.gymtracka.data.gym.GymRepository
+import com.dragosfotache.gymtracka.data.gym.SyncOutboxEntity
 import com.dragosfotache.gymtracka.data.sync.api.ServiceAuthApi
 import com.dragosfotache.gymtracka.data.sync.api.ServiceSession
 import com.dragosfotache.gymtracka.data.sync.api.SyncApiException
+import com.dragosfotache.gymtracka.data.sync.engine.PushDeliveryLoop
 import com.dragosfotache.gymtracka.data.sync.engine.PushDeliveryStop
 import com.dragosfotache.gymtracka.data.sync.engine.PullDeliveryStop
 import com.dragosfotache.gymtracka.data.sync.engine.PullRecoveryReason
@@ -17,13 +19,19 @@ import com.dragosfotache.gymtracka.data.sync.http.ServiceOrigin
 import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportCaptureBarrier
 import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportCaptureResult
 import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportException
+import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportFailure
 import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportPhase
 import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportPolicy
 import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportProgress
 import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportProgressPhase
 import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportStore
 import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportTarget
+import com.dragosfotache.gymtracka.data.sync.model.DURABLE_PAYLOAD_VERSION
+import com.dragosfotache.gymtracka.data.sync.model.MutationKind
+import com.dragosfotache.gymtracka.data.sync.model.SyncModelException
+import com.dragosfotache.gymtracka.data.sync.model.UnsupportedDurableVersionException
 import com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid
+import com.dragosfotache.gymtracka.data.sync.store.PushBlockReason
 import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationBarrier
 import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationLease
 import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationStatus
@@ -31,6 +39,9 @@ import com.dragosfotache.gymtracka.data.sync.store.ProjectionStore
 import com.dragosfotache.gymtracka.data.sync.store.PushRunOwner
 import com.dragosfotache.gymtracka.data.sync.store.PushStore
 import com.dragosfotache.gymtracka.data.sync.store.RepositorySession
+import com.dragosfotache.gymtracka.data.sync.store.StalePushClaimException
+import com.dragosfotache.gymtracka.data.sync.store.checkCanonicalFences
+import com.dragosfotache.gymtracka.data.sync.store.readDurableOutboxRow
 import androidx.room.withTransaction
 import com.dragosfotache.gymtracka.data.sync.store.CanonicalStorageException
 import com.dragosfotache.gymtracka.data.sync.store.StaleSessionException
@@ -94,6 +105,7 @@ internal class AppSessionCoordinator(
     private var currentFence: Any = Any()
     private var currentHandle: AppAccountSession? = null
     private var currentRecovered: RecoveredSession? = null
+    private val issuedRecoveries = mutableSetOf<AccountRecoveryConfirmation>()
     private val _state = MutableStateFlow<AppSessionState>(AppSessionState.PrivacyLocked)
 
     private val preparation: SessionPreparationCoordinator? =
@@ -129,6 +141,7 @@ internal class AppSessionCoordinator(
             currentHandle?.markStale()
             currentHandle = null
             currentRecovered = null
+            issuedRecoveries.clear()
             _state.value = AppSessionState.PrivacyLocked
             preparation?.invalidate()
             sameAccount?.invalidate()
@@ -1776,6 +1789,857 @@ internal class AppSessionCoordinator(
     }
 
     /**
+     * R13d explicit ordinary-recovery preparation over the exact current handle. Returns an
+     * opaque process-local confirmation when a validated definitive ordinary rejected head
+     * with a validated pending/rejected remainder is safely confirmable, or null when there
+     * is nothing to confirm or recovery would be unsafe. Never freezes or sends a previously
+     * pending successor to obtain the decision: only an already-frozen uncertain head is
+     * settled unchanged through existing push machinery, respecting durable backoff and
+     * retained errors. Accepted settlement acknowledges the exact original result; rejected
+     * settlement retains the original rejection. No generic HTTP error establishes definitive
+     * rejection, and unsettleable malformed/corrupt/unsupported/oversize evidence refuses
+     * unchanged. Performs no pull, snapshot or cleanup during preparation. Original import
+     * rows/source/progress/receipts are never discard targets, so corrupt/incomplete/
+     * non-settled import evidence refuses; fully settled retained legacy evidence never blocks
+     * later ordinary edits. The full ordered remainder is captured under a fresh real
+     * pause/drain lease which always closes before returning; no network or Room transaction
+     * spans the user's decision. Errors are existing closed categories; caller cancellation
+     * is always rethrown.
+     */
+    suspend fun prepareOrdinaryRecovery(session: AppAccountSession): AccountRecoveryConfirmation? {
+        currentCoroutineContext().ensureActive()
+        val observedFence = synchronized(stateLock) { currentFence }
+        // Fresh epoch read outside the operation mutex (observeCacheEpoch owns it). Entry
+        // fences revalidate inside the admitted run; drift fails closed with no effects.
+        val epoch = try {
+            observeCacheEpoch(session)
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (e: AppSessionStaleException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (e: AppSessionException) {
+            currentCoroutineContext().ensureActive()
+            return null
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            return null
+        }
+        return operationMutex.withLock {
+            ensureCurrent(observedFence)
+            if (origin == null) {
+                throw AppSessionException(AppSessionReason.CONFIGURATION_UNAVAILABLE)
+            }
+            val current = synchronized(stateLock) { currentHandle }
+            if (current == null || current !== session) {
+                throw AppSessionStaleException()
+            }
+            try {
+                current.checkCurrent()
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                throw AppSessionStaleException()
+            }
+            ensureCurrent(observedFence)
+            val recovered = synchronized(stateLock) { currentRecovered }
+                ?: throw AppSessionStaleException()
+            val binding = current.identity.binding
+            val facadeCheck: () -> Unit = {
+                if (!current.isAlive() || !isFacadeCurrent(observedFence, current)) {
+                    throw AppSessionStaleException()
+                }
+            }
+            val store = PushStore(
+                database,
+                RepositorySession(binding.accountId, binding.sessionGeneration),
+                runOwner,
+                facadeCheck,
+            )
+            val api = RecoveredSessionGymSyncApi(recovered, transport, facadeCheck)
+            // One uninterrupted run-owner admission spans frozen settlement and fenced
+            // capture: the run owner is never released between them, so no concurrent run
+            // can stage, publish or advance the epoch mid-preparation.
+            return@withLock try {
+                store.withRun(epoch) { run ->
+                    val settled = settleFrozenHeadForRecovery(run, store, api, binding.accountId)
+                    ensureCurrent(observedFence)
+                    if (!settled) {
+                        null
+                    } else if (!preflightOrdinaryRecovery(observedFence, current, run, epoch)) {
+                        // Advisory refusal: no validated definitive ordinary remainder, so the
+                        // real editor/timer drain below never starts.
+                        ensureCurrent(observedFence)
+                        null
+                    } else {
+                        withRecoveryLease(
+                            observedFence,
+                            RepositorySession(binding.accountId, binding.sessionGeneration),
+                        ) { lease ->
+                            lease.checkValid()
+                            ensureCurrent(observedFence)
+                            // Strict import-permit view through the accepted seam (own
+                            // transaction; no Room transaction is held here).
+                            val progress = try {
+                                observeOrdinaryLegacyProof(observedFence)
+                            } catch (e: CancellationException) {
+                                currentCoroutineContext().ensureActive()
+                                throw e
+                            } catch (_: Exception) {
+                                currentCoroutineContext().ensureActive()
+                                ensureCurrent(observedFence)
+                                return@withRecoveryLease null
+                            }
+                            if (progress != null && progress.phase != LegacyImportProgressPhase.SETTLED) {
+                                return@withRecoveryLease null
+                            }
+                            val confirmation = captureOrdinaryRecoveryTx(
+                                observedFence,
+                                current,
+                                run,
+                                epoch,
+                                lease,
+                                progress,
+                            )
+                            if (confirmation == null) {
+                                return@withRecoveryLease null
+                            }
+                            lease.checkValid()
+                            ensureCurrent(observedFence)
+                            currentCoroutineContext().ensureActive()
+                            synchronized(stateLock) {
+                                if (observedFence !== currentFence) {
+                                    throw AppSessionStaleException()
+                                }
+                                issuedRecoveries.add(confirmation)
+                            }
+                            // Final dispatch checks: the registered proof survives them.
+                            currentCoroutineContext().ensureActive()
+                            ensureCurrent(observedFence)
+                            facadeCheck()
+                            confirmation
+                        }
+                    }
+                }
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (e: AppSessionStaleException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (e: AppSessionException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (e: SessionVaultException) {
+                currentCoroutineContext().ensureActive()
+                lockIfAlive(observedFence, current.aliveToken())
+                throw AppSessionStaleException()
+            } catch (e: SessionRefreshException) {
+                currentCoroutineContext().ensureActive()
+                if (e.failure == SessionRefreshFailure.ACCESS_UNAVAILABLE) {
+                    ensureCurrent(observedFence)
+                    return@withLock null
+                }
+                lockIfAlive(observedFence, current.aliveToken())
+                throw AppSessionStaleException()
+            } catch (e: SessionRecoveryException) {
+                currentCoroutineContext().ensureActive()
+                lockIfAlive(observedFence, current.aliveToken())
+                throw AppSessionStaleException()
+            } catch (e: StaleSessionException) {
+                // Entry/epoch drift without authority evidence: refuse without the
+                // permanent privacy lock; a fresh decision rereads the live epoch.
+                currentCoroutineContext().ensureActive()
+                ensureCurrent(observedFence)
+                return@withLock null
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                ensureCurrent(observedFence)
+                return@withLock null
+            }
+        }
+    }
+
+    /**
+     * R13d confirmed ordinary rejection recovery. Discards only the captured exact ordinary
+     * rows, resets the selected cursor to null while preserving recorded last-success, marks
+     * the projection dirty, then reloads the complete cloud snapshot on the same admitted run
+     * with existing snapshot/tail/publication machinery (never a second facade/run admission
+     * and never the public reconcile entry, which would deadlock the held mutex/owner).
+     * The complete captured rows/authority/epoch/legacy proof are compared immediately before
+     * destructive SQL; a new/coalesced edit, changed row, different handle/stage or
+     * repeated/foreign token refuses with all remaining intent intact. There is never frozen
+     * work silently abandoned, even if injected after preparation. Newly admitted edits stay
+     * protected and are never included in the discard. Failure/cancellation after the
+     * committed discard keeps the old visible graph with the durable null-cursor marker, so
+     * restart requires a complete snapshot and never publishes old canonical state as success.
+     */
+    suspend fun recoverOrdinaryRejection(
+        session: AppAccountSession,
+        confirmation: AccountRecoveryConfirmation,
+    ): AppReconciliationResult {
+        currentCoroutineContext().ensureActive()
+        val observedFence = synchronized(stateLock) { currentFence }
+        return operationMutex.withLock {
+            ensureCurrent(observedFence)
+            if (origin == null) {
+                throw AppSessionException(AppSessionReason.CONFIGURATION_UNAVAILABLE)
+            }
+            val current = synchronized(stateLock) { currentHandle }
+            if (current == null || current !== session) {
+                throw AppSessionStaleException()
+            }
+            try {
+                current.checkCurrent()
+            } catch (e: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw e
+            } catch (_: Exception) {
+                currentCoroutineContext().ensureActive()
+                throw AppSessionStaleException()
+            }
+            ensureCurrent(observedFence)
+            val binding = current.identity.binding
+            if (confirmation.accountId != binding.accountId ||
+                confirmation.sessionGeneration != binding.sessionGeneration
+            ) {
+                throw AppSessionStaleException()
+            }
+            // Opaque owner/handle/fence/registry binding: a foreign facade token with
+            // identical durable account/room/rows still refuses here.
+            currentCoroutineContext().ensureActive()
+            if (confirmation.owner !== this) {
+                throw AppSessionStaleException()
+            }
+            if (confirmation.fence !== observedFence || confirmation.handle !== current) {
+                throw AppSessionStaleException()
+            }
+            if (confirmation.consumed || confirmation.rows.isEmpty()) {
+                throw AppSessionStaleException()
+            }
+            val registered = synchronized(stateLock) {
+                confirmation.fence === currentFence &&
+                    currentHandle === current &&
+                    currentHandle === confirmation.handle &&
+                    issuedRecoveries.contains(confirmation)
+            }
+            if (!registered) {
+                throw AppSessionStaleException()
+            }
+            synchronized(stateLock) {
+                issuedRecoveries.remove(confirmation)
+            }
+            confirmation.consumed = true
+            val recovered = synchronized(stateLock) { currentRecovered }
+                ?: throw AppSessionStaleException()
+            val facadeCheck: () -> Unit = {
+                if (!current.isAlive() || !isFacadeCurrent(observedFence, current)) {
+                    throw AppSessionStaleException()
+                }
+            }
+            val store = PushStore(
+                database,
+                RepositorySession(binding.accountId, binding.sessionGeneration),
+                runOwner,
+                facadeCheck,
+            )
+            val api = RecoveredSessionGymSyncApi(recovered, transport, facadeCheck)
+            run {
+                val result = try {
+                    store.withRun(confirmation.cacheEpoch) { run ->
+                        // Compare and discard under one fresh drain lease; the helper
+                        // closes it exactly once before any network below.
+                        withRecoveryLease(
+                            observedFence,
+                            RepositorySession(binding.accountId, binding.sessionGeneration),
+                        ) { lease ->
+                            compareOrdinaryRecovery(observedFence, current, confirmation)
+                            ensureCurrent(observedFence)
+                            if (run.readSnapshotStage() != null) {
+                                throw AppSessionStaleException()
+                            }
+                            run.discardExactOrdinaryRows(
+                                confirmation.rows,
+                                confirmation.room,
+                                confirmation.legacyRaw,
+                            ) { lease.checkValid() }
+                            ensureCurrent(observedFence)
+                        }
+                        ensureCurrent(observedFence)
+                        val stageId = try {
+                            uuidProvider()
+                        } catch (e: CancellationException) {
+                            currentCoroutineContext().ensureActive()
+                            throw e
+                        } catch (_: Exception) {
+                            currentCoroutineContext().ensureActive()
+                            throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                        }
+                        try {
+                            requireWorkoutUuid(stageId, "stageId")
+                        } catch (_: Exception) {
+                            throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                        }
+                        val syncDriver = SyncDeliveryLoop(store, api, clockMillis)
+                        val snapshotDriver = SnapshotDeliveryLoop(store, api, clockMillis)
+                        runSnapshotChain(
+                            run = run,
+                            store = store,
+                            syncDriver = syncDriver,
+                            snapshotDriver = snapshotDriver,
+                            handle = current,
+                            fence = observedFence,
+                            facadeCheck = facadeCheck,
+                            stageId = stageId,
+                            maxPushMutations = 100,
+                            maxPullPages = 100,
+                            pullPageLimit = 100,
+                            maxSnapshotPages = 100,
+                            snapshotPageLimit = 200,
+                        )
+                    }
+                } catch (e: CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e
+                } catch (e: AppSessionStaleException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e
+                } catch (e: AppSessionException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e
+                } catch (e: SessionVaultException) {
+                    currentCoroutineContext().ensureActive()
+                    lockIfAlive(observedFence, current.aliveToken())
+                    throw AppSessionStaleException()
+                } catch (e: SessionRefreshException) {
+                    currentCoroutineContext().ensureActive()
+                    if (e.failure == SessionRefreshFailure.ACCESS_UNAVAILABLE) {
+                        ensureCurrent(observedFence)
+                        updateDeliveryStatus(current, observedFence, AppSessionDeliveryStatus.RETRY_REQUIRED)
+                        throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                    }
+                    lockIfAlive(observedFence, current.aliveToken())
+                    throw AppSessionStaleException()
+                } catch (e: SessionRecoveryException) {
+                    currentCoroutineContext().ensureActive()
+                    lockIfAlive(observedFence, current.aliveToken())
+                    throw AppSessionStaleException()
+                } catch (e: SyncApiException.ReauthenticationRequired) {
+                    currentCoroutineContext().ensureActive()
+                    ensureCurrent(observedFence)
+                    updateDeliveryStatus(current, observedFence, AppSessionDeliveryStatus.REAUTHENTICATION_REQUIRED)
+                    throw e
+                } catch (e: SyncApiException) {
+                    currentCoroutineContext().ensureActive()
+                    ensureCurrent(observedFence)
+                    throw e
+                } catch (e: StalePushClaimException) {
+                    currentCoroutineContext().ensureActive()
+                    throw AppSessionStaleException()
+                } catch (e: StaleSessionException) {
+                    currentCoroutineContext().ensureActive()
+                    lockIfAlive(observedFence, current.aliveToken())
+                    throw AppSessionStaleException()
+                } catch (_: Exception) {
+                    currentCoroutineContext().ensureActive()
+                    ensureCurrent(observedFence)
+                    try {
+                        current.checkCurrent()
+                    } catch (e: CancellationException) {
+                        currentCoroutineContext().ensureActive()
+                        throw e
+                    } catch (_: Exception) {
+                        currentCoroutineContext().ensureActive()
+                        throw AppSessionStaleException()
+                    }
+                    ensureCurrent(observedFence)
+                    updateDeliveryStatus(current, observedFence, AppSessionDeliveryStatus.RETRY_REQUIRED)
+                    throw AppSessionException(AppSessionReason.UNAVAILABLE)
+                }
+                currentCoroutineContext().ensureActive()
+                try {
+                    current.checkCurrent()
+                } catch (e: CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    throw e
+                } catch (_: Exception) {
+                    currentCoroutineContext().ensureActive()
+                    throw AppSessionStaleException()
+                }
+                ensureCurrent(observedFence)
+                result
+            }
+        }
+    }
+
+    /**
+     * Settles only an already-frozen uncertain head through existing single-head push
+     * machinery. Returns true when validation may proceed (empty queue, pending/rejected
+     * head, or freshly settled frozen head). Returns false on backoff deferral, retained
+     * errors, auth stops or any unsettleable evidence. Never freezes or sends a previously
+     * pending successor. No pull, snapshot or cleanup runs here.
+     */
+    private suspend fun settleFrozenHeadForRecovery(
+        run: com.dragosfotache.gymtracka.data.sync.store.PushRun,
+        store: PushStore,
+        api: RecoveredSessionGymSyncApi,
+        accountId: String,
+    ): Boolean {
+        // A retained snapshot stage excludes ordinary recovery until explicit restart.
+        if (run.readSnapshotStage() != null) {
+            return false
+        }
+        val rows = database.syncDao().getOutboxForAccount(accountId)
+        currentCoroutineContext().ensureActive()
+        val head = rows.firstOrNull() ?: return true
+        if (head.state != "frozen" || head.errorCode != null || head.errorMessage != null) {
+            return true
+        }
+        val result = PushDeliveryLoop(store, api, clockMillis).deliver(run, 1)
+        currentCoroutineContext().ensureActive()
+        return when (val stop = result.stop) {
+            is PushDeliveryStop.Empty -> true
+            is PushDeliveryStop.LimitReached -> true
+            is PushDeliveryStop.Blocked -> stop.reason == PushBlockReason.REJECTED
+            else -> false
+        }
+    }
+
+    /**
+     * Acquires one fresh real pause/drain lease for recovery work and closes it exactly once.
+     * Close is never swallowed into a success return: a non-cancellation close fault after a
+     * successful block fails closed instead of returning success, and caller cancellation
+     * always dominates. A block failure propagates unchanged (never a silent success).
+     */
+    private suspend fun <T> withRecoveryLease(
+        fence: Any,
+        session: RepositorySession,
+        block: suspend (ProjectionPublicationLease) -> T,
+    ): T {
+        ensureCurrent(fence)
+        val lease = try {
+            transitionBarrier.acquire(session)
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            ensureCurrent(fence)
+            throw AppSessionException(AppSessionReason.UNAVAILABLE)
+        }
+        val result: T
+        try {
+            result = block(lease)
+        } catch (e: CancellationException) {
+            try {
+                lease.close()
+            } catch (_: Exception) {
+            }
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (e: Throwable) {
+            val closeError = try {
+                lease.close()
+                null
+            } catch (ce: CancellationException) {
+                currentCoroutineContext().ensureActive()
+                throw ce
+            } catch (ce: Exception) {
+                ce
+            }
+            if (closeError != null) {
+                currentCoroutineContext().ensureActive()
+                ensureCurrent(fence)
+                throw AppSessionException(AppSessionReason.UNAVAILABLE)
+            }
+            throw e
+        }
+        try {
+            lease.close()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            ensureCurrent(fence)
+            throw AppSessionException(AppSessionReason.UNAVAILABLE)
+        }
+        return result
+    }
+
+    /**
+     * Pure strict ordinary-remainder validation shared by preliminary eligibility and binding
+     * capture. No I/O; callers supply rows read under their own fencing. Requires a nonempty
+     * remainder headed by a definitive ordinary rejection, full pending/rejected numeric and
+     * state bookkeeping validity, strict durable wrappers and no import-kind mutation.
+     */
+    private fun ordinaryRemainderValid(rows: List<SyncOutboxEntity>): Boolean {
+        if (rows.isEmpty()) return false
+        val head = rows.first()
+        if (head.state != "rejected" || head.errorCode.isNullOrBlank()) return false
+        for (row in rows) {
+            if (row.sequence <= 0L ||
+                row.localGeneration <= 0L ||
+                row.payloadVersion != DURABLE_PAYLOAD_VERSION ||
+                (row.retryAfterMillis != null && row.retryAfterMillis < 0L)
+            ) {
+                return false
+            }
+            when (row.state) {
+                // Pending rows carry no frozen backoff/error bookkeeping.
+                "pending" -> if (row.attemptCount != 0 ||
+                    row.errorCode != null ||
+                    row.errorMessage != null ||
+                    row.retryAfterMillis != null
+                ) {
+                    return false
+                }
+                "rejected" -> if (row.attemptCount < 1 || row.errorCode.isNullOrBlank()) {
+                    return false
+                }
+                else -> return false
+            }
+            val kind = try {
+                readDurableOutboxRow(row).request.envelope.kind
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: UnsupportedDurableVersionException) {
+                return false
+            } catch (_: SyncModelException) {
+                return false
+            } catch (_: Exception) {
+                return false
+            }
+            if (kind == MutationKind.AGGREGATE_IMPORT) return false
+        }
+        return true
+    }
+
+    /**
+     * Strict preliminary ordinary-recovery eligibility under the same admitted run, before
+     * any real editor/timer pause or drain. Revalidates no retained stage, exact live ready
+     * authority, cache epoch, process and caller liveness, the full valid ordered rejected
+     * ordinary head plus pending/rejected remainder, and the strict settled-or-absent legacy
+     * proof, all in a real Room transaction with canonical fences. FALSE returns without any
+     * hardware/editor pause or drain; TRUE is advisory only and the caller must still
+     * revalidate and capture after the real drain (which may include newly drained rest
+     * edits). Frozen-prefix settlement is unaffected: an accepted prefix leaving only a
+     * pending remainder is not confirmable and avoids the drain here.
+     */
+    private suspend fun preflightOrdinaryRecovery(
+        fence: Any,
+        handle: AppAccountSession,
+        run: com.dragosfotache.gymtracka.data.sync.store.PushRun,
+        cacheEpoch: Long,
+    ): Boolean {
+        ensureCurrent(fence)
+        try {
+            handle.checkCurrent()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            throw AppSessionStaleException()
+        }
+        ensureCurrent(fence)
+        // No stage may be selected: checked on the admitted run outside any Room
+        // transaction, mirroring the binding capture below.
+        if (run.readSnapshotStage() != null) {
+            return false
+        }
+        val binding = handle.identity.binding
+        val eligible = database.withTransaction {
+            currentCoroutineContext().ensureActive()
+            checkCanonicalFences(database, binding.accountId, binding.sessionGeneration, cacheEpoch)
+            currentCoroutineContext().ensureActive()
+            if (!handle.isAlive() || !isFacadeCurrent(fence, handle)) {
+                throw AppSessionStaleException()
+            }
+            val rows = database.syncDao().getOutboxForAccount(binding.accountId)
+            if (!ordinaryRemainderValid(rows)) {
+                return@withTransaction false
+            }
+            // Exact ACTIVE ready authority, not a merely successful read: the strict
+            // journal/device ACTIVE tuple must equal the handle's admitted snapshot
+            // (binding and generation included) with a complete baseline cache. Anything
+            // else refuses before any drain.
+            val ready = try {
+                authority.readActiveReadyInTransaction()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                return@withTransaction false
+            }
+            if (ready.snapshot != handle.room ||
+                ready.snapshot.phase != RecoveryRoomPhase.ACTIVE ||
+                ready.snapshot.identity?.binding?.accountId != binding.accountId ||
+                ready.snapshot.sessionGeneration != binding.sessionGeneration
+            ) {
+                return@withTransaction false
+            }
+            val readyCache = ready.cache
+            if (readyCache == null || !readyCache.baselineComplete ||
+                readyCache.accountId != binding.accountId
+            ) {
+                return@withTransaction false
+            }
+            try {
+                readLegacyRaw()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                return@withTransaction false
+            }
+            // Strict settled-or-absent legacy proof as binding evidence in the same
+            // transaction: valid-looking tamper cannot become an authorized drain.
+            try {
+                if (com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportGate.checkEmpty(
+                        database,
+                        binding.accountId,
+                    ) != null
+                ) {
+                    return@withTransaction false
+                }
+            } catch (e: CancellationException) {
+                throw e
+            }
+            checkCanonicalFences(database, binding.accountId, binding.sessionGeneration, cacheEpoch)
+            currentCoroutineContext().ensureActive()
+            if (!handle.isAlive() || !isFacadeCurrent(fence, handle)) {
+                throw AppSessionStaleException()
+            }
+            true
+        }
+        currentCoroutineContext().ensureActive()
+        ensureCurrent(fence)
+        return eligible
+    }
+
+    /**
+     * Captures the full ordered ordinary remainder in one fenced transaction under the
+     * caller's held drain lease. Returns null unless the head is a definitive ordinary
+     * rejection, every remaining row passes full pending/rejected numeric/state bookkeeping
+     * validity, no row is an import mutation, the view permit was settled-or-absent and the
+     * exact selected authority plus strict raw legacy evidence reread cleanly. The lease is
+     * checked before and after capture; the retained snapshot plus final dispatch checks in
+     * the caller keep the proof valid through return.
+     */
+    private suspend fun captureOrdinaryRecoveryTx(
+        fence: Any,
+        handle: AppAccountSession,
+        run: com.dragosfotache.gymtracka.data.sync.store.PushRun,
+        cacheEpoch: Long,
+        lease: ProjectionPublicationLease,
+        progress: com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportProgress?,
+    ): AccountRecoveryConfirmation? {
+        ensureCurrent(fence)
+        try {
+            handle.checkCurrent()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            throw AppSessionStaleException()
+        }
+        ensureCurrent(fence)
+        // No stage may be selected: checked on the admitted run outside any Room
+        // transaction (staging needs the same uninterrupted run owner, which this
+        // preparation holds, and a nonempty ordinary outbox blocks any new begin).
+        if (run.readSnapshotStage() != null) {
+            return null
+        }
+        val binding = handle.identity.binding
+        return database.withTransaction {
+            currentCoroutineContext().ensureActive()
+            checkCanonicalFences(database, binding.accountId, binding.sessionGeneration, cacheEpoch)
+            lease.checkValid()
+            currentCoroutineContext().ensureActive()
+            if (!handle.isAlive() || !isFacadeCurrent(fence, handle)) {
+                throw AppSessionStaleException()
+            }
+            val rows: List<SyncOutboxEntity> = database.syncDao().getOutboxForAccount(binding.accountId)
+            currentCoroutineContext().ensureActive()
+            if (!ordinaryRemainderValid(rows)) {
+                return@withTransaction null
+            }
+            val room = try {
+                authority.read()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                return@withTransaction null
+            }
+            val raw = try {
+                readLegacyRaw()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                return@withTransaction null
+            }
+            // Strict legacy settlement gate inside the transaction: the advisory view
+            // permit is revalidated here as binding evidence, so valid-looking tamper
+            // between advisory observation and raw capture cannot become authorized proof.
+            // Original source/receipt/lineage stays binding even for settled migrations.
+            try {
+                if (com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportGate.checkEmpty(
+                        database,
+                        binding.accountId,
+                    ) != null
+                ) {
+                    return@withTransaction null
+                }
+            } catch (e: CancellationException) {
+                throw e
+            }
+            // Final in-transaction rechecks before commit: fences, lease, liveness.
+            checkCanonicalFences(database, binding.accountId, binding.sessionGeneration, cacheEpoch)
+            lease.checkValid()
+            currentCoroutineContext().ensureActive()
+            if (!handle.isAlive() || !isFacadeCurrent(fence, handle)) {
+                throw AppSessionStaleException()
+            }
+            currentCoroutineContext().ensureActive()
+            AccountRecoveryConfirmation(
+                pendingCount = rows.size.toLong(),
+                owner = this@AppSessionCoordinator,
+                fence = fence,
+                handle = handle,
+                accountId = binding.accountId,
+                sessionGeneration = binding.sessionGeneration,
+                cacheEpoch = cacheEpoch,
+                rows = rows,
+                room = room,
+                legacyProof = progress,
+                legacyRaw = raw,
+            )
+        }
+    }
+
+    /**
+     * Immediate pre-destructive comparison on the admitted recovery run. Any new or
+     * coalesced edit, changed row, frozen injection, authority/epoch/legacy drift or stage
+     * appearance refuses stale with all remaining intent intact.
+     */
+    private suspend fun compareOrdinaryRecovery(
+        fence: Any,
+        handle: AppAccountSession,
+        confirmation: AccountRecoveryConfirmation,
+    ) {
+        ensureCurrent(fence)
+        try {
+            handle.checkCurrent()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            throw AppSessionStaleException()
+        }
+        ensureCurrent(fence)
+        val binding = handle.identity.binding
+        if (confirmation.accountId != binding.accountId ||
+            confirmation.sessionGeneration != binding.sessionGeneration
+        ) {
+            throw AppSessionStaleException()
+        }
+        val room = try {
+            authority.read()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            throw AppSessionStaleException()
+        }
+        ensureCurrent(fence)
+        if (room != confirmation.room) {
+            throw AppSessionStaleException()
+        }
+        val rows = database.syncDao().getOutboxForAccount(binding.accountId)
+        currentCoroutineContext().ensureActive()
+        ensureCurrent(fence)
+        if (rows != confirmation.rows) {
+            throw AppSessionStaleException()
+        }
+        if (rows.any { it.state != "pending" && it.state != "rejected" }) {
+            throw AppSessionStaleException()
+        }
+        // Outside any Room transaction here (notably on Main-dispatched callers), so the
+        // transactional helper dispatches the synchronous cursor reads correctly.
+        val progress = try {
+            readLegacyRawTransactionally()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw e
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+            throw AppSessionStaleException()
+        }
+        ensureCurrent(fence)
+        if (progress != confirmation.legacyRaw) {
+            throw AppSessionStaleException()
+        }
+    }
+
+    /**
+     * Strict legacy proof for ordinary work. Null means no migration; only a fully settled
+     * migration permits ordinary recovery. Original import rows/source/progress/receipts are
+     * never discard targets. Corrupt evidence throws and the caller refuses.
+     */
+    private suspend fun observeOrdinaryLegacyProof(fence: Any): com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportProgress? {
+        ensureCurrent(fence)
+        val fenceCheck: () -> Unit = {
+            synchronized(stateLock) {
+                if (fence !== currentFence) throw AppSessionStaleException()
+            }
+        }
+        val store = LegacyImportStore(
+            database,
+            LegacyImportCaptureBarrier { throw LegacyImportException(LegacyImportFailure.UNAVAILABLE) },
+            fenceCheck,
+            uuidProvider,
+        )
+        return store.observeAny()
+    }
+
+    /**
+     * Strict raw legacy evidence read. Tx-safe cursor observation with no transaction of its
+     * own, so it runs both inside the fenced capture/discard transactions and outside them.
+     * Corrupt evidence throws and the caller refuses; cancellation propagates.
+     *
+     * Precondition: the synchronous DAO cursor reads below throw on Main-thread access, so
+     * call only inside [database.withTransaction] (which dispatches them off Main and reads
+     * the four rows atomically) or from a non-Main dispatcher. Outside-transaction paths
+     * must use [readLegacyRawTransactionally]; never allowMainThreadQueries to work around
+     * this, and never bypass the staleness mapping on failure.
+     */
+    private suspend fun readLegacyRaw(): LegacyEvidenceSnapshot =
+        LegacyEvidenceSnapshot(
+            com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportSettlement.readJournalStrict(database),
+            com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportSettlement.readEntriesStrict(database),
+            com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportSettlement.readProgressStrict(database),
+            com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportSettlement.readAcceptancesStrict(database),
+        )
+
+    /**
+     * Transaction-safe strict raw legacy evidence read for outside-transaction comparison
+     * paths (notably the pre-destructive compare invoked from Main-dispatched UI callers).
+     * Runs the synchronous cursor reads inside Room's transaction dispatch so Main-thread
+     * access is never attempted and the four rows read atomically. Inside-transaction
+     * callers keep using [readLegacyRaw] directly. Corrupt evidence throws and the caller
+     * refuses; cancellation propagates.
+     */
+    private suspend fun readLegacyRawTransactionally(): LegacyEvidenceSnapshot =
+        database.withTransaction {
+            readLegacyRaw()
+        }
+
+    /**
      * R12c guarded ACTIVE reconciliation over the exact current handle. Holds ONE
      * admitted run through push/pull, any typed full-resync, an actual
      * post-baseline tail and guarded paired publication. Never calls the
@@ -2227,7 +3091,32 @@ internal class AppSessionCoordinator(
                     )
                 }
                 val tailPull = tail.pull
-                if (tailPull?.stop !is PullDeliveryStop.Tail || tail.hasOutstandingLocalWork != false) {
+                if (tailPull == null || tailPull.stop !is PullDeliveryStop.Tail) {
+                    updateDeliveryStatus(handle, fence, statusFor(tail))
+                    return AppReconciliationResult(
+                        stop = AppReconciliationStop.PULL_STOPPED,
+                        cacheEpoch = run.observedCacheEpoch(),
+                        delivery = tail,
+                        snapshot = current,
+                        publication = null,
+                        retainedStageId = null,
+                    )
+                }
+                if (tail.hasOutstandingLocalWork == true) {
+                    // Real completed tail with known outstanding work: report protected without
+                    // publication or drain. The full visible graph and new pending bytes stay
+                    // preserved; no pending edit is sent after the terminal pull.
+                    updateDeliveryStatus(handle, fence, AppSessionDeliveryStatus.RETRY_REQUIRED)
+                    return AppReconciliationResult(
+                        stop = AppReconciliationStop.PROTECTED,
+                        cacheEpoch = run.observedCacheEpoch(),
+                        delivery = tail,
+                        snapshot = current,
+                        publication = null,
+                        retainedStageId = null,
+                    )
+                }
+                if (tail.hasOutstandingLocalWork != false) {
                     updateDeliveryStatus(handle, fence, statusFor(tail))
                     return AppReconciliationResult(
                         stop = AppReconciliationStop.PULL_STOPPED,
@@ -2683,6 +3572,7 @@ internal class AppSessionCoordinator(
             preparedEngine?.invalidate()
             currentHandle = handle
             currentRecovered = recovered
+            issuedRecoveries.clear()
             val active = AppSessionState.Active(handle, AppSessionDeliveryStatus.IDLE)
             _state.value = active
             return active
@@ -2784,6 +3674,7 @@ internal class AppSessionCoordinator(
             handle.markStale()
             currentHandle = null
             currentRecovered = null
+            issuedRecoveries.clear()
             _state.value = AppSessionState.PrivacyLocked
             preparation?.invalidate()
             sameAccount?.invalidate()
@@ -2808,6 +3699,7 @@ internal class AppSessionCoordinator(
             currentHandle?.markStale()
             currentHandle = null
             currentRecovered = null
+            issuedRecoveries.clear()
             _state.value = AppSessionState.PrivacyLocked
             recovery.invalidate()
             preparedEngine?.invalidate()

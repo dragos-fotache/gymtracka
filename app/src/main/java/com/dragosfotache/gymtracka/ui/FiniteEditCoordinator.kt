@@ -16,6 +16,9 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
 
@@ -164,6 +167,18 @@ internal class FiniteEditCoordinator(private val scope: CoroutineScope) {
     private var lastWrite: Job? = null
     private val owned = mutableSetOf<Job>()
     private val disposedCause = CancellationException("FiniteEditCoordinator is disposed")
+
+    /**
+     * R13d monotonic conflated successful-commit notification. Incremented exactly once per
+     * [settleSuccess] (normal, exclusive and terminal commits); failed, cancelled, refused
+     * and untracked work never advances it. The counter saturates at [Long.MAX_VALUE] rather
+     * than wrapping or throwing after persistence, so late observers never observe a
+     * regression. Emission never throws back into persistence and never clears retained
+     * failures. Controllers debounce/conflate this signal and always re-derive queue state
+     * from durable storage before acting on it.
+     */
+    private val _committedSequence = MutableStateFlow(0L)
+    val committedEdits: StateFlow<Long> = _committedSequence.asStateFlow()
 
     /**
      * Accepts one finite normal write. Returns the tracking job, or null when paused, disposed, or
@@ -552,6 +567,8 @@ internal class FiniteEditCoordinator(private val scope: CoroutineScope) {
                 it.key == tracked.key && !it.terminal && it.acceptSeq <= tracked.acceptSeq
             }
             tracked.signal.complete(Unit)
+            val observed = _committedSequence.value
+            _committedSequence.value = if (observed == Long.MAX_VALUE) Long.MAX_VALUE else observed + 1
         }
     }
 

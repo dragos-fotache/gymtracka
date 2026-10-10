@@ -1,11 +1,11 @@
 # Implemented Android sync components
 
 Default `GymApp()` is the mandatory account/configuration gate. A configured factory constructs private authority,
-real scoped edit/timer barriers and foreground identity/exchange seams; startup performs read-only recovery, never
-HTTP or Google UI automatically. Explicit service-confirmed sign-in uses approved P18 capture/consent, exact delivery
+real scoped edit/timer barriers and foreground identity/exchange seams. Startup recovery itself is read-only and never
+calls HTTP or Google UI; after complete ACTIVE admission, a separate foreground controller may reconcile automatically. Explicit service-confirmed sign-in uses approved P18 capture/consent, exact delivery
 and complete Room14 activation. Matching established accounts reopen/edit offline without login every launch.
-Automatic foreground/edit/manual synchronization and ordinary confirmed rejection/stage recovery remain separate;
-no sign-out/switching, scheduler, deployment or personal account/device operation is inferred.
+Foreground/edit/manual synchronization and captured confirmed ordinary rejection/stage recovery use the existing
+fenced ACTIVE seams. No sign-out/switching, scheduler, deployment or personal account/device operation is inferred.
 The [roadmap](../remaining-work-roadmap.md) owns delivery status; the
 [integration design](integration-design.md) owns approved future coordination. The
 [shared contract](../../shared-docs/docs/backend-contract/README.md) remains the service authority.
@@ -51,6 +51,39 @@ Explicit `GymApp(appState)` is an internal feature/test path, never a production
 
 See [runtime architecture](../architecture.md#application-structure), [private import](#private-import-delivery-and-activation),
 [app authority](#app-facing-authority-and-offline-recovery) and [foreground exchange](#bounded-foreground-exchange-and-guarded-grant-handoff).
+
+## Foreground synchronization and ordinary recovery
+
+`../ui/account/AccountSyncState` is composition-owned; `SessionAccountSyncOperations` delegates only exact current handles
+and matching runtime edit counters. It owns one serialized operation slot, nonqueueing busy/private manual actions,
+foreground/activation demand and debounced successful-edit demand. Handle-scoped raw counters/covered watermarks and
+first-counter readiness prevent duplicate activation/backlog runs while preserving genuinely newer intent. Cancellation
+retires owned work before readmission, never cancels the borrowed scope; a same-handle status emission repairs missing
+edit observation without turnover or watermark/readiness resets. Bounded tail/stop completion does not spin around
+protected publication, retained errors or backoff. Recoverable stops keep healthy offline editing available.
+
+The account panel provides manual sync, explicit retained-stage restart and confirmed ordinary recovery. Stage/token
+callbacks capture exact values; turnover clears old observations. Request-relative warning arming requires a fresh
+preparation, not an old token repaint. Cancel/dismiss performs no discard and promises no remote rollback.
+
+`prepareOrdinaryRecovery(session)` and `recoverOrdinaryRejection(session, confirmation)` keep facade/run ownership across
+all phases. Preparation settles an already frozen head unchanged, never sends a pending successor, and strictly preflights
+stage/ready authority/epoch/full ordinary remainder/absent-or-settled import proof **before** real editor/timer drain.
+Nonconfirmable work returns without acquiring that drain. Eligibility is advisory: actual capture revalidates under the
+real lease, including newly drained rest writes, then registers an opaque owner/fence/exact-handle-bound single-use token.
+No import mutation/source/progress/receipt is an ordinary discard target.
+
+Confirmation pauses/drains again, compares full ordered rows and strict authority/legacy evidence, and transactionally
+discards only captured ordinary intent under the same admitted run. Cursor becomes null; recorded last-success is
+preserved and projection marked dirty. Final SQL is followed by authority/legacy/lease/process/session/epoch/caller
+checks before commit. Failures roll back; cancellation retains genuinely committed results for fresh durable reread.
+Strict synchronous legacy cursor reads use Room transaction dispatch even from the actual Main UI caller.
+
+Existing complete snapshot/terminal/post-baseline tail machinery reloads canonical state. A real Tail with known newer
+outstanding intent returns `PROTECTED`/retry-required with no publisher/drain, preserving the entire visible graph and
+exact pending bytes; unknown/non-Tail fails closed. Only a known clean tail proceeds through existing guarded publication.
+The [R13d review](../archive/remaining-work/R13d-review.md) owns independent current/API24/HTTP/package evidence; actual
+Google/configuration/deployment/phone and deferred public lifecycle/background work are not inferred.
 
 ## Room and local capture
 
@@ -127,7 +160,7 @@ evidence remains separately authorized R17a.
 **Explicitly opt-in storage/delivery boundary:** the [R13b review](../archive/remaining-work/R13b-review.md) owns real Room/vault/HTTP,
 source-preservation, migration and scoped regression evidence; the [archived specification](../archive/remaining-work/R13b-task.md)
 retains the bounded assignment. The mandatory startup factory supplies this policy for explicit foreground actions;
-automatic foreground/edit/manual triggers remain absent.
+automatic foreground/edit/manual triggers apply only to an admitted ACTIVE handle, never to private import continuation.
 
 - `LegacyImportPolicy` opts an explicit `AppSessionCoordinator` into capture through its SAME held real transition lease
   and existing private grant preparation. A borrowed check-only lease never closes the outer owner. Empty installs use
@@ -394,7 +427,7 @@ This is bounded push orchestration, not a complete running sync engine or durabl
 exist and the [shared driver](#shared-push-before-pull-and-valid-tail) composes them uninterrupted with valid-tail
 bookkeeping. R08c supplies inert complete-snapshot baseline/recovery; the separate [app-facing authority boundary](#app-facing-authority-and-offline-recovery)
 composes the Room/session journal and prepared bootstrap. Explicit ACTIVE reconciliation and scoped UI/timer integration
-are described below; the mandatory startup factory runs no delivery automatically.
+are described below; startup recovery itself runs no delivery; the separately owned foreground controller admits only healthy ACTIVE reconciliation.
 
 ## Incremental checkpoint transactions
 
@@ -717,7 +750,7 @@ authority. Initial sign-in requires an empty signed-out expectation; reauthentic
 
 [R11b acceptance](../archive/remaining-work/R11b-review.md) closes deterministic personal R11a–b/package gates, not real
 Google/signing/HTTPS/phone verification. The mandatory account controller composes private P18 import and complete
-activation; foreground/edit/manual triggers remain separate. Null-policy local-root refusal and deferred public lifecycle proofs remain intact.
+activation; the separate foreground/edit/manual controller consumes only the resulting exact ACTIVE handle. Null-policy local-root refusal and deferred public lifecycle proofs remain intact.
 
 ## API and secure HTTP
 
@@ -1096,7 +1129,7 @@ delivered separately; automatic synchronization and live milestone gates remain 
 bootstrap/completion and startup/refresh components. Construction performs no I/O and exposes one stable read-only
 `StateFlow`, initially privacy-locked. Configured mandatory startup constructs it with the exact-handle account runtime,
 real scoped UI/timer integration and the approved P18 policy. Foreground exchange/grant handoff and complete private
-activation are invoked by the account controller; automatic foreground/edit/manual synchronization remains separate.
+activation are invoked by the startup controller; the separate sync controller owns foreground/edit/manual ACTIVE demand.
 Transition and publication barriers are mandatory caller inputs with no permissive defaults.
 
 - One operation mutex serializes facade work, one supplied physical-DB run owner serializes engine work, and one shared
@@ -1169,7 +1202,8 @@ canonical timer impact and lease-safe retirement, including hidden reauthenticat
 private with no automatic HTTP. Open explicit-save custom editors refuse normal transitions until explicitly closed;
 emergency invalidation hides immediately. App/feature epochs reconcile selected models, active pill and request-bound
 consent without late history writes or timer resurrection. See [runtime/refresh architecture](../architecture.md#projection-observation-and-feature-refresh).
-Mandatory startup/account presentation composes this runtime without automatic delivery. Public sign-out/switch/general
+Mandatory startup/account presentation composes this runtime with separately serialized foreground/edit/manual ACTIVE delivery;
+private startup recovery itself remains HTTP-free. Public sign-out/switch/general
 import-choice/deletion UI and background scheduling remain absent.
 
 ## Legacy auth replay limitation

@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.AlertDialog
@@ -29,6 +31,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.dragosfotache.gymtracka.BuildConfig
 import com.dragosfotache.gymtracka.data.gym.GymDatabase
 import com.dragosfotache.gymtracka.data.sync.api.GoogleIdentityException
@@ -224,7 +228,13 @@ internal fun AccountStartupApp() {
     val startupState = remember(operations, config.signInAvailable, scope) {
         AccountStartupState(operations, config.signInAvailable, scope)
     }
-    DisposableEffect(signInCoordinator, identityProvider, accountState, startupState, consent) {
+    val syncOperations = remember(accountState) {
+        SessionAccountSyncOperations(accountState)
+    }
+    val syncController = remember(syncOperations, scope) {
+        AccountSyncState(syncOperations, scope)
+    }
+    DisposableEffect(signInCoordinator, identityProvider, accountState, startupState, consent, syncController) {
         onDispose {
             try {
                 startupState.dispose()
@@ -246,9 +256,13 @@ internal fun AccountStartupApp() {
                 accountState.dispose()
             } catch (_: Exception) {
             }
+            try {
+                syncController.dispose()
+            } catch (_: Exception) {
+            }
         }
     }
-    AccountStartupApp(accountState, startupState, consent)
+    AccountStartupApp(accountState, startupState, consent, syncController)
 }
 
 /**
@@ -261,6 +275,7 @@ internal fun AccountStartupApp(
     accountState: AccountGymAppState,
     startupState: AccountStartupState,
     consent: AccountImportConsent,
+    syncState: AccountSyncState? = null,
 ) {
     DisposableEffect(startupState) {
         startupState.start()
@@ -269,6 +284,46 @@ internal fun AccountStartupApp(
                 startupState.dispose()
             } catch (_: Exception) {
             }
+        }
+    }
+    DisposableEffect(syncState) {
+        syncState?.start()
+        onDispose {
+            try {
+                syncState?.dispose()
+            } catch (_: Exception) {
+            }
+        }
+    }
+    val context = LocalContext.current
+    val activity = context as? ComponentActivity
+    DisposableEffect(activity?.lifecycle, syncState) {
+        val lifecycle = activity?.lifecycle
+        if (syncState == null) {
+            return@DisposableEffect onDispose {}
+        }
+        if (lifecycle == null) {
+            syncState.setForeground(false)
+            return@DisposableEffect onDispose {
+                syncState.setForeground(false)
+            }
+        }
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> syncState.setForeground(true)
+                Lifecycle.Event.ON_STOP -> syncState.setForeground(false)
+                Lifecycle.Event.ON_DESTROY -> syncState.setForeground(false)
+                else -> Unit
+            }
+        }
+        lifecycle.addObserver(observer)
+        syncState.setForeground(lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
+        onDispose {
+            try {
+                lifecycle.removeObserver(observer)
+            } catch (_: Exception) {
+            }
+            syncState.setForeground(false)
         }
     }
     val authority = accountState.sessionCoordinator.state.collectAsState().value
@@ -307,6 +362,7 @@ internal fun AccountStartupApp(
                         onDismiss = { showStatus = false },
                         onReauthenticate = { startupState.signIn() },
                         onCancel = { startupState.cancel() },
+                        syncState = syncState,
                     )
                 }
                 ImportWarningDialog(pending = pendingDecision, consent = consent)
@@ -541,13 +597,18 @@ private fun AccountStatusDialog(
     onDismiss: () -> Unit,
     onReauthenticate: () -> Unit,
     onCancel: () -> Unit,
+    syncState: AccountSyncState? = null,
 ) {
+    val syncBusy = syncState?.uiState?.collectAsState()?.value?.busy ?: false
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.testTag("account-status"),
         title = { Text("Account") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 val status = uiState.syncStatus
                 if (status == null) {
                     Text(
@@ -587,12 +648,15 @@ private fun AccountStatusDialog(
                 if (uiState.busy) {
                     CircularProgressIndicator()
                 }
+                if (syncState != null) {
+                    AccountSyncSection(syncState)
+                }
             }
         },
         confirmButton = {
             TextButton(
                 onClick = onReauthenticate,
-                enabled = signInAvailable && !uiState.busy,
+                enabled = signInAvailable && !uiState.busy && !syncBusy,
                 modifier = Modifier.testTag("account-reauthenticate"),
             ) {
                 Text("Reauthenticate")

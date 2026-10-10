@@ -15,7 +15,7 @@ Paths below are relative to `app/src/main/java/com/dragosfotache/gymtracka/`.
 |---|---|
 | `MainActivity.kt` | Edge-to-edge/Compose/theme setup; calls `GymApp` |
 | `ui/GymApp.kt` | Mandatory no-argument startup entry; explicit scoped scaffold, destinations, bottom navigation, active-workout pill and dialogs |
-| `ui/account/` | Configuration/privacy gates, composition-scoped startup controller, foreground sign-in/reauthentication, import consent/progress and account status |
+| `ui/account/` | Configuration/privacy gates, composition-scoped startup/sync controllers, foreground sign-in/reauthentication, import consent/progress, status and captured recovery controls |
 | `ui/GymAppState.kt` | Navigation/active-pill materialization reconciliation, catalogue restoration, real edit/timer barriers and rest timer |
 | `ui/AccountGymAppState.kt` | Explicit account runtime/root, exact-handle repository binding, real import-policy barriers, privacy gate and lease-safe scope retirement |
 | `ui/exercises/` | Catalogue/detail/custom editor, picker variants, feature state |
@@ -51,7 +51,11 @@ composition-owned runtime/controller. Sign-in is explicit; it consumes a service
 capture/consent and makes at most one complete activation attempt. Matching complete Room/vault bindings reopen/edit
 offline without HTTP or deadline checks. No-argument startup never renders the explicit local/test `GymApp(appState)`
 path. See [startup/account presentation](sync/implementation.md#mandatory-startup-and-account-presentation) for lifecycle,
-configuration and read-only metadata details; automatic foreground/edit/manual sync remains separate.
+configuration and read-only metadata details. A separate composition-owned `AccountSyncState` observes exact ACTIVE authority
+and matching committed-edit counters, serializes foreground/manual/edit demand and delegates existing reconciliation.
+Lifecycle START/STOP/DESTROY and disposal fence owned jobs without cancelling the borrowed scope. Status-only same-handle
+updates preserve runtime/navigation/timer state; missing same-handle edit observation is repaired without resetting coverage.
+See [foreground synchronization and ordinary recovery](sync/implementation.md#foreground-synchronization-and-ordinary-recovery).
 
 ## Room database
 
@@ -256,6 +260,12 @@ registration when draining again. External drains still observe those transition
 running timer only after repository success. Failure/cancellation evidence is retained by originating acceptance order;
 only a successful same-identity retry/superseding mutation settles nonterminal evidence. Unrelated edits, screen disposal
 and drain observation do not erase it. Terminal evidence is never automatically retried or cleared.
+
+`FiniteEditCoordinator.committedEdits` is a read-only, monotonic conflated counter advanced once by successful settlement,
+including exclusive and terminal rest writes; refused/failed/cancelled/untracked work does not advance it. It saturates
+rather than wrapping. `AccountGymAppState.observeBinding` follows binding revisions and exposes only synchronously current
+selection; the sync controller delegates to that exact runtime's counter, with handle-scoped raw/covered watermarks and
+first-counter readiness. Presentation signals never grant storage authority or replace fresh epoch/queue reads.
 
 Public pause/drain returns an owner-specific live publication lease; synchronous thread-safe checks/close work on Room
 threads. Pre-grant work is drained before atomic issuance; post-grant terminal admission invalidates the lease before

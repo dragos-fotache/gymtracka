@@ -27,6 +27,12 @@ import com.dragosfotache.gymtracka.data.sync.model.SyncBatchModel
 import com.dragosfotache.gymtracka.data.sync.model.SyncModelException
 import com.dragosfotache.gymtracka.data.sync.model.UnsupportedDurableVersionException
 import com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid
+import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportException
+import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportSettlement
+import com.dragosfotache.gymtracka.data.sync.session.LegacyEvidenceSnapshot
+import com.dragosfotache.gymtracka.data.sync.session.RecoveryRoomSnapshot
+import com.dragosfotache.gymtracka.data.sync.session.RoomSessionAuthority
+import com.dragosfotache.gymtracka.data.sync.session.RoomSessionAuthorityException
 import com.dragosfotache.gymtracka.data.sync.session.PreparedSessionEnginePermit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
@@ -1018,6 +1024,156 @@ class PushRun internal constructor(
         currentCoroutineContext().ensureActive()
         if (headAfter != expected) {
             throw IllegalStateException("Push head changed during transaction")
+        }
+    }
+
+    /**
+     * R13d confirmed ordinary discard. In one fenced Room transaction deletes only the
+     * caller-captured exact ordinary rows, resets the selected pull cursor to null while
+     * preserving recorded last-success, and marks the projection dirty. The caller compared
+     * the complete captured rows/authority/epoch/legacy proof immediately before this call;
+     * this method revalidates full-row equality, the exact ready Room authority and the
+     * strict legacy/source/receipt snapshot inside the transaction through the final SQL,
+     * then rechecks the supplied drain lease, process, session, epoch and caller fences AFTER
+     * the final SQL before commit. Any fault rolls everything back. Domain graph, canonical
+     * roots/watermarks, credentials, foreign scope, catalogue and import evidence are untouched.
+     * Must run inside the caller's admitted run; performs no HTTP and claims no successor.
+     */
+    internal suspend fun discardExactOrdinaryRows(
+        captured: List<com.dragosfotache.gymtracka.data.gym.SyncOutboxEntity>,
+        expectedRoom: RecoveryRoomSnapshot,
+        expectedLegacy: LegacyEvidenceSnapshot,
+        leaseCheck: () -> Unit,
+    ) {
+        require(captured.isNotEmpty()) { "Ordinary discard requires captured rows" }
+        requireAdmitted()
+        if (database.inTransaction()) {
+            throw IllegalStateException("Ordinary discard requires no active transaction")
+        }
+        currentCoroutineContext().ensureActive()
+        return handlingMutex.withLock {
+            try {
+                database.withTransaction {
+                    currentCoroutineContext().ensureActive()
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
+                    requireNoSnapshotStage()
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    val current = database.syncDao().getOutboxForAccount(accountId)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    if (current != captured) {
+                        throw StalePushClaimException()
+                    }
+                    if (current.any { it.state != "pending" && it.state != "rejected" }) {
+                        throw StalePushClaimException()
+                    }
+                    // Strict legacy settlement gate inside the transaction: valid-looking
+                    // tamper that passes row equality but breaks import settlement proof
+                    // refuses here, before any destructive effect.
+                    try {
+                        if (com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportGate.checkEmpty(
+                                database,
+                                accountId,
+                            ) != null
+                        ) {
+                            throw StalePushClaimException()
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    }
+                    val stateBefore = database.syncDao().getSyncState(accountId)
+                    val lastSuccessBefore = stateBefore?.lastSuccessMillis
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    for (row in captured) {
+                        val deleted = database.syncDao().deleteCapturedOrdinaryRow(
+                            mutationId = row.mutationId,
+                            accountId = accountId,
+                            sequence = row.sequence,
+                            expectedState = row.state,
+                            expectedAttempts = row.attemptCount,
+                        )
+                        if (deleted != 1) {
+                            throw IllegalStateException("Ordinary row changed during transaction")
+                        }
+                    }
+                    if (stateBefore == null) {
+                        database.syncDao().upsertSyncState(SyncStateEntity(accountId, null, null))
+                    } else {
+                        val nulled = database.syncDao().nullCursorPreservingLastSuccess(accountId)
+                        if (nulled != 1) {
+                            throw IllegalStateException("Sync cursor changed during transaction")
+                        }
+                    }
+                    database.syncCanonicalDao().insertAccountCache(accountId)
+                    if (database.syncCanonicalDao().markProjectionDirty(accountId) != 1) {
+                        throw IllegalStateException("Account cache changed during transaction")
+                    }
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    val remaining = database.syncDao().getOutboxForAccount(accountId)
+                    if (remaining.any { it.mutationId in captured.map { row -> row.mutationId }.toSet() }) {
+                        throw IllegalStateException("Ordinary row changed during transaction")
+                    }
+                    val stateAfter = database.syncDao().getSyncState(accountId)
+                        ?: throw IllegalStateException("Sync cursor changed during transaction")
+                    if (stateAfter.cursor != null || stateAfter.lastSuccessMillis != lastSuccessBefore) {
+                        throw IllegalStateException("Sync cursor changed during transaction")
+                    }
+                    // In-transaction final authority/legacy guard through the last SQL: any
+                    // trigger drift in ready Room lineage or strict import source/receipt
+                    // evidence refuses stale with rollback. Corrupt reads refuse the same way;
+                    // caller cancellation still dominates and propagates unwrapped.
+                    val roomNow = try {
+                        RoomSessionAuthority(database).read()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: RoomSessionAuthorityException) {
+                        throw StalePushClaimException()
+                    } catch (_: Exception) {
+                        throw StalePushClaimException()
+                    }
+                    if (roomNow != expectedRoom) {
+                        throw StalePushClaimException()
+                    }
+                    val legacyNow = try {
+                        LegacyEvidenceSnapshot(
+                            LegacyImportSettlement.readJournalStrict(database),
+                            LegacyImportSettlement.readEntriesStrict(database),
+                            LegacyImportSettlement.readProgressStrict(database),
+                            LegacyImportSettlement.readAcceptancesStrict(database),
+                        )
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: LegacyImportException) {
+                        throw StalePushClaimException()
+                    } catch (_: Exception) {
+                        throw StalePushClaimException()
+                    }
+                    if (legacyNow != expectedLegacy) {
+                        throw StalePushClaimException()
+                    }
+                    checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
+                    currentCoroutineContext().ensureActive()
+                    requireAdmitted()
+                    try {
+                        leaseCheck()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: RuntimeException) {
+                        throw e
+                    } catch (_: Exception) {
+                        throw IllegalStateException("Ordinary discard lease is no longer valid")
+                    }
+                    currentCoroutineContext().ensureActive()
+                }
+                currentCoroutineContext().ensureActive()
+                requireAdmitted()
+            } catch (_: SQLiteException) {
+                currentCoroutineContext().ensureActive()
+                throw PushStorageException()
+            }
         }
     }
 

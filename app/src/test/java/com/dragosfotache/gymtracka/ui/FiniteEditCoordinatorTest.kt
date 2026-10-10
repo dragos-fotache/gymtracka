@@ -25,6 +25,7 @@ class FiniteEditCoordinatorTest {
     @Test
     fun normalAcceptanceRegistersBeforeOnAcceptedAndDrainsInOrder() = runTest {
         val coordinator = FiniteEditCoordinator(backgroundScope)
+        assertEquals("counter starts at zero", 0L, coordinator.committedEdits.value)
         try {
             val order = mutableListOf<String>()
             val firstGate = CompletableDeferred<Unit>()
@@ -70,6 +71,7 @@ class FiniteEditCoordinatorTest {
                 listOf("accepted-first", "accepted-second", "work-first", "work-second"),
                 order,
             )
+            assertEquals("two successes increment twice", 2L, coordinator.committedEdits.value)
         } finally {
             coordinator.dispose()
         }
@@ -95,6 +97,7 @@ class FiniteEditCoordinatorTest {
                 assertNull(refused)
                 assertFalse(accepted)
                 assertFalse(workRan)
+                assertEquals("refusal increments nothing", 0L, coordinator.committedEdits.value)
 
                 // Repeat drain still succeeds while paused; no phantom work appears.
                 coordinator.awaitPendingEdits()
@@ -120,6 +123,7 @@ class FiniteEditCoordinatorTest {
             } catch (expected: IllegalStateException) {
                 assertEquals("boom", expected.message)
             }
+            assertEquals("failure increments nothing", 0L, coordinator.committedEdits.value)
 
             // Unrelated success must not clear the retained failure.
             coordinator.launchEdit(key = "unrelated") { }
@@ -130,11 +134,13 @@ class FiniteEditCoordinatorTest {
             } catch (expected: IllegalStateException) {
                 assertEquals("boom", expected.message)
             }
+            assertEquals("unrelated success increments once", 1L, coordinator.committedEdits.value)
 
             // Same-key retry with success settles the retained failure.
             coordinator.launchEdit(key = "failing") { }
             runCurrent()
             coordinator.awaitPendingEdits()
+            assertEquals("retry success increments again", 2L, coordinator.committedEdits.value)
         } finally {
             coordinator.dispose()
         }
@@ -216,6 +222,7 @@ class FiniteEditCoordinatorTest {
                 assertEquals("exclusive failed", expected.message)
             }
             assertEquals(listOf("preceding", "exclusive"), order)
+            assertEquals("only the preceding success increments", 1L, coordinator.committedEdits.value)
 
             // Same-key retry may run despite its own previous retained failure.
             val retry = coordinator.launchExclusiveEdit(key = "exclusive") { order += "exclusive-retry" }
@@ -225,6 +232,7 @@ class FiniteEditCoordinatorTest {
             runCurrent()
             coordinator.awaitPendingEdits()
             assertEquals(listOf("preceding", "exclusive", "exclusive-retry"), order)
+            assertEquals("retry success increments again", 2L, coordinator.committedEdits.value)
         } finally {
             coordinator.dispose()
         }
@@ -254,6 +262,7 @@ class FiniteEditCoordinatorTest {
                 terminal?.join()
                 runCurrent()
                 assertTrue(terminalRan)
+                assertEquals("terminal success increments", 1L, coordinator.committedEdits.value)
             } finally {
                 lease.close()
             }
@@ -283,6 +292,7 @@ class FiniteEditCoordinatorTest {
         assertFalse(accepted)
         assertNull(coordinator.launchExclusiveEdit(key = "after-dispose-exclusive") { })
         assertNull(coordinator.launchTerminalEdit(key = "after-dispose-terminal") { })
+        assertEquals("post-dispose refusals increment nothing", 0L, coordinator.committedEdits.value)
 
         // Parent scope is never cancelled by dispose.
         val parentProbe = CompletableDeferred<Unit>()
@@ -386,6 +396,7 @@ class FiniteEditCoordinatorTest {
             runCurrent()
             firstCoordinator.awaitPendingEdits()
             assertEquals(listOf("terminal", "normal"), order)
+            assertEquals("terminal plus normal increment twice", 2L, firstCoordinator.committedEdits.value)
         } finally {
             firstCoordinator.dispose()
         }
@@ -408,6 +419,7 @@ class FiniteEditCoordinatorTest {
             runCurrent()
             secondCoordinator.awaitPendingEdits()
             assertEquals(listOf("normal", "terminal"), order)
+            assertEquals("normal plus terminal increment twice", 2L, secondCoordinator.committedEdits.value)
         } finally {
             secondCoordinator.dispose()
         }
@@ -429,6 +441,7 @@ class FiniteEditCoordinatorTest {
             } catch (_: Exception) {
                 // Cancellation evidence is retained; exact type is an implementation detail.
             }
+            assertEquals("cancellation increments nothing", 0L, coordinator.committedEdits.value)
         } finally {
             coordinator.dispose()
         }
@@ -454,6 +467,7 @@ class FiniteEditCoordinatorTest {
             // Newer successful superseding write settles the drain.
             coordinator.awaitPendingEdits()
             assertEquals(listOf("B"), order)
+            assertEquals("only the superseding success increments", 1L, coordinator.committedEdits.value)
         } finally {
             coordinator.dispose()
         }
@@ -477,6 +491,7 @@ class FiniteEditCoordinatorTest {
                 // Cancellation evidence is retained.
             }
             assertFalse(mutated)
+            assertEquals("cancelled exclusive increments nothing", 0L, coordinator.committedEdits.value)
         } finally {
             coordinator.dispose()
         }
