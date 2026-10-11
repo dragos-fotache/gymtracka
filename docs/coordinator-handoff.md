@@ -11,12 +11,34 @@
 fresh final-source gates; its [task](archive/remaining-work/R13d-task.md) is archived. R13c and the accepted R09/Core R10a/
 personal R11/R12 foundations are not reopened. No R13e or extra personal slice is implied.
 
-**R17a is dependency-ready for planning, not live execution.** Obtain explicit owner inputs/authorization for actual
-Google/audience/installed signing, trusted deployed HTTPS and phone/account journeys before effects. Empty build
-configuration remains deliberately private/unavailable. Personal acceptance does not allocate a service, endpoint,
-audience, account or device, and never licenses push, deployment, private-config discovery/change or signing/OAuth change.
-Public lifecycle, expanded R10b, general sign-out/switch/import-choice/export/deletion and background work stay deferred.
-Bring missing inputs, unavailable required gates or unresolved destructive/scope decisions to the owner.
+**R17a is paused by the owner for independent testing; it is partially verified, not accepted/closed.**
+The pause concerns response latency, not rejection of the testing plan. Do not automatically continue tests, ask more
+questions, change code/configuration, access the phone/service, clean up resources, commit/push or rotate coordinators.
+Resume from the owner's next report/request. [Current task](remaining-work/R17a-task.md) owns setup/remaining gates;
+[dated evidence](remaining-work/R17a-review.md) owns actual commands, artifact identities and transient failures.
+
+**Confirmed boundary:** private laptop Java27/PostgreSQL16 deployment and Tailscale HTTPS; configured APK/signing/
+lint/security audits; actual Google test-account activation on Pixel10Pro Android17/API37; completed100kg workout;
+matching offline no-wipe process restart/history/editing and second30kg workout with5 queued changes. Owner confirms
+continuous offline beyond16minutes, then mobile data/Wi-Fi off/Tailscale connected, recovery to0 pending/no error/no
+Google re-login, and both histories present once at100kg/30kg. Dedicated service containers restarted during the wait,
+retaining keys/data. Timed expiry recovery is owner-observed with refresh inferred from the15-minute contract, not a
+credential/packet capture. Initial backup scratch restore passed; ongoing/off-machine protection is not established.
+
+**Transient stop:** reconnect/manual sync first showed Delivery paused, then recovered automatically. Coordinator only
+checked clock, owned container state and anonymous laptop HTTPS health—not phone/account sync. Cause remains
+unestablished; preserve the witness and investigate recurrence, not a clean first-attempt or old-limitation repair claim.
+
+**Live setup:** session/builds on desktop (off Tailscale); separate laptop/phone on Tailscale. Owner-approved persistent
+laptop containers/network/volume and private keys must remain intact, not cleaned up as disposable fixtures. Phone
+remains signed into the test account with data; previous reset consent is consumed. No more reset/discard/uninstall/
+account switch or cloud effects without new exact consent. Gradle slot released; no active build/agent delegation.
+
+Remaining: independent fresh-cache/cloud readback with renewed consent; screen-off timer and other live feature paths;
+same-account reauthentication as needed; secure off-machine keys/ongoing backups and practical host/network/recovery
+limits. See task for scope. Public lifecycle, expanded R10b and background R16/R17b stay deferred. Backend remains
+operational build/start plus black-box HTTP only; existing private config/source were not reviewed or changed. No
+Android production/test/schema/shared-doc changes; documentation is saved locally without acceptance/commit claims.
 
 ## Delivered current state
 

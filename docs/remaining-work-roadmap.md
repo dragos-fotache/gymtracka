@@ -39,7 +39,7 @@ accepted, deterministic-only:** [Google adapter](archive/remaining-work/R11a-rev
 Mandatory account startup is delivered by R13c; no live journey is released. R13 has a finite [four-slice personal plan](#remaining-r13-plan)
 for account UI/triggers and P18 legacy preservation/import. **[R13a](archive/remaining-work/R13a-review.md) is accepted:
 inert durable source/import capture and private recovery on Room13.** **[R13b](archive/remaining-work/R13b-review.md) is accepted:** opt-in exact import delivery, complete private activation/recovery and actual isolated Room/vault HTTP gates on Room14. **[R13c](archive/remaining-work/R13c-review.md) is accepted:** mandatory account startup/UI, matching offline reopen/edit, foreground same-account reauthentication, import consent/progress and safe status. **[R13d](archive/remaining-work/R13d-review.md) is accepted:** foreground/edit/manual sync, captured ordinary recovery and complete personal-package closure; its [specification](archive/remaining-work/R13d-task.md) is archived. See [current authority](coordinator-handoff.md).
-The finite personal R13a–d package is closed. R17a external-input/live-journey planning is dependency-ready, not authorized execution; R11c stays deferred public.
+The finite personal R13a–d package is closed. **[R17a is paused for owner self-testing](remaining-work/R17a-task.md), partially verified, not accepted:** laptop/APK, actual Google activation, workout/manual sync, offline restart/editing and mobile timed-expiry recovery observations passed. Transient delivery pause, remaining live/readback/operational gates and current stop authority are scoped in the task/review. No automatic continuation. R11c stays deferred public.
 No new R09 slices or deferred-public work is inferred.
 “Pending” requires eligibility under explicit/standing authority and a bounded pickup spec, not another approval for each
 eligible next slice. “Deferred” remains required for its later
@@ -63,7 +63,7 @@ milestone and is not automatically brought forward. Historical M-series assignme
 | R14 cloud JSON export | Deferred public | R02e, R03d export, R11 proofs, R13 |
 | R15 deletion/status recovery | Deferred public | R02e, R03d delete/status, R09, R11 proofs, R13, R14 |
 | R16 background scheduling | After usable personal app | R06–R08, R13; deletion hooks added with R15 |
-| R17 actual deployment/journeys | a personal pending; b unattended after R16; c public expansion deferred | Core R10, R13, external inputs; R16 for b |
+| R17 actual deployment/journeys | **a paused for owner self-testing; scoped laptop/APK/Google/workout/offline/mobile recovery passed, remaining gates open**; b unattended after R16; c public expansion deferred | Core R10, R13, external inputs; R16 for b |
 | R18 public release audit | Deferred public | All public gates, including R14/R15 and expanded R17 |
 
 Dependencies are capability gates, not a mandate to implement every independent branch serially. In particular:
@@ -421,7 +421,7 @@ their choice/isolation gates; R11c, expanded R10b and lifecycle/export/deletion/
 Offline sign-out must never claim server revocation. R16 background scheduling remains after the usable personal milestone.
 No live migration, private-config discovery/change, signing/OAuth change, push, deployment or personal account/device
 operation is authorized by this plan. R13a–b are accepted at their explicit private boundaries; R13c's mandatory startup/UI boundary is accepted.
-R13d closes the renewed owner-authorized personal slice. R17a is dependency-ready for planning only; live deployment/configuration/account/device actions remain separately gated.
+R13d closes the renewed owner-authorized personal slice. R17a completed scoped live checkpoints under its [specification](remaining-work/R17a-task.md) and is now owner-paused for self-testing, not accepted; further actions require explicit resume.
 
 ### R02e / R03d — Deferred lifecycle foundations
 
@@ -460,12 +460,17 @@ cancellation when R15 ships; R15 does not block personal scheduling.
 
 ### R17 — Live personal and public journeys
 
-- **a:** actual Google/service identity, trusted laptop HTTPS, phone LAN/away connectivity, refresh/sign-out, data choice,
-  foreground/manual sync/error recovery, offline/reconnect, app/server restart and existing workout/timer behavior.
+- **a:** [personal setup and journeys](remaining-work/R17a-task.md), with owner checkpoints for setup decisions,
+  authorized configuration and guided phone testing: actual Google/service identity, trusted laptop HTTPS, phone LAN/away
+  connectivity, refresh/same-account reauthentication, foreground/manual sync/error recovery, offline/reconnect,
+  app/server restart and existing workout/timer behavior. General sign-out/switch/data-choice UI stays deferred public.
 - **b:** after R16, actual unattended delivery, stopped work/token expiry/restart without lost work; document practical
   connection, server restart, backup/recovery and laptop/network availability limits with owner permission.
 - **c:** public expansion after lifecycle features: export/delete/status/new signup, release signing/distribution, minimum
   API 24 and broader devices, actual hosted CI. Mock/local passes cannot substitute for these live gates.
+
+**Current R17a authority:** owner pauses guided work and will report later. Preserve current app/service/data; do not
+resume effects automatically. The task owns the remaining gates and the review preserves scoped actual evidence.
 
 Record environment, permission, actual results and limitations separately per subplan. Never use personal data as an
 automated failure-injection fixture. Missing external inputs block the affected live gate, not unrelated implementation.
