@@ -6,7 +6,7 @@ import com.dragosfotache.gymtracka.data.sync.http.ServiceOrigin
 import com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid
 
 /**
- * R11b foreground sign-in intent. INITIAL_SIGN_IN admits only an empty
+ * foreground sign-in intent. INITIAL_SIGN_IN admits only an empty
  * signed-out observation; SAME_ACCOUNT_REAUTHENTICATION admits only an
  * observation retaining a cached account. Displays are fixed.
  */
@@ -169,9 +169,9 @@ internal class ForegroundSignInContextInvalidException :
  *
  * INITIAL_SIGN_IN requires SIGNED_OUT with no cached account or identity.
  * SAME_ACCOUNT_REAUTHENTICATION requires a cached account; any retained
- * identity must already match the configured origin. PREPARING and
- * TRANSITIONING require exactly the reserved identity operation; ACTIVE
- * requires a fresh different operation; SIGNED_OUT admits the
+ * identity must already match the configured origin. PREPARING,
+ * TRANSITIONING and ACTIVE require a fresh different operation: foreground
+ * sign-in supplies a new grant, never an exact saved-session retry. SIGNED_OUT admits the
  * caller-supplied canonical operation. Any violation throws the fixed marker;
  * callers map it to their closed refusal.
  */
@@ -225,16 +225,10 @@ internal fun canonicalForegroundOperation(
             // Caller-supplied canonical operation, validated above.
         }
         RecoveryRoomPhase.PREPARING, RecoveryRoomPhase.TRANSITIONING -> {
-            if (intent == ForegroundSignInIntent.PRIVATE_IMPORT_REAUTHENTICATION &&
-                expected.phase == RecoveryRoomPhase.PREPARING
-            ) {
-                // New canonical operation already validated different above.
-            } else {
-                val reserved = expected.identity?.operationId
-                    ?: throw ForegroundSignInContextInvalidException()
-                if (reserved != canonical) {
-                    throw ForegroundSignInContextInvalidException()
-                }
+            val reserved = expected.identity?.operationId
+                ?: throw ForegroundSignInContextInvalidException()
+            if (reserved == canonical) {
+                throw ForegroundSignInContextInvalidException()
             }
         }
         RecoveryRoomPhase.ACTIVE -> {

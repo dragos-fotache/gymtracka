@@ -13,17 +13,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R08a independent staging-storage migration acceptance: every supported
- * start migrates to 11 via the updated loop in [GymDatabaseMigrationTest];
- * here a fully populated version-10 database migrates to 11 with every prior
- * table byte-identical, sequence allocation and FK/index schema preserved,
- * and the three new staging tables present but empty.
- *
- * Real SQLite, no mocked DAOs. Every seeded value is a literal authored from
- * docs/archive/remaining-work/R08a-task.md and the version-10 exported schema; no
- * production encoder output is used as an oracle and no production source was
- * inspected. Canonical bodies are hand-authored JSON bytes compared for exact
- * preservation, never regenerated.
+ * Checks populated 10 -> 11 migration with byte-identical prior rows, sequence allocation and
+ * foreign-key/index preservation. All three snapshot staging tables start empty. Canonical
+ * fixtures are literal JSON bytes.
  */
 @RunWith(AndroidJUnit4::class)
 class SnapshotStorageMigrationTest {

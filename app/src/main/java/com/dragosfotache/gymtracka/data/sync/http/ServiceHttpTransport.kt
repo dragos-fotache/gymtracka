@@ -324,7 +324,7 @@ internal class ServiceHttpResponse internal constructor(
 
 private fun mapBodyIo(error: IOException): SyncApiException {
     if (error is ProtocolException || error is EOFException) return SyncApiException.MalformedResponse()
-    return SyncApiException.Transient()
+    return SyncApiException.Transient(connectionFailure = true)
 }
 
 private fun snapshotHeaders(headers: Headers): Map<String, List<String>> {

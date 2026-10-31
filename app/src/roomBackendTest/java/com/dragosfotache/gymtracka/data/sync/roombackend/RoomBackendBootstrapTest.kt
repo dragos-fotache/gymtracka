@@ -14,7 +14,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R10a matrix 1: empty and populated bootstrap plus offline/reopen.
+ * RoomBackend matrix 1: empty and populated bootstrap plus offline/reopen.
  *
  * Two independent file stores start from a real complete empty snapshot. Store A
  * edits offline (custom plus routine draft plus workout with ordered entries and
@@ -28,10 +28,10 @@ import org.junit.runner.RunWith
 class RoomBackendBootstrapTest {
 
     companion object {
-        const val CUSTOM_NAME = "R10a Press"
-        const val ROUTINE_NAME = "R10a Routine"
-        const val WORKOUT_NAME = "R10a Workout"
-        const val ENTRY_NOTES = "R10a keep chest up"
+        const val CUSTOM_NAME = "RoomBackend Press"
+        const val ROUTINE_NAME = "RoomBackend Routine"
+        const val WORKOUT_NAME = "RoomBackend Workout"
+        const val ENTRY_NOTES = "RoomBackend keep chest up"
         const val ENTRY_REST_SECONDS = 75
         const val SET_REST_SECONDS = 90
         const val STARTED_AT_MILLIS = 1_790_259_100_000L
@@ -39,21 +39,21 @@ class RoomBackendBootstrapTest {
 
     @Test
     fun emptyAndPopulatedBootstrapOfflineReopen() = runBlocking(Dispatchers.IO) {
-        val inputs = r10aRequireInputs()
-        val transport = r10aNewTransport(inputs)
+        val inputs = roomBackendRequireInputs()
+        val transport = roomBackendNewTransport(inputs)
         try {
-            val account = r10aMintAccount(transport, inputs.port)
+            val account = roomBackendMintAccount(transport, inputs.port)
             val context = InstrumentationRegistry.getInstrumentation().targetContext
-            var storeA = r10aOpenStore(context, "boot-a", account.accountId)
-            var storeB = r10aOpenStore(context, "boot-b", account.accountId)
+            var storeA = roomBackendOpenStore(context, "boot-a", account.accountId)
+            var storeB = roomBackendOpenStore(context, "boot-b", account.accountId)
             try {
-                val apiA = r10aNewApi(transport, account)
-                val apiB = r10aNewApi(transport, account)
+                val apiA = roomBackendNewApi(transport, account)
+                val apiB = roomBackendNewApi(transport, account)
 
                 // Both stores start from a real complete empty snapshot.
-                val emptyA = r10aSnapshotConverge(storeA, account.accountId, apiA, R10aTestLease())
+                val emptyA = roomBackendSnapshotConverge(storeA, account.accountId, apiA, RoomBackendTestLease())
                 assertEquals(ProjectionPublicationStatus.PUBLISHED, emptyA.status)
-                val emptyB = r10aSnapshotConverge(storeB, account.accountId, apiB, R10aTestLease(), pageLimit = 1)
+                val emptyB = roomBackendSnapshotConverge(storeB, account.accountId, apiB, RoomBackendTestLease(), pageLimit = 1)
                 assertEquals(ProjectionPublicationStatus.PUBLISHED, emptyB.status)
                 assertEmptyVisible(storeA, "A empty", account.accountId)
                 assertEmptyVisible(storeB, "B empty", account.accountId)
@@ -89,11 +89,11 @@ class RoomBackendBootstrapTest {
 
                 // Inject an offline failure: the loop returns Deferred with no pull;
                 // immutable intent is unchanged and the head state stays frozen.
-                val clock = R10aMutableNow(System.currentTimeMillis())
-                val beforeOffline = storeA.database.r10aOutboxRows(account.accountId)
+                val clock = RoomBackendMutableNow(System.currentTimeMillis())
+                val beforeOffline = storeA.database.roomBackendOutboxRows(account.accountId)
                 assertTrue("A must hold pending intent, got ${beforeOffline.size}", beforeOffline.isNotEmpty())
-                val (offlineDelivery, offlinePublication) = r10aDeliverAndPublish(
-                    storeA, account.accountId, R10aOfflinePushApi(apiA), R10aTestLease(),
+                val (offlineDelivery, offlinePublication) = roomBackendDeliverAndPublish(
+                    storeA, account.accountId, RoomBackendOfflinePushApi(apiA), RoomBackendTestLease(),
                     nowMillis = clock::get,
                 )
                 assertTrue(
@@ -103,19 +103,19 @@ class RoomBackendBootstrapTest {
                 assertNull(offlineDelivery.pullStop)
                 assertNull(offlineDelivery.hasOutstandingLocalWork)
                 assertNull("no publication without an eligible tail", offlinePublication)
-                val retainedOffline = storeA.database.r10aOutboxRows(account.accountId)
-                r10aAssertOutboxFrozen(beforeOffline, retainedOffline, "A offline")
+                val retainedOffline = storeA.database.roomBackendOutboxRows(account.accountId)
+                roomBackendAssertOutboxFrozen(beforeOffline, retainedOffline, "A offline")
 
                 // Reopen the same file with no reseed: the post-failure snapshot is exact.
-                storeA = r10aReopen(context, storeA)
-                assertEquals(retainedOffline, storeA.database.r10aOutboxRows(account.accountId))
+                storeA = roomBackendReopen(context, storeA)
+                assertEquals(retainedOffline, storeA.database.roomBackendOutboxRows(account.accountId))
 
                 // Deterministic reconnect: advance the injected clock beyond the
                 // durable backoff, then run through the actual engine.
-                clock.advanceBeyond(storeA.database.r10aOutboxRetryAfterMax(account.accountId))
-                val leaseA = R10aTestLease()
-                val publicationA = r10aDeliverAndPublish(
-                    storeA, account.accountId, r10aNewApi(transport, account), leaseA,
+                clock.advanceBeyond(storeA.database.roomBackendOutboxRetryAfterMax(account.accountId))
+                val leaseA = RoomBackendTestLease()
+                val publicationA = roomBackendDeliverAndPublish(
+                    storeA, account.accountId, roomBackendNewApi(transport, account), leaseA,
                     nowMillis = clock::get,
                 ).second
                 val publishedA = checkNotNull(publicationA) { "A must observe an eligible tail" }
@@ -126,13 +126,13 @@ class RoomBackendBootstrapTest {
                     workout.id, routineId, customId, entryId, completed.id,
                     routineEntryId, routineSetId,
                 )
-                r10aAssertOutboxEmpty(storeA.database, account.accountId, "A populated")
-                r10aAssertBaselineComplete(storeA.database, account.accountId, "A populated")
-                assertEquals(0, storeA.database.r10aStageCount(account.accountId))
+                roomBackendAssertOutboxEmpty(storeA.database, account.accountId, "A populated")
+                roomBackendAssertBaselineComplete(storeA.database, account.accountId, "A populated")
+                assertEquals(0, storeA.database.roomBackendStageCount(account.accountId))
 
                 // B bootstraps via a paged real snapshot and must agree independently.
-                val leaseB = R10aTestLease()
-                val publishedB = r10aSnapshotConverge(storeB, account.accountId, apiB, leaseB, pageLimit = 1)
+                val leaseB = RoomBackendTestLease()
+                val publishedB = roomBackendSnapshotConverge(storeB, account.accountId, apiB, leaseB, pageLimit = 1)
                 assertEquals(ProjectionPublicationStatus.PUBLISHED, publishedB.status)
                 assertEquals(1, leaseB.closeCount)
                 assertExpectedGraph(
@@ -140,29 +140,29 @@ class RoomBackendBootstrapTest {
                     workout.id, routineId, customId, entryId, completed.id,
                     routineEntryId, routineSetId,
                 )
-                r10aAssertOutboxEmpty(storeB.database, account.accountId, "B populated")
-                val cacheB = r10aAssertBaselineComplete(storeB.database, account.accountId, "B populated")
+                roomBackendAssertOutboxEmpty(storeB.database, account.accountId, "B populated")
+                val cacheB = roomBackendAssertBaselineComplete(storeB.database, account.accountId, "B populated")
                 assertEquals(cacheB.cacheEpoch, cacheB.materializedEpoch)
-                assertEquals(0, storeB.database.r10aStageCount(account.accountId))
-                r10aAssertQuiescentTail(storeA, account.accountId, apiA, "A quiescent")
-                r10aAssertQuiescentTail(storeB, account.accountId, apiB, "B quiescent")
+                assertEquals(0, storeB.database.roomBackendStageCount(account.accountId))
+                roomBackendAssertQuiescentTail(storeA, account.accountId, apiA, "A quiescent")
+                roomBackendAssertQuiescentTail(storeB, account.accountId, apiB, "B quiescent")
             } finally {
-                r10aCloseAndDelete(context, storeA)
-                r10aCloseAndDelete(context, storeB)
+                roomBackendCloseAndDelete(context, storeA)
+                roomBackendCloseAndDelete(context, storeB)
             }
         } finally {
             transport.client.dispatcher.executorService.shutdown()
         }
     }
 
-    private suspend fun assertEmptyVisible(store: R10aStore, label: String, accountId: String) {
+    private suspend fun assertEmptyVisible(store: RoomBackendStore, label: String, accountId: String) {
         val repo = store.repository()
         assertNull("$label expected no active workout", repo.activeWorkout())
-        r10aAssertOutboxEmpty(store.database, accountId, "$label")
+        roomBackendAssertOutboxEmpty(store.database, accountId, "$label")
     }
 
     private suspend fun assertExpectedGraph(
-        store: R10aStore,
+        store: RoomBackendStore,
         label: String,
         accountId: String,
         workoutId: String,
@@ -214,50 +214,50 @@ class RoomBackendBootstrapTest {
         assertTrue("$label custom user-created", customDetails.exercise.isUserCreated)
         assertTrue(
             "$label exact live custom count",
-            store.database.r10aCount(
+            store.database.roomBackendCount(
                 "SELECT COUNT(*) FROM exercises WHERE is_user_created = 1 AND deleted_at_millis IS NULL",
                 emptyArray(),
             ) == 1,
         )
         assertTrue(
             "$label no custom muscle relationships",
-            store.database.r10aCount(
+            store.database.roomBackendCount(
                 "SELECT COUNT(*) FROM exercise_muscle_groups WHERE exercise_id = ?",
                 arrayOf(customId),
             ) == 0,
         )
         assertTrue(
             "$label no custom equipment relationships",
-            store.database.r10aCount(
+            store.database.roomBackendCount(
                 "SELECT COUNT(*) FROM exercise_equipment WHERE exercise_id = ?",
                 arrayOf(customId),
             ) == 0,
         )
         assertTrue(
             "$label exact live workout count",
-            store.database.r10aCount(
+            store.database.roomBackendCount(
                 "SELECT COUNT(*) FROM workouts WHERE deleted_at_millis IS NULL",
                 emptyArray(),
             ) == 1,
         )
         assertTrue(
             "$label exact live routine count",
-            store.database.r10aCount(
+            store.database.roomBackendCount(
                 "SELECT COUNT(*) FROM routines WHERE deleted_at_millis IS NULL",
                 emptyArray(),
             ) == 1,
         )
         val workoutCanonical = checkNotNull(
-            store.database.r10aReadCanonical(accountId, "workout", workoutId),
+            store.database.roomBackendReadCanonical(accountId, "workout", workoutId),
         ) { "$label must hold workout canonical" }
         assertTrue("$label workout revision positive", (workoutCanonical.serverRevision ?: 0L) > 0L)
         assertEquals("$label workout canonical state", "upsert", workoutCanonical.canonicalState)
         val customCanonical = checkNotNull(
-            store.database.r10aReadCanonical(accountId, "customExercise", customId),
+            store.database.roomBackendReadCanonical(accountId, "customExercise", customId),
         ) { "$label must hold custom canonical" }
         assertTrue("$label custom revision positive", (customCanonical.serverRevision ?: 0L) > 0L)
         val active = checkNotNull(repo.activeWorkout()) { "$label must expose the active workout" }
         assertEquals("$label active id", workoutId, active.id)
-        assertNotNull("$label cache", store.database.r10aReadCache(accountId))
+        assertNotNull("$label cache", store.database.roomBackendReadCache(accountId))
     }
 }

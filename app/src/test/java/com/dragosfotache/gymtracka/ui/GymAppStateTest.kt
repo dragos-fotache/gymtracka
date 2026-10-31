@@ -41,12 +41,55 @@ class GymAppStateTest {
         assertEquals(Destination.ActiveWorkout, state.destination)
         state.showExercises()
         assertEquals(Destination.Exercises, state.destination)
+        state.showSettings()
+        assertEquals(Destination.Settings, state.destination)
         state.showHistory()
         assertEquals(Destination.History, state.destination)
         state.showWorkoutHistory("history")
         assertEquals(Destination.WorkoutHistoryDetail, state.destination)
         state.closeWorkoutHistory()
         assertEquals(Destination.History, state.destination)
+    }
+
+    @Test
+    fun settingsNavigationKeepsTimerOwnershipAndPersistsTerminalRestExactlyOnce() = runTest {
+        val repository = FakeGymAppStateRepository().apply {
+            active = WorkoutEntity("active", "Current", 500L)
+        }
+        val hardware = FakeTimerHardware()
+        val state = state(repository, hardware = hardware)
+        runCurrent()
+        state.startRestTimer(WorkoutSetEntity("set", "entry", 0), 10)
+        runCurrent()
+        val timer = state.activeRestTimer!!
+
+        state.showSettings()
+        advanceTimeBy(2_100)
+        runCurrent()
+        assertEquals(Destination.Settings, state.destination)
+        assertEquals(timer, state.activeRestTimer)
+        assertEquals(8, state.restTimerRemainingSeconds)
+        state.showExercises()
+        state.showHistory()
+        state.showWorkouts()
+        state.showSettings()
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals(timer, state.activeRestTimer)
+        assertEquals("active", state.activeWorkout?.id)
+        assertTrue(hardware.isHeld)
+        assertEquals(1, hardware.acquiredTimeouts.size)
+        assertEquals(0, hardware.releaseCount)
+        assertTrue(repository.restUpdates.isEmpty())
+
+        state.skipRestTimer(timer)
+        state.skipRestTimer(timer)
+        runCurrent()
+        assertEquals(listOf("set" to 3), repository.restUpdates)
+        assertNull(state.activeRestTimer)
+        assertFalse(hardware.isHeld)
+        assertEquals(1, hardware.releaseCount)
+        assertEquals(Destination.Settings, state.destination)
     }
 
     @Test
@@ -697,7 +740,7 @@ class GymAppStateTest {
         assertTrue(repository.committedRestUpdates.isEmpty())
         assertNull(state.activeRestTimer)
 
-        // R12a disposed admission must refuse: no new timer and no rest write.
+        // disposed admission must refuse: no new timer and no rest write.
         state.startRestTimer(WorkoutSetEntity("fresh-set", "entry", 2), 30)
         runCurrent()
         assertNull(state.activeRestTimer)

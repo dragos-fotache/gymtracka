@@ -21,12 +21,15 @@ interface SyncDao {
 
     /**
      * Freezes one claimable head row and records one more admission. Only the
-     * state and attempt count change; every other column stays untouched. The
+     * state and attempt count change, except an explicitly authorized connection retry
+     * also clears its local deadline/cause. Identity and payload stay untouched. The
      * expected predicates pin the update to the head read in the same transaction.
      * Callers must verify the affected count is exactly one.
      */
     @Query(
-        """UPDATE sync_outbox SET state = 'frozen', attempt_count = :newAttemptCount
+        """UPDATE sync_outbox SET state = 'frozen', attempt_count = :newAttemptCount,
+                retry_after_millis = CASE WHEN :resetConnectionDelay THEN NULL ELSE retry_after_millis END,
+                retry_cause = CASE WHEN :resetConnectionDelay THEN 'unknown' ELSE retry_cause END
             WHERE mutation_id = :mutationId AND account_id = :accountId
                 AND state = :expectedState AND attempt_count = :expectedAttempts""",
     )
@@ -36,6 +39,7 @@ interface SyncDao {
         expectedState: String,
         expectedAttempts: Int,
         newAttemptCount: Int,
+        resetConnectionDelay: Boolean = false,
     ): Int
 
     @Query(
@@ -85,7 +89,7 @@ interface SyncDao {
     @Query(
         """UPDATE sync_outbox
             SET state = :newState, error_code = :errorCode,
-                error_message = :errorMessage, retry_after_millis = :retryAfterMillis
+                error_message = :errorMessage, retry_after_millis = :retryAfterMillis, retry_cause = :retryCause
             WHERE mutation_id = :mutationId AND account_id = :accountId
                 AND state = :expectedState AND attempt_count = :expectedAttempts""",
     )
@@ -98,6 +102,7 @@ interface SyncDao {
         errorCode: String?,
         errorMessage: String?,
         retryAfterMillis: Long?,
+        retryCause: String,
     ): Int
 
     @Query("DELETE FROM sync_outbox WHERE mutation_id = :mutationId AND account_id = :accountId")
@@ -172,7 +177,7 @@ interface SyncDao {
     suspend fun hasOutboxForAccount(accountId: String): Boolean
 
     /**
-     * R13c selected-account outbox size for presentation only. Counts every row
+     * selected-account outbox size for presentation only. Counts every row
      * for the account, including frozen/rejected; foreign rows never match.
      * Additive scalar observation; no schema change.
      */
@@ -180,7 +185,7 @@ interface SyncDao {
     suspend fun countOutboxForAccount(accountId: String): Long
 
     /**
-     * R13c retained-error presence for presentation only. True when any selected
+     * retained-error presence for presentation only. True when any selected
      * row is rejected or carries stored error presence; never exposes codes.
      * Additive scalar observation; no schema change.
      */
@@ -190,8 +195,12 @@ interface SyncDao {
     )
     suspend fun hasRetainedOutboxError(accountId: String): Boolean
 
+    /** Advisory recovery candidates only; the facade validates durable ordinary rejection. */
+    @Query("SELECT * FROM sync_outbox WHERE account_id = :accountId AND state = 'rejected' ORDER BY sequence")
+    suspend fun getRejectedOutboxForAccount(accountId: String): List<SyncOutboxEntity>
+
     /**
-     * R13c selected-account last-success observation for presentation only.
+     * selected-account last-success observation for presentation only.
      * Null when no row or null column; foreign rows never match. Negative
      * values are returned so callers fail closed, never normalized.
      * Additive scalar observation; no schema change.
@@ -200,7 +209,7 @@ interface SyncDao {
     suspend fun getLastSuccessMillis(accountId: String): Long?
 
     /**
-     * R13c selected-account last-success storage-type observation for presentation
+     * selected-account last-success storage-type observation for presentation
      * only. SQLite INTEGER-affinity columns can hold nonnumeric TEXT/REAL/BLOB,
      * which a typed getter may coerce; callers must check this type first in the
      * same transaction and refuse non-integer storage. Null when no row matches.
@@ -222,7 +231,7 @@ interface SyncDao {
     suspend fun getCatalogueState(): CatalogueStateEntity?
 
     /**
-     * R13d removes exactly one captured ordinary row. Predicates pin the delete to the
+     * removes exactly one captured ordinary row. Predicates pin the delete to the
      * full-row observation (sequence/state/attempts) made in the same fenced decision;
      * callers verify the affected count is exactly one per row and recheck post-write state.
      */
@@ -241,7 +250,7 @@ interface SyncDao {
     ): Int
 
     /**
-     * R13d resets only the selected pull cursor to null after a confirmed ordinary discard.
+     * resets only the selected pull cursor to null after a confirmed ordinary discard.
      * Last-success is preserved untouched; callers verify it post-write. Never inserts a row.
      */
     @Query("UPDATE sync_state SET cursor = NULL WHERE account_id = :accountId")

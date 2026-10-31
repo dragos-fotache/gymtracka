@@ -25,8 +25,10 @@ sealed class SyncApiException(val code: String, message: String) : Exception(mes
      * [retryAfterMillis] carries an optional service retry hint in
      * milliseconds, deliberately bounded to [MAX_RETRY_AFTER_MILLIS];
      * null means the caller applies its own bounded backoff.
+     * [connectionFailure] is set only for actual I/O faults. A nonnull service hint always
+     * takes precedence: its saved deadline is never reset by a connectivity check.
      */
-    class Transient(retryAfterMillis: Long? = null) :
+    class Transient(retryAfterMillis: Long? = null, val connectionFailure: Boolean = false) :
         SyncApiException("transient", "transient sync failure; retry with bounded backoff") {
         val retryAfterMillis: Long? = retryAfterMillis?.coerceIn(0L, MAX_RETRY_AFTER_MILLIS)
     }

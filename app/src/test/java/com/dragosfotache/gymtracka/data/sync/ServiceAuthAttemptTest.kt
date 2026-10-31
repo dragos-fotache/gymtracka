@@ -24,7 +24,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R02d attempt tests: capture/restore exact-body invariants, typed delegation,
+ * attempt tests: capture/restore exact-body invariants, typed delegation,
  * redaction and cancellation. Independent fixtures only. Failure text may name
  * represented fields; raw distinct sentinels must never be echoed.
  */

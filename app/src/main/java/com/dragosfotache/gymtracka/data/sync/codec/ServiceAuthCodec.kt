@@ -10,7 +10,7 @@ import com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid
 import org.json.JSONObject
 
 /**
- * Auth-only lexical guard for new R02d readers. The shared strict parser can
+ * Auth-only lexical guard for new auth request readers. The shared strict parser can
  * normalize arbitrary unquoted scalar tokens into strings, so these readers
  * first enforce JSON scalar grammar locally: quoted literals are skipped
  * opaquely (never reparsed), and outside them only JSON structural

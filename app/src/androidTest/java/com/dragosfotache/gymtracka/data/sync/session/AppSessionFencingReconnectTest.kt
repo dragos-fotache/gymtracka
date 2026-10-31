@@ -25,25 +25,7 @@ import org.junit.runner.RunWith
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * R09h independent QA: process fencing and bounded reconnect, real Room.
- *
- * Derived ONLY from docs/remaining-work/R09h-task.md (coordinator operation
- * mutex, synchronous invalidation killing process permits, facade repository
- * process guard inside every scoped transaction, PushStore/PushRun process
- * checks with rollback of uncommitted work, reconnect binding the exact
- * current handle, bounded SyncDeliveryLoop reuse, frozen-identity retries,
- * transient/reauthentication stops keeping cached editing eligibility with
- * only a closed delivery-status update, no ACTIVE projection construction,
- * caller cancellation rethrown) plus QA-owned harness facts (R09c engine/
- * transport shapes, R06a owner shape, R07c hasOutstandingLocalWork Boolean?,
- * hand-written snapshot/pull literals, raw-SQL outbox/cache/cursor oracles,
- * createCustomExercise minimal-edit seam, coordinator-supplied
- * exerciseSummaries fenced-read seam, known SyncApiException subtypes
- * Transient/ReauthenticationRequired). No production source, diffs, Worker
- * output, LSP or decompiled code inspected. Deterministic only, no sleeps;
- * async coordination awaits entered gates/jobs under test timeouts, and the
- * in-flight write uses a gated transaction executor for an explicit
- * entered-then-invalidated rollback proof.
+ * process fencing and bounded reconnect, real Room.
  *
  * Covers risk obligations 7 (process-only invalidation fencing and
  * transactional in-flight guard rollback at the narrowest real-Room layer)
@@ -137,7 +119,7 @@ class AppSessionFencingReconnectTest {
     fun processOnlyInvalidationFencesOldFacadeReadsAndWritesAtUnchangedGeneration() = runTest(timeout = 90.seconds) {
         val s = stack()
         val handle = s.activate()
-        handle.repository.createCustomExercise("R09h Live", null, emptySet(), null, null, "")
+        handle.repository.createCustomExercise("session Live", null, emptySet(), null, null, "")
         val journalBefore = harness.journalRow(s.database)
         val vaultBefore = s.vault.load()
 
@@ -163,7 +145,7 @@ class AppSessionFencingReconnectTest {
             AppSessionFixtures.assertClosed(e)
         }
         try {
-            handle.repository.createCustomExercise("R09h Dead Write", null, emptySet(), null, null, "")
+            handle.repository.createCustomExercise("session Dead Write", null, emptySet(), null, null, "")
             error("dead facade repository must refuse mutation")
         } catch (e: AppSessionStaleException) {
             AppSessionFixtures.assertClosed(e)
@@ -174,7 +156,7 @@ class AppSessionFencingReconnectTest {
         assertTrue("matching cache must revive, was $revived", revived is AppSessionState.Active)
         val fresh = (revived as AppSessionState.Active).session
         fresh.checkCurrent()
-        assertTrue(fresh.repository.exerciseSummaries().map { it.exercise.name }.contains("R09h Live"))
+        assertTrue(fresh.repository.exerciseSummaries().map { it.exercise.name }.contains("session Live"))
         try {
             handle.checkCurrent()
             error("old handle must stay dead after revival")
@@ -197,7 +179,7 @@ class AppSessionFencingReconnectTest {
         val outcome = CompletableDeferred<Result<String>>()
         val job = launch {
             try {
-                val id = handle.repository.createCustomExercise("R09h Raced", null, emptySet(), null, null, "")
+                val id = handle.repository.createCustomExercise("session Raced", null, emptySet(), null, null, "")
                 outcome.complete(Result.success(id))
             } catch (e: Throwable) {
                 outcome.complete(Result.failure(e))
@@ -222,7 +204,7 @@ class AppSessionFencingReconnectTest {
         assertEquals("rolled-back write leaves no outbox", 0L, harness.outboxCount(s.database, AppSessionFixtures.ACCOUNT))
         assertTrue(
             "rolled-back write leaves no domain row",
-            harness.customNames(s.database, AppSessionFixtures.ACCOUNT).none { it.startsWith("R09h") },
+            harness.customNames(s.database, AppSessionFixtures.ACCOUNT).none { it.startsWith("session") },
         )
         assertEquals("rollback changes no journal", journalBefore, harness.journalRow(s.database))
         assertTrue(s.coordinator.state.value is AppSessionState.PrivacyLocked)
@@ -268,14 +250,14 @@ class AppSessionFencingReconnectTest {
         assertNull(pull.body)
         // Checkpoint advanced but the batch uses without incrementing the
         // cache epoch, and no publication ran: materialized epoch and vault
-        // are untouched while projection stays dirty for R12c.
+        // are untouched while projection stays dirty for account runtime.
         assertEquals(AppSessionFixtures.TAIL, harness.syncStateCursor(s.database, AppSessionFixtures.ACCOUNT))
         assertEquals(epochBefore, harness.cacheEpoch(s.database, AppSessionFixtures.ACCOUNT))
         assertEquals(1L, harness.projectionDirty(s.database, AppSessionFixtures.ACCOUNT))
         assertEquals(materializedBefore, harness.materializedEpoch(s.database, AppSessionFixtures.ACCOUNT))
         assertEquals(vaultBefore, s.vault.load())
         assertEquals(0, s.auth.refreshCalls)
-        // R12c owns publication: the pulled change is canonical (positive
+        // owns publication: the pulled change is canonical (positive
         // revision row) but not visible (no routine materialized).
         assertEquals(
             1L,
@@ -343,7 +325,7 @@ class AppSessionFencingReconnectTest {
         val s = stack(clock = clock)
         s.activate()
         val handle = s.currentHandle()
-        handle.repository.createCustomExercise("R09h Fenced", null, emptySet(), null, null, "")
+        handle.repository.createCustomExercise("session Fenced", null, emptySet(), null, null, "")
         val frozenBefore = harness.frozenIdentity(harness.outboxSnapshot(s.database, AppSessionFixtures.ACCOUNT))
         assertEquals(1, frozenBefore.size)
         val vaultBefore = s.vault.load()
@@ -396,7 +378,7 @@ class AppSessionFencingReconnectTest {
         assertEquals(frozenBefore, harness.frozenIdentity(harness.outboxSnapshot(s.database, AppSessionFixtures.ACCOUNT)))
         // Cached editing eligibility is intact after the stop.
         handle.checkCurrent()
-        handle.repository.createCustomExercise("R09h Still Editing", null, emptySet(), null, null, "")
+        handle.repository.createCustomExercise("session Still Editing", null, emptySet(), null, null, "")
         assertEquals(2L, harness.outboxCount(s.database, AppSessionFixtures.ACCOUNT))
     }
 
@@ -405,8 +387,8 @@ class AppSessionFencingReconnectTest {
         val s = stack()
         s.activate()
         val queuedHandle = s.currentHandle()
-        queuedHandle.repository.createCustomExercise("R09h Reauth Queued", null, emptySet(), null, null, "")
-        assertTrue(queuedHandle.repository.exerciseSummaries().map { it.exercise.name }.contains("R09h Reauth Queued"))
+        queuedHandle.repository.createCustomExercise("session Reauth Queued", null, emptySet(), null, null, "")
+        assertTrue(queuedHandle.repository.exerciseSummaries().map { it.exercise.name }.contains("session Reauth Queued"))
         // Expire only access: refresh stays live so the stop is typed
         // reauthentication rather than a transport failure.
         val loaded = s.vault.load()
@@ -457,8 +439,8 @@ class AppSessionFencingReconnectTest {
             (s.coordinator.state.value as AppSessionState.Active).deliveryStatus,
         )
         handle.checkCurrent()
-        assertTrue(handle.repository.exerciseSummaries().map { it.exercise.name }.contains("R09h Reauth Queued"))
-        handle.repository.createCustomExercise("R09h Reauth Editing", null, emptySet(), null, null, "")
+        assertTrue(handle.repository.exerciseSummaries().map { it.exercise.name }.contains("session Reauth Queued"))
+        handle.repository.createCustomExercise("session Reauth Editing", null, emptySet(), null, null, "")
     }
 
     @Test
@@ -466,7 +448,7 @@ class AppSessionFencingReconnectTest {
         val s = stack()
         s.activate()
         val handle = s.currentHandle()
-        handle.repository.createCustomExercise("R09h Fenced", null, emptySet(), null, null, "")
+        handle.repository.createCustomExercise("session Fenced", null, emptySet(), null, null, "")
         val frozenBefore = harness.frozenIdentity(harness.outboxSnapshot(s.database, AppSessionFixtures.ACCOUNT))
         val epoch = checkNotNull(harness.cacheEpoch(s.database, AppSessionFixtures.ACCOUNT))
 
@@ -487,7 +469,7 @@ class AppSessionFencingReconnectTest {
             }
         }
         admitted.await()
-        val probe = kotlinx.coroutines.CancellationException("r09h-reconnect-cancel")
+        val probe = kotlinx.coroutines.CancellationException("session-reconnect-cancel")
         job.cancel(probe)
         hold.complete(Unit)
         job.join()
@@ -502,8 +484,8 @@ class AppSessionFencingReconnectTest {
         assertTrue("cancelled reconnect must preserve Active, was $state", state is AppSessionState.Active)
         val same = (state as AppSessionState.Active).session
         same.checkCurrent()
-        assertTrue(same.repository.exerciseSummaries().map { it.exercise.name }.contains("R09h Fenced"))
-        same.repository.createCustomExercise("R09h Cancel Kept", null, emptySet(), null, null, "")
+        assertTrue(same.repository.exerciseSummaries().map { it.exercise.name }.contains("session Fenced"))
+        same.repository.createCustomExercise("session Cancel Kept", null, emptySet(), null, null, "")
         assertEquals(2L, harness.outboxCount(s.database, AppSessionFixtures.ACCOUNT))
     }
 
@@ -522,7 +504,7 @@ class AppSessionFencingReconnectTest {
             }
         }
         s.coordinator.reconnect(handle, epochBefore)
-        // R12c owns publication: reconnect advances no materialization epoch.
+        // owns publication: reconnect advances no materialization epoch.
         assertEquals(epochBefore, harness.cacheEpoch(s.database, AppSessionFixtures.ACCOUNT))
         assertEquals(materializedBefore, harness.materializedEpoch(s.database, AppSessionFixtures.ACCOUNT))
     }
@@ -560,7 +542,7 @@ class AppSessionFencingReconnectTest {
         val outcome = CompletableDeferred<Result<String>>()
         val job = launch {
             try {
-                val id = handle.repository.createCustomExercise("R09h Post Write", null, emptySet(), null, null, "")
+                val id = handle.repository.createCustomExercise("session Post Write", null, emptySet(), null, null, "")
                 outcome.complete(Result.success(id))
             } catch (e: Throwable) {
                 outcome.complete(Result.failure(e))
@@ -608,7 +590,7 @@ class AppSessionFencingReconnectTest {
         // CAS entered: reservation committed, transition lease held.
         gatedVault.entered.await()
         val closeBefore = tLease.closeCount
-        val probe = kotlinx.coroutines.CancellationException("r09h-lease-cancel")
+        val probe = kotlinx.coroutines.CancellationException("session-lease-cancel")
         job.cancel(probe)
         gatedVault.release.complete(Unit)
         job.join()
@@ -635,7 +617,7 @@ class AppSessionFencingReconnectTest {
         // editing instead (proven by the neighbouring stop tests).
         val s = stack()
         val handle = s.activate()
-        handle.repository.createCustomExercise("R09h Bound", null, emptySet(), null, null, "")
+        handle.repository.createCustomExercise("session Bound", null, emptySet(), null, null, "")
         val journalBefore = harness.journalRow(s.database)
         val frozenBefore = harness.frozenIdentity(harness.outboxSnapshot(s.database, AppSessionFixtures.ACCOUNT))
         val epoch = checkNotNull(harness.cacheEpoch(s.database, AppSessionFixtures.ACCOUNT))
@@ -665,7 +647,7 @@ class AppSessionFencingReconnectTest {
             AppSessionFixtures.assertClosed(e)
         }
         try {
-            handle.repository.createCustomExercise("R09h Faulted Write", null, emptySet(), null, null, "")
+            handle.repository.createCustomExercise("session Faulted Write", null, emptySet(), null, null, "")
             error("faulted facade write must refuse")
         } catch (e: AppSessionStaleException) {
             AppSessionFixtures.assertClosed(e)
@@ -673,7 +655,7 @@ class AppSessionFencingReconnectTest {
         // ...while Room generation, queue and domain stay untouched.
         assertEquals(journalBefore, harness.journalRow(s.database))
         assertEquals(frozenBefore, harness.frozenIdentity(harness.outboxSnapshot(s.database, AppSessionFixtures.ACCOUNT)))
-        assertEquals(listOf("R09h Bound"), harness.customNames(s.database, AppSessionFixtures.ACCOUNT))
+        assertEquals(listOf("session Bound"), harness.customNames(s.database, AppSessionFixtures.ACCOUNT))
     }
 
     /** Vault CAS entry gate: observes the held post-reservation write, then releases. */

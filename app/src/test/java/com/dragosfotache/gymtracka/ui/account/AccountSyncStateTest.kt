@@ -1,5 +1,6 @@
 package com.dragosfotache.gymtracka.ui.account
 
+import com.dragosfotache.gymtracka.data.sync.session.OrdinaryRecoveryPreparation
 import com.dragosfotache.gymtracka.data.sync.session.AccountRecoveryConfirmation
 import com.dragosfotache.gymtracka.data.sync.session.AppAccountSession
 import com.dragosfotache.gymtracka.data.sync.session.AppReconciliationResult
@@ -16,20 +17,11 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
- * R13d independent QA (JVM): AccountSyncState controller inertness and gating
+ * (JVM): AccountSyncState controller inertness and gating
  * without an ACTIVE handle.
  *
- * Derived ONLY from docs/remaining-work/R13d-task.md (foreground/edit/manual
- * controller contract: separate composition-owned state, inert construction/
- * startup until explicit foreground lifecycle admission, exact-handle bounded
- * reconciliation, monotonic conflated finite-write notifications, debounce/
- * serialize/coalesce, no stop/status spin, manual retry respecting backoff,
- * cancellation/disposal fencing, opaque confirmation objects) plus the
- * established R13c Fake-operations/TestScope/virtual-time pattern. Fake
- * operations only (no HTTP, no Room); no sleeps.
- *
  * These tests never construct [AppAccountSession] or
- * [AccountRecoveryConfirmation]: production owns those handles/tokens and QA
+ * [AccountRecoveryConfirmation]: production owns those handles/tokens and tests
  * must not fabricate authority. All tests stay in non-ACTIVE states
  * ([AppSessionState.PrivacyLocked] and Private), where the controller must
  * remain inert: no [AccountSyncOperations.reconcile], no
@@ -72,7 +64,7 @@ class AccountSyncStateTest {
 
         override suspend fun prepareOrdinaryRecovery(
             session: AppAccountSession,
-        ): AccountRecoveryConfirmation? {
+        ): OrdinaryRecoveryPreparation {
             prepareCalls += 1
             error("prepareOrdinaryRecovery must not run without an ACTIVE handle")
         }

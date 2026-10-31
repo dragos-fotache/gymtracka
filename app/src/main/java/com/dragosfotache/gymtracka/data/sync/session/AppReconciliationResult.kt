@@ -5,7 +5,7 @@ import com.dragosfotache.gymtracka.data.sync.engine.SyncDeliveryResult
 import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationResult
 
 /**
- * R12c ACTIVE reconciliation stops. TAIL means a clean valid tail plus
+ * ACTIVE reconciliation stops. TAIL means a clean valid tail plus
  * successful/unchanged publication with no outstanding local work.
  * PROTECTED means new local intent/claimed rest postponed projection and the
  * entire visible graph is preserved. PUSH_STOPPED/PULL_STOPPED are bounded

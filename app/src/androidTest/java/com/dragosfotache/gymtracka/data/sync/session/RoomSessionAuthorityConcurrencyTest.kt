@@ -18,12 +18,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R09a independent QA: exact-expected, concurrent reservation, overflow and
- * stale-fence obligations.
- *
- * Contract-only; raw SQL literals; no production inspection. Covers task
- * obligation 3: exact expected snapshot, concurrent reservation single winner,
- * checked revision/generation overflow, stale old-repository fence failure.
+ * Real Room checks for concurrent private reservations, exact expected authority, and
+ * stale-generation refusal.
  */
 @RunWith(AndroidJUnit4::class)
 class RoomSessionAuthorityConcurrencyTest {
@@ -71,7 +67,7 @@ class RoomSessionAuthorityConcurrencyTest {
         } catch (e: RoomSessionAuthorityException) {
             assertEquals(RoomSessionAuthorityFailure.STALE_AUTHORITY, e.failure)
         }
-        // Already-PREPARING is also STALE for a second reservation in this slice.
+        // Already-PREPARING is also STALE for a second reservation for the same private state.
         try {
             authority.beginPreparation(preparing, originA(), ACCOUNT_A, OP_B)
             fail("expected STALE_AUTHORITY for second reservation")

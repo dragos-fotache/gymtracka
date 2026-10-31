@@ -23,12 +23,8 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R07c independent sync-driver acceptance: shared push-before-pull composition
- * and valid-tail bookkeeping through real Room and scripted transport.
- *
- * No production source inspected; every expectation is a literal authored from
- * docs/archive/remaining-work/R07c-task.md. Reuses vetted R06a/R06c/R07a/R07b helpers;
- * does not duplicate their exhaustive matrices.
+ * Real Room and scripted transport checks for uninterrupted push-before-pull composition and
+ * valid-tail bookkeeping.
  */
 class SyncDeliveryTest : GymDatabaseTest() {
 

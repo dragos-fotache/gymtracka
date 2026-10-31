@@ -28,10 +28,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R04a independent QA: EncryptedSessionVault behavior.
- *
- * Derived from R04a-task.md model validation / compare-and-set / encryption / Android I/O
- * rules. Uses fakes only; no production I/O, no network, no sleeps.
+ * EncryptedSessionVault behavior.
  */
 class SessionVaultTest {
 

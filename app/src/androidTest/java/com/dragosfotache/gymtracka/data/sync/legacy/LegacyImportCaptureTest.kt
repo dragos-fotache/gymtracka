@@ -40,23 +40,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R13a independent QA: durable legacy graph and private import capture.
- *
- * Derived ONLY from docs/archive/remaining-work/R13a-task.md exact API/table contract
- * (including coordinator-confirmed harness facts: store lease package,
- * `aggregate.import` mutation type, `customExercise`/`routine`/`workout` wire
- * roots, exact g+1 generation, supplier call rules, closed step-6 exception
- * mapping), task-relevant normative doc sections and allowed harness patterns
- * (in-memory Room + raw SQL, MigrationTestHelper file-reopen, controllable
- * barrier/lease, exported schemas 1-12 column facts). No production
- * declarations/sources/diffs/new schema13/Worker work inspected, including via
- * LSP/generated/decompiled classes. All seeds and oracles are independent raw
- * SQL literals; wire expectations are structural/substring checks, never bytes
- * derived from a production encoder.
- *
- * Every root/child/reference/muscle/equipment ID in a valid graph is a
- * canonical UUID; only slugs/labels stay mnemonic. Invalid mnemonic IDs are
- * covered by the dedicated invalid-fixture test below, never weakened.
+ * Real Room checks for preserved local source graphs, private import capture, exact request
+ * evidence, corruption refusal, rollback and durable recovery.
  */
 @RunWith(AndroidJUnit4::class)
 class LegacyImportCaptureTest {
@@ -893,7 +878,7 @@ class LegacyImportCaptureTest {
 
     @Test
     fun fileReopen_recoversIdenticalSourceAndRequestIdentitiesAndIdempotent() = kotlinx.coroutines.test.runTest {
-        val dbName = "qa-legacy-reopen.db"
+        val dbName = "test-legacy-reopen.db"
         context.deleteDatabase(dbName)
         var capturedSource = ""
         var capturedOutbox: List<List<String?>> = emptyList()
@@ -1132,7 +1117,7 @@ class LegacyImportCaptureTest {
         val before = graphSnapshot()
         exec(
             "CREATE TRIGGER qa_abort_entry BEFORE INSERT ON sync_legacy_import_entries" +
-                " BEGIN SELECT RAISE(ABORT, 'qa abort'); END",
+                " BEGIN SELECT RAISE(ABORT, 'test abort'); END",
         )
         val lease = FakeLease()
         expectLegacyFailure(LegacyImportFailure.UNAVAILABLE) {

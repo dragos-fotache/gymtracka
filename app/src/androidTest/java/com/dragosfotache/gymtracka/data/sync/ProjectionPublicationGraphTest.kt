@@ -31,28 +31,28 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R05c independent acceptance: whole-graph validation, physical collisions,
+ * Projection independent acceptance: whole-graph validation, physical collisions,
  * generation preservation, epoch signal, rollback and file-backed persistence.
- * Real Room, raw SQLite oracles, handwritten expectations from R05c-task.md.
+ * Real Room, raw SQLite oracles, handwritten expectations from Projection-task.md.
  */
 class ProjectionPublicationGraphTest : GymDatabaseTest() {
 
     private suspend fun seedLookups() {
         insertMuscleGroups(
-            muscleGroupFixture(id = R05C_MUSCLE_PRIMARY, name = "Chest"),
-            muscleGroupFixture(id = R05C_MUSCLE_SECONDARY, name = "Shoulders"),
+            muscleGroupFixture(id = PROJECTION_MUSCLE_PRIMARY, name = "Chest"),
+            muscleGroupFixture(id = PROJECTION_MUSCLE_SECONDARY, name = "Shoulders"),
         )
-        insertEquipment(equipmentFixture(id = R05C_EQUIPMENT, name = "Dumbbell"))
-        insertExercises(exerciseFixture(id = R05C_BUNDLED, name = "Bench Press"))
+        insertEquipment(equipmentFixture(id = PROJECTION_EQUIPMENT, name = "Dumbbell"))
+        insertExercises(exerciseFixture(id = PROJECTION_BUNDLED, name = "Bench Press"))
     }
 
-    private fun customA(revision: Long = 1L) = r05bCustomRecord(
-        id = R05B_CUSTOM_A,
+    private fun customA(revision: Long = 1L) = canonicalCustomRecord(
+        id = CANONICAL_CUSTOM_A,
         name = "Fly",
         revision = revision,
         category = "strength",
-        muscleGroups = r05bJsonArray(r05bMuscleRef(R05C_MUSCLE_PRIMARY, "Chest", "primary")),
-        equipment = r05bJsonArray(r05bEquipmentRef(R05C_EQUIPMENT, "Dumbbell", 2)),
+        muscleGroups = canonicalJsonArray(canonicalMuscleRef(PROJECTION_MUSCLE_PRIMARY, "Chest", "primary")),
+        equipment = canonicalJsonArray(canonicalEquipmentRef(PROJECTION_EQUIPMENT, "Dumbbell", 2)),
     )
 
     private fun assertSafeMessage(message: String?, vararg secrets: String) {
@@ -61,31 +61,31 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
     }
 
     private suspend fun assertPublishThrowsGraphUnchanged(): ProjectionGraphException {
-        val before = database.r05cDumpAll()
-        val lease = R05cTestLease()
+        val before = database.projectionDumpAll()
+        val lease = ProjectionTestLease()
         try {
-            database.r05cStore(barrier = r05cGrantBarrier(lease)).publish(0L)
+            database.projectionStore(barrier = projectionGrantBarrier(lease)).publish(0L)
             fail("Expected ProjectionGraphException")
             throw AssertionError("unreachable")
         } catch (e: ProjectionGraphException) {
-            assertSafeMessage(e.message, R05B_ACCOUNT, R05B_WORKOUT_A, R05B_CUSTOM_A)
+            assertSafeMessage(e.message, CANONICAL_ACCOUNT, CANONICAL_WORKOUT_A, CANONICAL_CUSTOM_A)
             assertEquals(1, lease.closeCount)
-            assertEquals(before, database.r05cDumpAll())
+            assertEquals(before, database.projectionDumpAll())
             return e
         }
     }
 
     private suspend fun assertPublishThrowsCollisionUnchanged(): ProjectionCollisionException {
-        val before = database.r05cDumpAll()
-        val lease = R05cTestLease()
+        val before = database.projectionDumpAll()
+        val lease = ProjectionTestLease()
         try {
-            database.r05cStore(barrier = r05cGrantBarrier(lease)).publish(0L)
+            database.projectionStore(barrier = projectionGrantBarrier(lease)).publish(0L)
             fail("Expected ProjectionCollisionException")
             throw AssertionError("unreachable")
         } catch (e: ProjectionCollisionException) {
-            assertSafeMessage(e.message, R05B_ACCOUNT, R05B_WORKOUT_A, R05B_CUSTOM_A)
+            assertSafeMessage(e.message, CANONICAL_ACCOUNT, CANONICAL_WORKOUT_A, CANONICAL_CUSTOM_A)
             assertEquals(1, lease.closeCount)
-            assertEquals(before, database.r05cDumpAll())
+            assertEquals(before, database.projectionDumpAll())
             return e
         }
     }
@@ -95,17 +95,17 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
     @Test
     fun unknownCustomDependencyFails() = runTest {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_A,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
+                    canonicalWorkoutRecord(
                         revision = 1L,
-                        exercises = r05bJsonArray(
-                            r05bWorkoutEntry(exerciseId = "99999999-9999-4999-8999-999999999999"),
+                        exercises = canonicalJsonArray(
+                            canonicalWorkoutEntry(exerciseId = "99999999-9999-4999-8999-999999999999"),
                         ),
                     ),
                 ),
@@ -117,23 +117,23 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
     @Test
     fun deletedCustomDependencyFails() = runTest {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_DELETE, 2L, null),
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_A,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_DELETE, 2L, null),
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
+                    canonicalWorkoutRecord(
                         revision = 1L,
-                        exercises = r05bJsonArray(r05bWorkoutEntry(exerciseId = R05B_CUSTOM_A)),
+                        exercises = canonicalJsonArray(canonicalWorkoutEntry(exerciseId = CANONICAL_CUSTOM_A)),
                     ),
                 ),
             ),
         )
         assertPublishThrowsGraphUnchanged()
-        val root = database.syncCanonicalDao().getRoot(R05B_ACCOUNT, R05B_TYPE_CUSTOM, R05B_CUSTOM_A)!!
+        val root = database.syncCanonicalDao().getRoot(CANONICAL_ACCOUNT, CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A)!!
         assertEquals("delete", root.canonicalState)
     }
 
@@ -142,16 +142,16 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
         seedLookups()
         val localId = "aaaaaaaa-0000-4000-8000-00000000c106"
         insertExercises(exerciseFixture(id = localId, name = "Local", isUserCreated = true))
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_A,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
+                    canonicalWorkoutRecord(
                         revision = 1L,
-                        exercises = r05bJsonArray(r05bWorkoutEntry(exerciseId = localId)),
+                        exercises = canonicalJsonArray(canonicalWorkoutEntry(exerciseId = localId)),
                     ),
                 ),
             ),
@@ -165,26 +165,26 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
         val foreignCustom = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb01bb"
         insertExercises(
             exerciseFixture(id = foreignCustom, name = "Foreign", isUserCreated = true)
-                .copy(accountId = R05B_OTHER_ACCOUNT),
+                .copy(accountId = CANONICAL_OTHER_ACCOUNT),
         )
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_A,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
+                    canonicalWorkoutRecord(
                         revision = 1L,
-                        exercises = r05bJsonArray(r05bWorkoutEntry(exerciseId = foreignCustom)),
+                        exercises = canonicalJsonArray(canonicalWorkoutEntry(exerciseId = foreignCustom)),
                     ),
                 ),
             ),
         )
         assertPublishThrowsGraphUnchanged()
         assertEquals(
-            R05B_OTHER_ACCOUNT,
-            database.r05cQuery(
+            CANONICAL_OTHER_ACCOUNT,
+            database.projectionQuery(
                 "SELECT account_id FROM exercises WHERE id = ?",
                 arrayOf(foreignCustom),
             ).single()["account_id"],
@@ -193,68 +193,68 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
 
     @Test
     fun missingMuscleThenEquipmentFailBeforeSuccess() = runTest {
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, customA()),
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_A,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, customA()),
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
+                    canonicalWorkoutRecord(
                         revision = 1L,
-                        exercises = r05bJsonArray(r05bWorkoutEntry(exerciseId = R05B_CUSTOM_A)),
+                        exercises = canonicalJsonArray(canonicalWorkoutEntry(exerciseId = CANONICAL_CUSTOM_A)),
                     ),
                 ),
             ),
         )
         assertPublishThrowsGraphUnchanged()
-        insertMuscleGroups(muscleGroupFixture(id = R05C_MUSCLE_PRIMARY, name = "Chest"))
+        insertMuscleGroups(muscleGroupFixture(id = PROJECTION_MUSCLE_PRIMARY, name = "Chest"))
         assertPublishThrowsGraphUnchanged()
-        insertEquipment(equipmentFixture(id = R05C_EQUIPMENT, name = "Dumbbell"))
-        val result = database.r05cStore(barrier = r05cGrantBarrier()).publish(0L)
+        insertEquipment(equipmentFixture(id = PROJECTION_EQUIPMENT, name = "Dumbbell"))
+        val result = database.projectionStore(barrier = projectionGrantBarrier()).publish(0L)
         assertEquals(ProjectionPublicationStatus.PUBLISHED, result.status)
         assertEquals(1L, result.cacheEpoch)
-        val muscles = database.r05cQuery(
+        val muscles = database.projectionQuery(
             "SELECT muscle_group_id FROM exercise_muscle_groups WHERE exercise_id = ?",
-            arrayOf(R05B_CUSTOM_A),
+            arrayOf(CANONICAL_CUSTOM_A),
         )
-        assertEquals(listOf(R05C_MUSCLE_PRIMARY), muscles.map { it["muscle_group_id"] })
+        assertEquals(listOf(PROJECTION_MUSCLE_PRIMARY), muscles.map { it["muscle_group_id"] })
     }
 
     @Test
     fun multipleActiveWorkoutsFail() = runTest {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, customA()),
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_A,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, customA()),
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
+                    canonicalWorkoutRecord(
                         name = "First",
                         status = "active",
                         revision = 1L,
-                        exercises = r05bJsonArray(r05bWorkoutEntry(exerciseId = R05B_CUSTOM_A)),
+                        exercises = canonicalJsonArray(canonicalWorkoutEntry(exerciseId = CANONICAL_CUSTOM_A)),
                     ),
                 ),
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_B,
-                    R05B_OP_UPSERT,
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_B,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
-                        id = R05B_WORKOUT_B,
+                    canonicalWorkoutRecord(
+                        id = CANONICAL_WORKOUT_B,
                         name = "Second",
                         status = "active",
                         revision = 1L,
-                        exercises = r05bJsonArray(
-                            r05bWorkoutEntry(
-                                id = R05C_ENTRY_X1,
-                                exerciseId = R05C_BUNDLED,
-                                sets = r05bJsonArray(r05bWorkoutSet(id = R05C_SET_X1)),
+                        exercises = canonicalJsonArray(
+                            canonicalWorkoutEntry(
+                                id = PROJECTION_ENTRY_X1,
+                                exerciseId = PROJECTION_BUNDLED,
+                                sets = canonicalJsonArray(canonicalWorkoutSet(id = PROJECTION_SET_X1)),
                             ),
                         ),
                     ),
@@ -267,44 +267,44 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
     @Test
     fun completeBatchActiveReplacementSucceeds() = runTest {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, customA()),
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_A,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, customA()),
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
+                    canonicalWorkoutRecord(
                         name = "Old",
                         status = "active",
                         revision = 1L,
-                        exercises = r05bJsonArray(r05bWorkoutEntry(exerciseId = R05B_CUSTOM_A)),
+                        exercises = canonicalJsonArray(canonicalWorkoutEntry(exerciseId = CANONICAL_CUSTOM_A)),
                     ),
                 ),
             ),
         )
-        database.r05cStore(barrier = r05cGrantBarrier()).publish(0L)
-        database.r05cApplyCanonical(
-            r05bPull(
-                batchId = R05B_BATCH_2,
-                cursor = R05B_CURSOR_2,
-                changes = r05bJsonArray(
-                    r05bChange(R05B_TYPE_WORKOUT, R05B_WORKOUT_A, R05B_OP_DELETE, 2L, null),
-                    r05bChange(
-                        R05B_TYPE_WORKOUT,
-                        R05B_WORKOUT_B,
-                        R05B_OP_UPSERT,
+        database.projectionStore(barrier = projectionGrantBarrier()).publish(0L)
+        database.projectionApplyCanonical(
+            canonicalPull(
+                batchId = CANONICAL_BATCH_2,
+                cursor = CANONICAL_CURSOR_2,
+                changes = canonicalJsonArray(
+                    canonicalChange(CANONICAL_TYPE_WORKOUT, CANONICAL_WORKOUT_A, CANONICAL_OP_DELETE, 2L, null),
+                    canonicalChange(
+                        CANONICAL_TYPE_WORKOUT,
+                        CANONICAL_WORKOUT_B,
+                        CANONICAL_OP_UPSERT,
                         1L,
-                        r05bWorkoutRecord(
-                            id = R05B_WORKOUT_B,
+                        canonicalWorkoutRecord(
+                            id = CANONICAL_WORKOUT_B,
                             name = "New",
                             status = "active",
                             revision = 1L,
-                            exercises = r05bJsonArray(
-                                r05bWorkoutEntry(
-                                    id = R05C_ENTRY_X1,
-                                    exerciseId = R05C_BUNDLED,
+                            exercises = canonicalJsonArray(
+                                canonicalWorkoutEntry(
+                                    id = PROJECTION_ENTRY_X1,
+                                    exerciseId = PROJECTION_BUNDLED,
                                 ),
                             ),
                         ),
@@ -313,13 +313,13 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
             ),
             1L,
         )
-        val result = database.r05cStore(barrier = r05cGrantBarrier()).publish(1L)
+        val result = database.projectionStore(barrier = projectionGrantBarrier()).publish(1L)
         assertEquals(ProjectionPublicationStatus.PUBLISHED, result.status)
         assertEquals(2L, result.cacheEpoch)
         assertTrue(
-            database.r05cQuery("SELECT id FROM workouts WHERE id = ?", arrayOf(R05B_WORKOUT_A)).isEmpty(),
+            database.projectionQuery("SELECT id FROM workouts WHERE id = ?", arrayOf(CANONICAL_WORKOUT_A)).isEmpty(),
         )
-        val active = database.r05cQuery("SELECT name FROM workouts WHERE status = 'active'")
+        val active = database.projectionQuery("SELECT name FROM workouts WHERE status = 'active'")
         assertEquals(listOf("New"), active.map { it["name"] })
     }
 
@@ -328,50 +328,50 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
     @Test
     fun localRootPkCollisionFails() = runTest {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, customA()),
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_A,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, customA()),
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
+                    canonicalWorkoutRecord(
                         revision = 1L,
-                        exercises = r05bJsonArray(r05bWorkoutEntry(exerciseId = R05B_CUSTOM_A)),
+                        exercises = canonicalJsonArray(canonicalWorkoutEntry(exerciseId = CANONICAL_CUSTOM_A)),
                     ),
                 ),
             ),
         )
-        insertWorkoutAggregate(workoutFixture(id = R05B_WORKOUT_A, name = "Local"))
+        insertWorkoutAggregate(workoutFixture(id = CANONICAL_WORKOUT_A, name = "Local"))
         assertPublishThrowsCollisionUnchanged()
     }
 
     @Test
     fun foreignRootPkCollisionFails() = runTest {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, customA()),
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_A,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, customA()),
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
+                    canonicalWorkoutRecord(
                         revision = 1L,
-                        exercises = r05bJsonArray(r05bWorkoutEntry(exerciseId = R05B_CUSTOM_A)),
+                        exercises = canonicalJsonArray(canonicalWorkoutEntry(exerciseId = CANONICAL_CUSTOM_A)),
                     ),
                 ),
             ),
         )
-        insertWorkoutAggregate(workoutFixture(id = R05B_WORKOUT_A).copy(accountId = R05B_OTHER_ACCOUNT))
+        insertWorkoutAggregate(workoutFixture(id = CANONICAL_WORKOUT_A).copy(accountId = CANONICAL_OTHER_ACCOUNT))
         assertPublishThrowsCollisionUnchanged()
         assertEquals(
-            R05B_OTHER_ACCOUNT,
-            database.r05cQuery(
+            CANONICAL_OTHER_ACCOUNT,
+            database.projectionQuery(
                 "SELECT account_id FROM workouts WHERE id = ?",
-                arrayOf(R05B_WORKOUT_A),
+                arrayOf(CANONICAL_WORKOUT_A),
             ).single()["account_id"],
         )
     }
@@ -379,19 +379,19 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
     @Test
     fun bundledCustomClaimCollisionFails() = runTest {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(
-                    R05B_TYPE_CUSTOM,
-                    R05C_BUNDLED,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(
+                    CANONICAL_TYPE_CUSTOM,
+                    PROJECTION_BUNDLED,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bCustomRecord(id = R05C_BUNDLED, name = "Claimed", revision = 1L),
+                    canonicalCustomRecord(id = PROJECTION_BUNDLED, name = "Claimed", revision = 1L),
                 ),
             ),
         )
         assertPublishThrowsCollisionUnchanged()
-        val bundled = database.r05cQuery("SELECT * FROM exercises WHERE id = ?", arrayOf(R05C_BUNDLED)).single()
+        val bundled = database.projectionQuery("SELECT * FROM exercises WHERE id = ?", arrayOf(PROJECTION_BUNDLED)).single()
         assertEquals("Bench Press", bundled["name"])
         assertEquals(0L, bundled["is_user_created"])
     }
@@ -399,21 +399,21 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
     @Test
     fun entryAndSetPkAndRoleCollisionsFail() = runTest {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, customA()),
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_A,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, customA()),
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
+                    canonicalWorkoutRecord(
                         revision = 1L,
-                        exercises = r05bJsonArray(
-                            r05bWorkoutEntry(
-                                id = R05B_ENTRY_A1,
-                                exerciseId = R05B_CUSTOM_A,
-                                sets = r05bJsonArray(r05bWorkoutSet(id = R05B_SET_A1)),
+                        exercises = canonicalJsonArray(
+                            canonicalWorkoutEntry(
+                                id = CANONICAL_ENTRY_A1,
+                                exerciseId = CANONICAL_CUSTOM_A,
+                                sets = canonicalJsonArray(canonicalWorkoutSet(id = CANONICAL_SET_A1)),
                             ),
                         ),
                     ),
@@ -421,9 +421,9 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
             ),
         )
         insertWorkoutAggregate(
-            workoutFixture(id = R05C_WORKOUT_B),
-            listOf(workoutExerciseFixture(id = R05B_ENTRY_A1, workoutId = R05C_WORKOUT_B, exerciseId = R05C_BUNDLED)),
-            listOf(workoutSetFixture(id = R05B_SET_A1, workoutExerciseId = R05B_ENTRY_A1)),
+            workoutFixture(id = PROJECTION_WORKOUT_B),
+            listOf(workoutExerciseFixture(id = CANONICAL_ENTRY_A1, workoutId = PROJECTION_WORKOUT_B, exerciseId = PROJECTION_BUNDLED)),
+            listOf(workoutSetFixture(id = CANONICAL_SET_A1, workoutExerciseId = CANONICAL_ENTRY_A1)),
         )
         assertPublishThrowsCollisionUnchanged()
 
@@ -431,9 +431,9 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
         database.openHelper.writableDatabase.execSQL("DELETE FROM workout_exercises")
         database.openHelper.writableDatabase.execSQL("DELETE FROM workouts")
         insertWorkoutAggregate(
-            workoutFixture(id = R05C_WORKOUT_B),
-            listOf(workoutExerciseFixture(id = R05C_ENTRY_X2, workoutId = R05C_WORKOUT_B, exerciseId = R05C_BUNDLED)),
-            listOf(workoutSetFixture(id = R05B_ENTRY_A1, workoutExerciseId = R05C_ENTRY_X2)),
+            workoutFixture(id = PROJECTION_WORKOUT_B),
+            listOf(workoutExerciseFixture(id = PROJECTION_ENTRY_X2, workoutId = PROJECTION_WORKOUT_B, exerciseId = PROJECTION_BUNDLED)),
+            listOf(workoutSetFixture(id = CANONICAL_ENTRY_A1, workoutExerciseId = PROJECTION_ENTRY_X2)),
         )
         assertPublishThrowsCollisionUnchanged()
     }
@@ -441,22 +441,22 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
     @Test
     fun sameAccountWrongRootReuseFailsDespiteRemoval() = runTest {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, customA()),
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_B,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, customA()),
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_B,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
-                        id = R05B_WORKOUT_B,
+                    canonicalWorkoutRecord(
+                        id = CANONICAL_WORKOUT_B,
                         revision = 1L,
-                        exercises = r05bJsonArray(
-                            r05bWorkoutEntry(
-                                id = R05C_ENTRY_X1,
-                                exerciseId = R05B_CUSTOM_A,
-                                sets = r05bJsonArray(r05bWorkoutSet(id = R05B_SET_A1)),
+                        exercises = canonicalJsonArray(
+                            canonicalWorkoutEntry(
+                                id = PROJECTION_ENTRY_X1,
+                                exerciseId = CANONICAL_CUSTOM_A,
+                                sets = canonicalJsonArray(canonicalWorkoutSet(id = CANONICAL_SET_A1)),
                             ),
                         ),
                     ),
@@ -464,22 +464,22 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
             ),
         )
         insertWorkoutAggregate(
-            workoutFixture(id = R05C_WORKOUT_B).copy(accountId = R05B_ACCOUNT),
+            workoutFixture(id = PROJECTION_WORKOUT_B).copy(accountId = CANONICAL_ACCOUNT),
             listOf(
                 workoutExerciseFixture(
-                    id = R05B_ENTRY_A1,
-                    workoutId = R05C_WORKOUT_B,
-                    exerciseId = R05C_BUNDLED,
+                    id = CANONICAL_ENTRY_A1,
+                    workoutId = PROJECTION_WORKOUT_B,
+                    exerciseId = PROJECTION_BUNDLED,
                 ),
             ),
-            listOf(workoutSetFixture(id = R05B_SET_A1, workoutExerciseId = R05B_ENTRY_A1)),
+            listOf(workoutSetFixture(id = CANONICAL_SET_A1, workoutExerciseId = CANONICAL_ENTRY_A1)),
         )
         assertPublishThrowsCollisionUnchanged()
         assertEquals(
-            R05C_WORKOUT_B,
-            database.r05cQuery(
+            PROJECTION_WORKOUT_B,
+            database.projectionQuery(
                 "SELECT workout_id FROM workout_exercises WHERE id = ?",
-                arrayOf(R05B_ENTRY_A1),
+                arrayOf(CANONICAL_ENTRY_A1),
             ).single()["workout_id"],
         )
     }
@@ -488,41 +488,41 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
     fun validSameBindingAndWorkoutRoutineIdOverlapSucceed() = runTest {
         seedLookups()
         val sharedId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaa102"
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, customA()),
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, customA()),
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
                     sharedId,
-                    R05B_OP_UPSERT,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
+                    canonicalWorkoutRecord(
                         id = sharedId,
                         revision = 1L,
-                        exercises = r05bJsonArray(
-                            r05bWorkoutEntry(
-                                id = R05B_ENTRY_A1,
-                                exerciseId = R05B_CUSTOM_A,
-                                sets = r05bJsonArray(r05bWorkoutSet(id = R05B_SET_A1)),
+                        exercises = canonicalJsonArray(
+                            canonicalWorkoutEntry(
+                                id = CANONICAL_ENTRY_A1,
+                                exerciseId = CANONICAL_CUSTOM_A,
+                                sets = canonicalJsonArray(canonicalWorkoutSet(id = CANONICAL_SET_A1)),
                             ),
                         ),
                     ),
                 ),
-                r05bChange(
-                    R05B_TYPE_ROUTINE,
+                canonicalChange(
+                    CANONICAL_TYPE_ROUTINE,
                     sharedId,
-                    R05B_OP_UPSERT,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bRoutineRecord(
+                    canonicalRoutineRecord(
                         id = sharedId,
                         name = "Shared",
                         isDraft = false,
                         revision = 1L,
-                        exercises = r05bJsonArray(
-                            r05bRoutineEntry(
-                                id = R05B_ENTRY_A2,
-                                exerciseId = R05B_CUSTOM_A,
-                                sets = r05bJsonArray(r05bRoutineSet(id = R05B_SET_A2)),
+                        exercises = canonicalJsonArray(
+                            canonicalRoutineEntry(
+                                id = CANONICAL_ENTRY_A2,
+                                exerciseId = CANONICAL_CUSTOM_A,
+                                sets = canonicalJsonArray(canonicalRoutineSet(id = CANONICAL_SET_A2)),
                             ),
                         ),
                     ),
@@ -530,106 +530,106 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
             ),
         )
         insertExercises(
-            exerciseFixture(id = R05B_CUSTOM_A, name = "Fly", isUserCreated = true).copy(accountId = R05B_ACCOUNT),
+            exerciseFixture(id = CANONICAL_CUSTOM_A, name = "Fly", isUserCreated = true).copy(accountId = CANONICAL_ACCOUNT),
         )
         insertWorkoutAggregate(
-            workoutFixture(id = sharedId).copy(accountId = R05B_ACCOUNT),
+            workoutFixture(id = sharedId).copy(accountId = CANONICAL_ACCOUNT),
             listOf(
                 workoutExerciseFixture(
-                    id = R05B_ENTRY_A1,
+                    id = CANONICAL_ENTRY_A1,
                     workoutId = sharedId,
-                    exerciseId = R05B_CUSTOM_A,
+                    exerciseId = CANONICAL_CUSTOM_A,
                 ),
             ),
-            listOf(workoutSetFixture(id = R05B_SET_A1, workoutExerciseId = R05B_ENTRY_A1)),
+            listOf(workoutSetFixture(id = CANONICAL_SET_A1, workoutExerciseId = CANONICAL_ENTRY_A1)),
         )
-        val result = database.r05cStore(barrier = r05cGrantBarrier()).publish(0L)
+        val result = database.projectionStore(barrier = projectionGrantBarrier()).publish(0L)
         assertEquals(ProjectionPublicationStatus.PUBLISHED, result.status)
         assertEquals(1L, result.cacheEpoch)
         assertEquals(
             sharedId,
-            database.r05cQuery("SELECT id FROM workouts WHERE id = ?", arrayOf(sharedId)).single()["id"],
+            database.projectionQuery("SELECT id FROM workouts WHERE id = ?", arrayOf(sharedId)).single()["id"],
         )
         assertEquals(
             "Shared",
-            database.r05cQuery("SELECT name FROM routines WHERE id = ?", arrayOf(sharedId)).single()["name"],
+            database.projectionQuery("SELECT name FROM routines WHERE id = ?", arrayOf(sharedId)).single()["name"],
         )
     }
 
     @Test
     fun crossScopeReferenceToRemovedCustomFailsWithoutTouchingOtherScope() = runTest {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, customA()),
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_A,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, customA()),
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
+                    canonicalWorkoutRecord(
                         revision = 1L,
-                        exercises = r05bJsonArray(r05bWorkoutEntry(exerciseId = R05B_CUSTOM_A)),
+                        exercises = canonicalJsonArray(canonicalWorkoutEntry(exerciseId = CANONICAL_CUSTOM_A)),
                     ),
                 ),
             ),
         )
-        database.r05cStore(barrier = r05cGrantBarrier()).publish(0L)
+        database.projectionStore(barrier = projectionGrantBarrier()).publish(0L)
         insertWorkoutAggregate(
-            workoutFixture(id = R05C_WORKOUT_B).copy(accountId = R05B_OTHER_ACCOUNT),
+            workoutFixture(id = PROJECTION_WORKOUT_B).copy(accountId = CANONICAL_OTHER_ACCOUNT),
             listOf(
                 workoutExerciseFixture(
-                    id = R05C_ENTRY_X2,
-                    workoutId = R05C_WORKOUT_B,
-                    exerciseId = R05B_CUSTOM_A,
+                    id = PROJECTION_ENTRY_X2,
+                    workoutId = PROJECTION_WORKOUT_B,
+                    exerciseId = CANONICAL_CUSTOM_A,
                 ),
             ),
-            listOf(workoutSetFixture(id = R05C_SET_X2, workoutExerciseId = R05C_ENTRY_X2)),
+            listOf(workoutSetFixture(id = PROJECTION_SET_X2, workoutExerciseId = PROJECTION_ENTRY_X2)),
         )
-        database.r05cApplyCanonical(
-            r05bPull(
-                batchId = R05B_BATCH_2,
-                cursor = R05B_CURSOR_2,
-                changes = r05bJsonArray(
-                    r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_DELETE, 2L, null),
-                    r05bChange(
-                        R05B_TYPE_WORKOUT,
-                        R05B_WORKOUT_A,
-                        R05B_OP_UPSERT,
+        database.projectionApplyCanonical(
+            canonicalPull(
+                batchId = CANONICAL_BATCH_2,
+                cursor = CANONICAL_CURSOR_2,
+                changes = canonicalJsonArray(
+                    canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_DELETE, 2L, null),
+                    canonicalChange(
+                        CANONICAL_TYPE_WORKOUT,
+                        CANONICAL_WORKOUT_A,
+                        CANONICAL_OP_UPSERT,
                         2L,
-                        r05bWorkoutRecord(
+                        canonicalWorkoutRecord(
                             revision = 2L,
-                            exercises = r05bJsonArray(r05bWorkoutEntry(exerciseId = R05C_BUNDLED)),
+                            exercises = canonicalJsonArray(canonicalWorkoutEntry(exerciseId = PROJECTION_BUNDLED)),
                         ),
                     ),
                 ),
             ),
             1L,
         )
-        val before = database.r05cDumpAll()
-        val lease = R05cTestLease()
+        val before = database.projectionDumpAll()
+        val lease = ProjectionTestLease()
         try {
-            database.r05cStore(barrier = r05cGrantBarrier(lease)).publish(1L)
+            database.projectionStore(barrier = projectionGrantBarrier(lease)).publish(1L)
             fail("Expected safe failure for surviving cross-scope reference")
         } catch (e: ProjectionGraphException) {
-            assertSafeMessage(e.message, R05B_ACCOUNT, R05B_CUSTOM_A)
+            assertSafeMessage(e.message, CANONICAL_ACCOUNT, CANONICAL_CUSTOM_A)
         } catch (e: CanonicalStorageException) {
-            assertSafeMessage(e.message, R05B_ACCOUNT, R05B_CUSTOM_A)
+            assertSafeMessage(e.message, CANONICAL_ACCOUNT, CANONICAL_CUSTOM_A)
         }
         assertEquals(1, lease.closeCount)
-        assertEquals(before, database.r05cDumpAll())
+        assertEquals(before, database.projectionDumpAll())
         assertEquals(
-            R05B_CUSTOM_A,
-            database.r05cQuery(
+            CANONICAL_CUSTOM_A,
+            database.projectionQuery(
                 "SELECT exercise_id FROM workout_exercises WHERE id = ?",
-                arrayOf(R05C_ENTRY_X2),
+                arrayOf(PROJECTION_ENTRY_X2),
             ).single()["exercise_id"],
         )
         assertEquals(
             "Fly",
-            database.r05cQuery(
+            database.projectionQuery(
                 "SELECT name FROM exercises WHERE id = ?",
-                arrayOf(R05B_CUSTOM_A),
+                arrayOf(CANONICAL_CUSTOM_A),
             ).single()["name"],
         )
     }
@@ -639,118 +639,118 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
     @Test
     fun generationPreservedAcrossRemovalAndReappearance() = runTest {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, customA()),
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_A,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, customA()),
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
+                    canonicalWorkoutRecord(
                         revision = 1L,
-                        exercises = r05bJsonArray(r05bWorkoutEntry(exerciseId = R05B_CUSTOM_A)),
+                        exercises = canonicalJsonArray(canonicalWorkoutEntry(exerciseId = CANONICAL_CUSTOM_A)),
                     ),
                 ),
             ),
         )
         insertExercises(
-            exerciseFixture(id = R05B_CUSTOM_A, name = "Fly", isUserCreated = true).copy(accountId = R05B_ACCOUNT),
+            exerciseFixture(id = CANONICAL_CUSTOM_A, name = "Fly", isUserCreated = true).copy(accountId = CANONICAL_ACCOUNT),
         )
         insertWorkoutAggregate(
-            workoutFixture(id = R05B_WORKOUT_A).copy(accountId = R05B_ACCOUNT),
+            workoutFixture(id = CANONICAL_WORKOUT_A).copy(accountId = CANONICAL_ACCOUNT),
             listOf(
                 workoutExerciseFixture(
-                    id = R05B_ENTRY_A1,
-                    workoutId = R05B_WORKOUT_A,
-                    exerciseId = R05B_CUSTOM_A,
+                    id = CANONICAL_ENTRY_A1,
+                    workoutId = CANONICAL_WORKOUT_A,
+                    exerciseId = CANONICAL_CUSTOM_A,
                 ),
             ),
-            listOf(workoutSetFixture(id = R05B_SET_A1, workoutExerciseId = R05B_ENTRY_A1)),
+            listOf(workoutSetFixture(id = CANONICAL_SET_A1, workoutExerciseId = CANONICAL_ENTRY_A1)),
         )
         insertWorkoutAggregate(
-            workoutFixture(id = R05C_WORKOUT_B).copy(accountId = R05B_ACCOUNT),
+            workoutFixture(id = PROJECTION_WORKOUT_B).copy(accountId = CANONICAL_ACCOUNT),
             listOf(
                 workoutExerciseFixture(
-                    id = R05C_ENTRY_X1,
-                    workoutId = R05C_WORKOUT_B,
-                    exerciseId = R05C_BUNDLED,
+                    id = PROJECTION_ENTRY_X1,
+                    workoutId = PROJECTION_WORKOUT_B,
+                    exerciseId = PROJECTION_BUNDLED,
                 ),
             ),
             emptyList(),
         )
         database.openHelper.writableDatabase.execSQL(
             "UPDATE workouts SET local_generation = 5 WHERE id = ?",
-            arrayOf(R05B_WORKOUT_A),
+            arrayOf(CANONICAL_WORKOUT_A),
         )
         database.openHelper.writableDatabase.execSQL(
             "UPDATE workouts SET local_generation = 9 WHERE id = ?",
-            arrayOf(R05C_WORKOUT_B),
+            arrayOf(PROJECTION_WORKOUT_B),
         )
-        val first = database.r05cStore(barrier = r05cGrantBarrier()).publish(0L)
+        val first = database.projectionStore(barrier = projectionGrantBarrier()).publish(0L)
         assertEquals(ProjectionPublicationStatus.PUBLISHED, first.status)
-        val kept = database.r05cQuery(
+        val kept = database.projectionQuery(
             "SELECT local_generation, sync_state, server_revision FROM workouts WHERE id = ?",
-            arrayOf(R05B_WORKOUT_A),
+            arrayOf(CANONICAL_WORKOUT_A),
         ).single()
         assertEquals(5L, kept["local_generation"])
         assertEquals("synced", kept["sync_state"])
         assertEquals(1L, kept["server_revision"])
         assertTrue(
-            database.r05cQuery("SELECT id FROM workouts WHERE id = ?", arrayOf(R05C_WORKOUT_B)).isEmpty(),
+            database.projectionQuery("SELECT id FROM workouts WHERE id = ?", arrayOf(PROJECTION_WORKOUT_B)).isEmpty(),
         )
-        val reservation = database.syncCanonicalDao().getRoot(R05B_ACCOUNT, R05B_TYPE_WORKOUT, R05C_WORKOUT_B)!!
+        val reservation = database.syncCanonicalDao().getRoot(CANONICAL_ACCOUNT, CANONICAL_TYPE_WORKOUT, PROJECTION_WORKOUT_B)!!
         assertEquals("unobserved", reservation.canonicalState)
         assertEquals(9L, reservation.localGenerationWatermark)
 
-        database.r05cApplyCanonical(
-            r05bPull(
-                batchId = R05B_BATCH_2,
-                cursor = R05B_CURSOR_2,
-                changes = r05bJsonArray(
-                    r05bChange(R05B_TYPE_WORKOUT, R05B_WORKOUT_A, R05B_OP_DELETE, 2L, null),
+        database.projectionApplyCanonical(
+            canonicalPull(
+                batchId = CANONICAL_BATCH_2,
+                cursor = CANONICAL_CURSOR_2,
+                changes = canonicalJsonArray(
+                    canonicalChange(CANONICAL_TYPE_WORKOUT, CANONICAL_WORKOUT_A, CANONICAL_OP_DELETE, 2L, null),
                 ),
             ),
             1L,
         )
-        val second = database.r05cStore(barrier = r05cGrantBarrier()).publish(1L)
+        val second = database.projectionStore(barrier = projectionGrantBarrier()).publish(1L)
         assertEquals(ProjectionPublicationStatus.PUBLISHED, second.status)
         assertEquals(2L, second.cacheEpoch)
         assertEquals(2L, second.materializedEpoch)
         assertTrue(
-            database.r05cQuery("SELECT id FROM workouts WHERE id = ?", arrayOf(R05B_WORKOUT_A)).isEmpty(),
+            database.projectionQuery("SELECT id FROM workouts WHERE id = ?", arrayOf(CANONICAL_WORKOUT_A)).isEmpty(),
         )
-        val tombstone = database.syncCanonicalDao().getRoot(R05B_ACCOUNT, R05B_TYPE_WORKOUT, R05B_WORKOUT_A)!!
+        val tombstone = database.syncCanonicalDao().getRoot(CANONICAL_ACCOUNT, CANONICAL_TYPE_WORKOUT, CANONICAL_WORKOUT_A)!!
         assertEquals("delete", tombstone.canonicalState)
         assertEquals(2L, tombstone.serverRevision)
         assertEquals(5L, tombstone.localGenerationWatermark)
 
-        database.r05cApplyCanonical(
-            r05bPull(
-                batchId = R05C_BATCH_3,
-                cursor = R05C_CURSOR_3,
-                changes = r05bJsonArray(
-                    r05bChange(
-                        R05B_TYPE_WORKOUT,
-                        R05B_WORKOUT_A,
-                        R05B_OP_UPSERT,
+        database.projectionApplyCanonical(
+            canonicalPull(
+                batchId = PROJECTION_BATCH_3,
+                cursor = PROJECTION_CURSOR_3,
+                changes = canonicalJsonArray(
+                    canonicalChange(
+                        CANONICAL_TYPE_WORKOUT,
+                        CANONICAL_WORKOUT_A,
+                        CANONICAL_OP_UPSERT,
                         3L,
-                        r05bWorkoutRecord(
+                        canonicalWorkoutRecord(
                             name = "Reappeared",
                             revision = 3L,
-                            exercises = r05bJsonArray(r05bWorkoutEntry(exerciseId = R05B_CUSTOM_A)),
+                            exercises = canonicalJsonArray(canonicalWorkoutEntry(exerciseId = CANONICAL_CUSTOM_A)),
                         ),
                     ),
                 ),
             ),
             2L,
         )
-        val third = database.r05cStore(barrier = r05cGrantBarrier()).publish(2L)
+        val third = database.projectionStore(barrier = projectionGrantBarrier()).publish(2L)
         assertEquals(ProjectionPublicationStatus.PUBLISHED, third.status)
         assertEquals(3L, third.cacheEpoch)
-        val revived = database.r05cQuery(
+        val revived = database.projectionQuery(
             "SELECT name, local_generation, sync_state, server_revision FROM workouts WHERE id = ?",
-            arrayOf(R05B_WORKOUT_A),
+            arrayOf(CANONICAL_WORKOUT_A),
         ).single()
         assertEquals("Reappeared", revived["name"])
         assertEquals(3L, revived["server_revision"])
@@ -761,99 +761,99 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
     @Test
     fun canonicalOutboxCursorDeviceAndCatalogueUnchanged() = runTest {
         seedLookups()
-        database.syncDao().upsertSyncState(SyncStateEntity(R05B_ACCOUNT, "cursor-9", 12345L))
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, customA()),
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_A,
-                    R05B_OP_UPSERT,
+        database.syncDao().upsertSyncState(SyncStateEntity(CANONICAL_ACCOUNT, "cursor-9", 12345L))
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, customA()),
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
+                    canonicalWorkoutRecord(
                         revision = 1L,
-                        exercises = r05bJsonArray(r05bWorkoutEntry(exerciseId = R05B_CUSTOM_A)),
+                        exercises = canonicalJsonArray(canonicalWorkoutEntry(exerciseId = CANONICAL_CUSTOM_A)),
                     ),
                 ),
             ),
         )
-        database.r05cInsertOutbox(
+        database.projectionInsertOutbox(
             mutationId = "20000000-0000-4000-8000-000000000097",
-            account = R05B_OTHER_ACCOUNT,
+            account = CANONICAL_OTHER_ACCOUNT,
         )
-        val canonicalBefore = database.r05cQuery(
+        val canonicalBefore = database.projectionQuery(
             "SELECT account_id, aggregate_type, aggregate_id, server_revision," +
                 " canonical_state, canonical_json, cache_epoch FROM sync_canonical_roots ORDER BY aggregate_id",
         )
-        val watermarksBefore = database.r05cQuery(
+        val watermarksBefore = database.projectionQuery(
             "SELECT aggregate_id, local_generation_watermark FROM sync_canonical_roots",
         ).associate { it["aggregate_id"] as String to it["local_generation_watermark"] as Long }
-        val outboxBefore = database.r05cDump("sync_outbox")
-        val syncStateBefore = database.r05cDump("sync_state")
-        val deviceBefore = database.r05cDump("sync_device_state")
-        val muscleBefore = database.r05cDump("muscle_groups")
-        val equipmentBefore = database.r05cDump("equipment")
-        val bundledBefore = database.r05cQuery("SELECT * FROM exercises WHERE id = ?", arrayOf(R05C_BUNDLED))
+        val outboxBefore = database.projectionDump("sync_outbox")
+        val syncStateBefore = database.projectionDump("sync_state")
+        val deviceBefore = database.projectionDump("sync_device_state")
+        val muscleBefore = database.projectionDump("muscle_groups")
+        val equipmentBefore = database.projectionDump("equipment")
+        val bundledBefore = database.projectionQuery("SELECT * FROM exercises WHERE id = ?", arrayOf(PROJECTION_BUNDLED))
 
-        val result = database.r05cStore(barrier = r05cGrantBarrier()).publish(0L)
+        val result = database.projectionStore(barrier = projectionGrantBarrier()).publish(0L)
         assertEquals(ProjectionPublicationStatus.PUBLISHED, result.status)
 
         assertEquals(
             canonicalBefore,
-            database.r05cQuery(
+            database.projectionQuery(
                 "SELECT account_id, aggregate_type, aggregate_id, server_revision," +
                     " canonical_state, canonical_json, cache_epoch FROM sync_canonical_roots ORDER BY aggregate_id",
             ),
         )
-        val watermarksAfter = database.r05cQuery(
+        val watermarksAfter = database.projectionQuery(
             "SELECT aggregate_id, local_generation_watermark FROM sync_canonical_roots",
         ).associate { it["aggregate_id"] as String to it["local_generation_watermark"] as Long }
         watermarksAfter.forEach { (id, after) ->
             assertTrue("watermark regressed for $id", after >= (watermarksBefore[id] ?: 0L))
         }
-        assertEquals(outboxBefore, database.r05cDump("sync_outbox"))
-        assertEquals(syncStateBefore, database.r05cDump("sync_state"))
-        assertEquals(deviceBefore, database.r05cDump("sync_device_state"))
-        assertEquals(muscleBefore, database.r05cDump("muscle_groups"))
-        assertEquals(equipmentBefore, database.r05cDump("equipment"))
+        assertEquals(outboxBefore, database.projectionDump("sync_outbox"))
+        assertEquals(syncStateBefore, database.projectionDump("sync_state"))
+        assertEquals(deviceBefore, database.projectionDump("sync_device_state"))
+        assertEquals(muscleBefore, database.projectionDump("muscle_groups"))
+        assertEquals(equipmentBefore, database.projectionDump("equipment"))
         assertEquals(
             bundledBefore,
-            database.r05cQuery("SELECT * FROM exercises WHERE id = ?", arrayOf(R05C_BUNDLED)),
+            database.projectionQuery("SELECT * FROM exercises WHERE id = ?", arrayOf(PROJECTION_BUNDLED)),
         )
-        assertEquals(0, database.syncDao().getOutboxForAccount(R05B_ACCOUNT).size)
+        assertEquals(0, database.syncDao().getOutboxForAccount(CANONICAL_ACCOUNT).size)
     }
 
     @Test
     fun customRenameAtUnchangedParentRevisionAdvancesSignal() = runTest {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, customA()),
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_A,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, customA()),
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
+                    canonicalWorkoutRecord(
                         revision = 1L,
-                        exercises = r05bJsonArray(
-                            r05bWorkoutEntry(exerciseId = R05B_CUSTOM_A, exerciseName = "Stale Press"),
+                        exercises = canonicalJsonArray(
+                            canonicalWorkoutEntry(exerciseId = CANONICAL_CUSTOM_A, exerciseName = "Stale Press"),
                         ),
                     ),
                 ),
             ),
         )
-        val first = database.r05cStore(barrier = r05cGrantBarrier()).publish(0L)
+        val first = database.projectionStore(barrier = projectionGrantBarrier()).publish(0L)
         assertEquals(ProjectionPublicationStatus.PUBLISHED, first.status)
-        database.r05cApplyCanonical(
-            r05bPull(
-                batchId = R05B_BATCH_2,
-                cursor = R05B_CURSOR_2,
-                changes = r05bJsonArray(
-                    r05bChange(
-                        R05B_TYPE_CUSTOM,
-                        R05B_CUSTOM_A,
-                        R05B_OP_UPSERT,
+        database.projectionApplyCanonical(
+            canonicalPull(
+                batchId = CANONICAL_BATCH_2,
+                cursor = CANONICAL_CURSOR_2,
+                changes = canonicalJsonArray(
+                    canonicalChange(
+                        CANONICAL_TYPE_CUSTOM,
+                        CANONICAL_CUSTOM_A,
+                        CANONICAL_OP_UPSERT,
                         2L,
                         customA(revision = 2L).put("name", "Fly Plus"),
                     ),
@@ -861,80 +861,80 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
             ),
             1L,
         )
-        val second = database.r05cStore(barrier = r05cGrantBarrier()).publish(1L)
+        val second = database.projectionStore(barrier = projectionGrantBarrier()).publish(1L)
         assertEquals(ProjectionPublicationStatus.PUBLISHED, second.status)
         assertEquals(2L, second.cacheEpoch)
         assertEquals(2L, second.materializedEpoch)
         assertEquals(
             "Fly Plus",
-            database.r05cQuery(
+            database.projectionQuery(
                 "SELECT e.name AS n FROM workout_exercises we" +
                     " JOIN exercises e ON e.id = we.exercise_id WHERE we.workout_id = ?",
-                arrayOf(R05B_WORKOUT_A),
+                arrayOf(CANONICAL_WORKOUT_A),
             ).single()["n"],
         )
         assertEquals(
             1L,
-            database.r05cQuery(
+            database.projectionQuery(
                 "SELECT server_revision FROM workouts WHERE id = ?",
-                arrayOf(R05B_WORKOUT_A),
+                arrayOf(CANONICAL_WORKOUT_A),
             ).single()["server_revision"],
         )
-        val renamedRepository = GymRepository(database, RepositorySession(R05B_ACCOUNT, R05C_GENERATION))
-        val renamedDetails = renamedRepository.workoutDetails(R05B_WORKOUT_A)
+        val renamedRepository = GymRepository(database, RepositorySession(CANONICAL_ACCOUNT, PROJECTION_GENERATION))
+        val renamedDetails = renamedRepository.workoutDetails(CANONICAL_WORKOUT_A)
         assertNotNull(renamedDetails)
         assertEquals(
             "Fly Plus",
             renamedDetails!!.exercises.single().workoutExercise.exerciseName,
         )
-        assertEquals(2L, database.syncCanonicalDao().getRoot(R05B_ACCOUNT, R05B_TYPE_CUSTOM, R05B_CUSTOM_A)!!.serverRevision)
+        assertEquals(2L, database.syncCanonicalDao().getRoot(CANONICAL_ACCOUNT, CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A)!!.serverRevision)
     }
 
     @Test
     fun faultAfterDeletesRollsBackCompleteGraph() = runTest {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(
-                    R05B_TYPE_ROUTINE,
-                    R05B_ROUTINE_A,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(
+                    CANONICAL_TYPE_ROUTINE,
+                    CANONICAL_ROUTINE_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bRoutineRecord(
+                    canonicalRoutineRecord(
                         name = "Legs",
                         isDraft = false,
                         revision = 1L,
-                        exercises = r05bJsonArray(
-                            r05bRoutineEntry(
-                                exerciseId = R05C_BUNDLED,
-                                sets = r05bJsonArray(r05bRoutineSet()),
+                        exercises = canonicalJsonArray(
+                            canonicalRoutineEntry(
+                                exerciseId = PROJECTION_BUNDLED,
+                                sets = canonicalJsonArray(canonicalRoutineSet()),
                             ),
                         ),
                     ),
                 ),
             ),
         )
-        database.r05cStore(barrier = r05cGrantBarrier()).publish(0L)
-        database.r05cApplyCanonical(
-            r05bPull(
-                batchId = R05B_BATCH_2,
-                cursor = R05B_CURSOR_2,
-                changes = r05bJsonArray(
-                    r05bChange(
-                        R05B_TYPE_ROUTINE,
-                        R05B_ROUTINE_A,
-                        R05B_OP_UPSERT,
+        database.projectionStore(barrier = projectionGrantBarrier()).publish(0L)
+        database.projectionApplyCanonical(
+            canonicalPull(
+                batchId = CANONICAL_BATCH_2,
+                cursor = CANONICAL_CURSOR_2,
+                changes = canonicalJsonArray(
+                    canonicalChange(
+                        CANONICAL_TYPE_ROUTINE,
+                        CANONICAL_ROUTINE_A,
+                        CANONICAL_OP_UPSERT,
                         2L,
-                        r05bRoutineRecord(
+                        canonicalRoutineRecord(
                             name = "Legs Plus",
                             isDraft = false,
                             revision = 2L,
-                            exercises = r05bJsonArray(
-                                r05bRoutineEntry(
-                                    exerciseId = R05C_BUNDLED,
-                                    sets = r05bJsonArray(
-                                        r05bRoutineSet(),
-                                        r05bRoutineSet(id = R05C_SET_X1, position = 1),
+                            exercises = canonicalJsonArray(
+                                canonicalRoutineEntry(
+                                    exerciseId = PROJECTION_BUNDLED,
+                                    sets = canonicalJsonArray(
+                                        canonicalRoutineSet(),
+                                        canonicalRoutineSet(id = PROJECTION_SET_X1, position = 1),
                                     ),
                                 ),
                             ),
@@ -945,47 +945,47 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
             1L,
         )
         database.openHelper.writableDatabase.execSQL(
-            "CREATE TRIGGER r05c_block_child BEFORE INSERT ON routine_sets " +
-                "WHEN NEW.id = '$R05C_SET_X1' " +
-                "BEGIN SELECT RAISE(ABORT, 'injected r05c fault'); END",
+            "CREATE TRIGGER projection_block_child BEFORE INSERT ON routine_sets " +
+                "WHEN NEW.id = '$PROJECTION_SET_X1' " +
+                "BEGIN SELECT RAISE(ABORT, 'injected projection fault'); END",
         )
         try {
-            val before = database.r05cDumpAll()
-            val lease = R05cTestLease()
+            val before = database.projectionDumpAll()
+            val lease = ProjectionTestLease()
             try {
-                database.r05cStore(barrier = r05cGrantBarrier(lease)).publish(1L)
+                database.projectionStore(barrier = projectionGrantBarrier(lease)).publish(1L)
                 fail("Expected CanonicalStorageException from injected fault")
             } catch (e: CanonicalStorageException) {
-                assertSafeMessage(e.message, R05B_ACCOUNT, R05B_ROUTINE_A, R05C_SET_X1)
+                assertSafeMessage(e.message, CANONICAL_ACCOUNT, CANONICAL_ROUTINE_A, PROJECTION_SET_X1)
             }
             assertEquals(1, lease.closeCount)
-            assertEquals(before, database.r05cDumpAll())
+            assertEquals(before, database.projectionDumpAll())
             assertEquals(
                 "Legs",
-                database.r05cQuery(
+                database.projectionQuery(
                     "SELECT name FROM routines WHERE id = ?",
-                    arrayOf(R05B_ROUTINE_A),
+                    arrayOf(CANONICAL_ROUTINE_A),
                 ).single()["name"],
             )
         } finally {
-            database.openHelper.writableDatabase.execSQL("DROP TRIGGER r05c_block_child")
+            database.openHelper.writableDatabase.execSQL("DROP TRIGGER projection_block_child")
         }
     }
 
     @Test
     fun fileBackedReopenRetainsSignalDeletionAndProjection() = runTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val file = File(context.cacheDir, "r05c-publication-${System.nanoTime()}.db")
+        val file = File(context.cacheDir, "projection-publication-${System.nanoTime()}.db")
         var fileDb: GymDatabase? = null
         try {
             fileDb = Room.databaseBuilder(context, GymDatabase::class.java, file.absolutePath).build()
             fileDb.openHelper.writableDatabase.execSQL(
                 "INSERT INTO muscle_groups (id, slug, name) VALUES (?, ?, ?)",
-                arrayOf(R05C_MUSCLE_PRIMARY, R05C_MUSCLE_PRIMARY, "Chest"),
+                arrayOf(PROJECTION_MUSCLE_PRIMARY, PROJECTION_MUSCLE_PRIMARY, "Chest"),
             )
             fileDb.openHelper.writableDatabase.execSQL(
                 "INSERT INTO equipment (id, name, type, usage_type) VALUES (?, ?, ?, ?)",
-                arrayOf<Any?>(R05C_EQUIPMENT, "Dumbbell", "weight", null),
+                arrayOf<Any?>(PROJECTION_EQUIPMENT, "Dumbbell", "weight", null),
             )
             fileDb.openHelper.writableDatabase.execSQL(
                 """INSERT INTO exercises
@@ -994,58 +994,58 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
                      local_generation, sync_state, deleted_at_millis)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 arrayOf<Any?>(
-                    R05C_BUNDLED, "Bench Press", "reps", null, null, null, "strength",
+                    PROJECTION_BUNDLED, "Bench Press", "reps", null, null, null, "strength",
                     null, 0, null, null, 0, "local_only", null,
                 ),
             )
-            val session = RepositorySession(R05B_ACCOUNT, R05C_GENERATION)
+            val session = RepositorySession(CANONICAL_ACCOUNT, PROJECTION_GENERATION)
             fileDb.syncDao().upsertDeviceState(
                 com.dragosfotache.gymtracka.data.gym.SyncDeviceStateEntity(
-                    activeAccountId = R05B_ACCOUNT,
-                    cachedAccountId = R05B_ACCOUNT,
-                    sessionGeneration = R05C_GENERATION,
+                    activeAccountId = CANONICAL_ACCOUNT,
+                    cachedAccountId = CANONICAL_ACCOUNT,
+                    sessionGeneration = PROJECTION_GENERATION,
                 ),
             )
             fileDb.openHelper.writableDatabase.execSQL(
                 """INSERT INTO sync_account_cache
                     (account_id, baseline_complete, cache_epoch, projection_dirty, materialized_epoch)
                     VALUES (?, 1, 0, 0, 0)""",
-                arrayOf<Any?>(R05B_ACCOUNT),
+                arrayOf<Any?>(CANONICAL_ACCOUNT),
             )
             CanonicalStore(fileDb, session).applyBatch(
-                r05bDecodeBatch(
-                    r05bPull(
-                        changes = r05bJsonArray(
-                            r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, customA()),
-                            r05bChange(R05B_TYPE_WORKOUT, R05C_WORKOUT_B, R05B_OP_DELETE, 3L, null),
+                canonicalDecodeBatch(
+                    canonicalPull(
+                        changes = canonicalJsonArray(
+                            canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, customA()),
+                            canonicalChange(CANONICAL_TYPE_WORKOUT, PROJECTION_WORKOUT_B, CANONICAL_OP_DELETE, 3L, null),
                         ),
                     ),
                 ),
                 0L,
             )
-            val published = ProjectionStore(fileDb, session, r05cGrantBarrier()).publish(0L)
+            val published = ProjectionStore(fileDb, session, projectionGrantBarrier()).publish(0L)
             assertEquals(ProjectionPublicationStatus.PUBLISHED, published.status)
             assertEquals(1L, published.cacheEpoch)
             fileDb.close()
             fileDb = Room.databaseBuilder(context, GymDatabase::class.java, file.absolutePath).build()
-            val reopenedCache = fileDb.r05cQuery(
+            val reopenedCache = fileDb.projectionQuery(
                 "SELECT baseline_complete, cache_epoch, projection_dirty, materialized_epoch" +
                     " FROM sync_account_cache WHERE account_id = ?",
-                arrayOf(R05B_ACCOUNT),
+                arrayOf(CANONICAL_ACCOUNT),
             ).single()
             assertEquals(1L, reopenedCache["baseline_complete"])
             assertEquals(1L, reopenedCache["cache_epoch"])
             assertEquals(0L, reopenedCache["projection_dirty"])
             assertEquals(1L, reopenedCache["materialized_epoch"])
             assertTrue(
-                fileDb.r05cQuery(
+                fileDb.projectionQuery(
                     "SELECT id FROM exercises WHERE id = ?",
-                    arrayOf(R05B_CUSTOM_A),
+                    arrayOf(CANONICAL_CUSTOM_A),
                 ).isNotEmpty(),
             )
-            val deleted = fileDb.syncCanonicalDao().getRoot(R05B_ACCOUNT, R05B_TYPE_WORKOUT, R05C_WORKOUT_B)!!
+            val deleted = fileDb.syncCanonicalDao().getRoot(CANONICAL_ACCOUNT, CANONICAL_TYPE_WORKOUT, PROJECTION_WORKOUT_B)!!
             assertEquals("delete", deleted.canonicalState)
-            val retry = ProjectionStore(fileDb, session, r05cGrantBarrier()).publish(1L)
+            val retry = ProjectionStore(fileDb, session, projectionGrantBarrier()).publish(1L)
             assertEquals(ProjectionPublicationStatus.UNCHANGED, retry.status)
             fileDb.close()
             fileDb = null
@@ -1064,17 +1064,17 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
     @Test
     fun corruptRetainedEvidenceThrowsStorageExceptionUnchanged() = runTest {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, customA()),
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_A,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, customA()),
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
+                    canonicalWorkoutRecord(
                         revision = 1L,
-                        exercises = r05bJsonArray(r05bWorkoutEntry(exerciseId = R05B_CUSTOM_A)),
+                        exercises = canonicalJsonArray(canonicalWorkoutEntry(exerciseId = CANONICAL_CUSTOM_A)),
                     ),
                 ),
             ),
@@ -1082,62 +1082,62 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
         database.openHelper.writableDatabase.execSQL(
             "UPDATE sync_canonical_roots SET canonical_json = ? " +
                 "WHERE account_id = ? AND aggregate_type = ? AND aggregate_id = ?",
-            arrayOf<Any?>("{corrupt", R05B_ACCOUNT, R05B_TYPE_WORKOUT, R05B_WORKOUT_A),
+            arrayOf<Any?>("{corrupt", CANONICAL_ACCOUNT, CANONICAL_TYPE_WORKOUT, CANONICAL_WORKOUT_A),
         )
-        val before = database.r05cDumpAll()
+        val before = database.projectionDumpAll()
         database.openHelper.writableDatabase.execSQL(
             "UPDATE sync_canonical_roots SET canonical_json = ? " +
                 "WHERE account_id = ? AND aggregate_type = ? AND aggregate_id = ?",
-            arrayOf<Any?>("{corrupt", R05B_ACCOUNT, R05B_TYPE_WORKOUT, R05B_WORKOUT_A),
+            arrayOf<Any?>("{corrupt", CANONICAL_ACCOUNT, CANONICAL_TYPE_WORKOUT, CANONICAL_WORKOUT_A),
         )
-        val snapshotBeforeFault = database.r05cDumpAll()
+        val snapshotBeforeFault = database.projectionDumpAll()
         assertEquals(before, snapshotBeforeFault)
-        val lease = R05cTestLease()
+        val lease = ProjectionTestLease()
         try {
-            database.r05cStore(barrier = r05cGrantBarrier(lease)).publish(0L)
+            database.projectionStore(barrier = projectionGrantBarrier(lease)).publish(0L)
             fail("Expected CanonicalStorageException for corrupt retained evidence")
         } catch (e: CanonicalStorageException) {
-            assertSafeMessage(e.message, R05B_ACCOUNT, R05B_WORKOUT_A)
+            assertSafeMessage(e.message, CANONICAL_ACCOUNT, CANONICAL_WORKOUT_A)
         }
         assertEquals(1, lease.closeCount)
-        assertEquals(before, database.r05cDumpAll())
-        assertEquals(0, database.r05cDomainCount("workouts"))
+        assertEquals(before, database.projectionDumpAll())
+        assertEquals(0, database.projectionDomainCount("workouts"))
     }
 
     @Test
     fun snapshotAbsentEvidenceCreatesNoFakeRoot() = runTest {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, customA()),
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, customA()),
             ),
         )
-        database.r05bSeedCanonicalRow(
-            R05B_ACCOUNT,
-            R05B_TYPE_WORKOUT,
-            R05C_WORKOUT_B,
+        database.canonicalSeedCanonicalRow(
+            CANONICAL_ACCOUNT,
+            CANONICAL_TYPE_WORKOUT,
+            PROJECTION_WORKOUT_B,
             5L,
             "snapshot_absent",
             null,
             0L,
             0L,
         )
-        val result = database.r05cStore(barrier = r05cGrantBarrier()).publish(0L)
+        val result = database.projectionStore(barrier = projectionGrantBarrier()).publish(0L)
         assertEquals(ProjectionPublicationStatus.PUBLISHED, result.status)
         assertEquals(1L, result.cacheEpoch)
         assertTrue(
-            database.r05cQuery("SELECT id FROM workouts WHERE id = ?", arrayOf(R05C_WORKOUT_B)).isEmpty(),
+            database.projectionQuery("SELECT id FROM workouts WHERE id = ?", arrayOf(PROJECTION_WORKOUT_B)).isEmpty(),
         )
         assertEquals(
             "Fly",
-            database.r05cQuery(
+            database.projectionQuery(
                 "SELECT name FROM exercises WHERE id = ?",
-                arrayOf(R05B_CUSTOM_A),
+                arrayOf(CANONICAL_CUSTOM_A),
             ).single()["name"],
         )
         assertEquals(
             "snapshot_absent",
-            database.syncCanonicalDao().getRoot(R05B_ACCOUNT, R05B_TYPE_WORKOUT, R05C_WORKOUT_B)!!
+            database.syncCanonicalDao().getRoot(CANONICAL_ACCOUNT, CANONICAL_TYPE_WORKOUT, PROJECTION_WORKOUT_B)!!
                 .canonicalState,
         )
     }
@@ -1145,81 +1145,81 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
     @Test
     fun retainedFamilyParentDisagreementReusesConflictBoundary() = runTest {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, customA()),
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_A,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, customA()),
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
+                    canonicalWorkoutRecord(
                         revision = 1L,
-                        exercises = r05bJsonArray(
-                            r05bWorkoutEntry(
-                                id = R05B_ENTRY_A1,
-                                exerciseId = R05B_CUSTOM_A,
-                                sets = r05bJsonArray(r05bWorkoutSet(id = R05B_SET_A1)),
+                        exercises = canonicalJsonArray(
+                            canonicalWorkoutEntry(
+                                id = CANONICAL_ENTRY_A1,
+                                exerciseId = CANONICAL_CUSTOM_A,
+                                sets = canonicalJsonArray(canonicalWorkoutSet(id = CANONICAL_SET_A1)),
                             ),
                         ),
                     ),
                 ),
             ),
         )
-        database.r05bSeedCanonicalRow(
-            R05B_ACCOUNT,
-            R05B_TYPE_WORKOUT,
-            R05B_WORKOUT_B,
+        database.canonicalSeedCanonicalRow(
+            CANONICAL_ACCOUNT,
+            CANONICAL_TYPE_WORKOUT,
+            CANONICAL_WORKOUT_B,
             1L,
             "upsert",
-            r05bWorkoutRecord(
-                id = R05B_WORKOUT_B,
+            canonicalWorkoutRecord(
+                id = CANONICAL_WORKOUT_B,
                 revision = 1L,
-                exercises = r05bJsonArray(
-                    r05bWorkoutEntry(
-                        id = R05B_ENTRY_A1,
-                        exerciseId = R05C_BUNDLED,
-                        sets = r05bJsonArray(r05bWorkoutSet(id = R05C_SET_X1)),
+                exercises = canonicalJsonArray(
+                    canonicalWorkoutEntry(
+                        id = CANONICAL_ENTRY_A1,
+                        exerciseId = PROJECTION_BUNDLED,
+                        sets = canonicalJsonArray(canonicalWorkoutSet(id = PROJECTION_SET_X1)),
                     ),
                 ),
             ).toString(),
             0L,
             0L,
         )
-        val before = database.r05cDumpAll()
-        val lease = R05cTestLease()
+        val before = database.projectionDumpAll()
+        val lease = ProjectionTestLease()
         try {
-            database.r05cStore(barrier = r05cGrantBarrier(lease)).publish(0L)
+            database.projectionStore(barrier = projectionGrantBarrier(lease)).publish(0L)
             fail("Expected CanonicalConflictException for retained parent disagreement")
         } catch (e: CanonicalConflictException) {
-            assertSafeMessage(e.message, R05B_ACCOUNT, R05B_ENTRY_A1)
+            assertSafeMessage(e.message, CANONICAL_ACCOUNT, CANONICAL_ENTRY_A1)
             assertEquals(1, lease.closeCount)
-            assertEquals(before, database.r05cDumpAll())
+            assertEquals(before, database.projectionDumpAll())
         }
-        assertEquals(0, database.r05cDomainCount("workouts"))
+        assertEquals(0, database.projectionDomainCount("workouts"))
     }
 
     @Test
     fun crossRoleAliasFailsDespiteMatchingTargetRow() = runTest {
         seedLookups()
         insertExercises(
-            exerciseFixture(id = R05B_CUSTOM_A, name = "Fly", isUserCreated = true).copy(accountId = R05B_ACCOUNT),
+            exerciseFixture(id = CANONICAL_CUSTOM_A, name = "Fly", isUserCreated = true).copy(accountId = CANONICAL_ACCOUNT),
         )
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, customA()),
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_A,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, customA()),
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
+                    canonicalWorkoutRecord(
                         revision = 1L,
-                        exercises = r05bJsonArray(
-                            r05bWorkoutEntry(
-                                id = R05B_ENTRY_A1,
-                                exerciseId = R05B_CUSTOM_A,
-                                sets = r05bJsonArray(r05bWorkoutSet(id = R05B_SET_A1)),
+                        exercises = canonicalJsonArray(
+                            canonicalWorkoutEntry(
+                                id = CANONICAL_ENTRY_A1,
+                                exerciseId = CANONICAL_CUSTOM_A,
+                                sets = canonicalJsonArray(canonicalWorkoutSet(id = CANONICAL_SET_A1)),
                             ),
                         ),
                     ),
@@ -1227,22 +1227,22 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
             ),
         )
         insertWorkoutAggregate(
-            workoutFixture(id = R05B_WORKOUT_A).copy(accountId = R05B_ACCOUNT),
+            workoutFixture(id = CANONICAL_WORKOUT_A).copy(accountId = CANONICAL_ACCOUNT),
             listOf(
                 workoutExerciseFixture(
-                    id = R05B_ENTRY_A1,
-                    workoutId = R05B_WORKOUT_A,
-                    exerciseId = R05B_CUSTOM_A,
+                    id = CANONICAL_ENTRY_A1,
+                    workoutId = CANONICAL_WORKOUT_A,
+                    exerciseId = CANONICAL_CUSTOM_A,
                 ),
             ),
             emptyList(),
         )
         insertWorkoutAggregate(
-            workoutFixture(id = R05C_WORKOUT_B),
+            workoutFixture(id = PROJECTION_WORKOUT_B),
             listOf(
-                workoutExerciseFixture(id = R05C_ENTRY_X2, workoutId = R05C_WORKOUT_B, exerciseId = R05C_BUNDLED),
+                workoutExerciseFixture(id = PROJECTION_ENTRY_X2, workoutId = PROJECTION_WORKOUT_B, exerciseId = PROJECTION_BUNDLED),
             ),
-            listOf(workoutSetFixture(id = R05B_ENTRY_A1, workoutExerciseId = R05C_ENTRY_X2)),
+            listOf(workoutSetFixture(id = CANONICAL_ENTRY_A1, workoutExerciseId = PROJECTION_ENTRY_X2)),
         )
         assertPublishThrowsCollisionUnchanged()
     }
@@ -1250,31 +1250,31 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
     @Test
     fun savedBlankEmptyRoutineMaterializes() = runTest {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, customA()),
-                r05bChange(
-                    R05B_TYPE_ROUTINE,
-                    R05C_ROUTINE_B,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, customA()),
+                canonicalChange(
+                    CANONICAL_TYPE_ROUTINE,
+                    PROJECTION_ROUTINE_B,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bRoutineRecord(id = R05C_ROUTINE_B, name = "", isDraft = false, revision = 1L),
+                    canonicalRoutineRecord(id = PROJECTION_ROUTINE_B, name = "", isDraft = false, revision = 1L),
                 ),
             ),
         )
-        val result = database.r05cStore(barrier = r05cGrantBarrier()).publish(0L)
+        val result = database.projectionStore(barrier = projectionGrantBarrier()).publish(0L)
         assertEquals(ProjectionPublicationStatus.PUBLISHED, result.status)
         assertEquals(1L, result.cacheEpoch)
-        val saved = database.r05cQuery("SELECT * FROM routines WHERE id = ?", arrayOf(R05C_ROUTINE_B)).single()
+        val saved = database.projectionQuery("SELECT * FROM routines WHERE id = ?", arrayOf(PROJECTION_ROUTINE_B)).single()
         assertEquals("", saved["name"])
         assertEquals(0L, saved["is_draft"])
-        assertEquals(R05B_ACCOUNT, saved["account_id"])
+        assertEquals(CANONICAL_ACCOUNT, saved["account_id"])
         assertEquals(1L, saved["server_revision"])
         assertEquals("synced", saved["sync_state"])
         assertTrue(
-            database.r05cQuery(
+            database.projectionQuery(
                 "SELECT id FROM routine_exercises WHERE routine_id = ?",
-                arrayOf(R05C_ROUTINE_B),
+                arrayOf(PROJECTION_ROUTINE_B),
             ).isEmpty(),
         )
     }
@@ -1282,32 +1282,32 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
     @Test
     fun routineRootPkCollisionsFail() = runTest {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(
-                    R05B_TYPE_ROUTINE,
-                    R05B_ROUTINE_A,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(
+                    CANONICAL_TYPE_ROUTINE,
+                    CANONICAL_ROUTINE_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bRoutineRecord(name = "Canon", isDraft = false, revision = 1L),
+                    canonicalRoutineRecord(name = "Canon", isDraft = false, revision = 1L),
                 ),
             ),
         )
-        insertRoutineAggregate(routineFixture(id = R05B_ROUTINE_A, name = "Local"))
+        insertRoutineAggregate(routineFixture(id = CANONICAL_ROUTINE_A, name = "Local"))
         assertPublishThrowsCollisionUnchanged()
         database.openHelper.writableDatabase.execSQL(
             "DELETE FROM routines WHERE id = ?",
-            arrayOf(R05B_ROUTINE_A),
+            arrayOf(CANONICAL_ROUTINE_A),
         )
         insertRoutineAggregate(
-            routineFixture(id = R05B_ROUTINE_A, name = "Foreign").copy(accountId = R05B_OTHER_ACCOUNT),
+            routineFixture(id = CANONICAL_ROUTINE_A, name = "Foreign").copy(accountId = CANONICAL_OTHER_ACCOUNT),
         )
         assertPublishThrowsCollisionUnchanged()
         assertEquals(
-            R05B_OTHER_ACCOUNT,
-            database.r05cQuery(
+            CANONICAL_OTHER_ACCOUNT,
+            database.projectionQuery(
                 "SELECT account_id FROM routines WHERE id = ?",
-                arrayOf(R05B_ROUTINE_A),
+                arrayOf(CANONICAL_ROUTINE_A),
             ).single()["account_id"],
         )
     }
@@ -1315,27 +1315,27 @@ class ProjectionPublicationGraphTest : GymDatabaseTest() {
     @Test
     fun customPhysicalCollisionsFail() = runTest {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, customA()),
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, customA()),
             ),
         )
-        insertExercises(exerciseFixture(id = R05B_CUSTOM_A, name = "Local", isUserCreated = true))
+        insertExercises(exerciseFixture(id = CANONICAL_CUSTOM_A, name = "Local", isUserCreated = true))
         assertPublishThrowsCollisionUnchanged()
         database.openHelper.writableDatabase.execSQL(
             "DELETE FROM exercises WHERE id = ?",
-            arrayOf(R05B_CUSTOM_A),
+            arrayOf(CANONICAL_CUSTOM_A),
         )
         insertExercises(
-            exerciseFixture(id = R05B_CUSTOM_A, name = "Foreign", isUserCreated = true)
-                .copy(accountId = R05B_OTHER_ACCOUNT),
+            exerciseFixture(id = CANONICAL_CUSTOM_A, name = "Foreign", isUserCreated = true)
+                .copy(accountId = CANONICAL_OTHER_ACCOUNT),
         )
         assertPublishThrowsCollisionUnchanged()
         assertEquals(
             "Foreign",
-            database.r05cQuery(
+            database.projectionQuery(
                 "SELECT name FROM exercises WHERE id = ?",
-                arrayOf(R05B_CUSTOM_A),
+                arrayOf(CANONICAL_CUSTOM_A),
             ).single()["name"],
         )
     }

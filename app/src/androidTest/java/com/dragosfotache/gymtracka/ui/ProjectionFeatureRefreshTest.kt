@@ -25,38 +25,38 @@ import com.dragosfotache.gymtracka.data.gym.GymRepository
 import com.dragosfotache.gymtracka.data.gym.equipmentFixture
 import com.dragosfotache.gymtracka.data.gym.exerciseFixture
 import com.dragosfotache.gymtracka.data.gym.muscleGroupFixture
-import com.dragosfotache.gymtracka.data.sync.R05B_ACCOUNT
-import com.dragosfotache.gymtracka.data.sync.R05B_BATCH_2
-import com.dragosfotache.gymtracka.data.sync.R05B_CURSOR_2
-import com.dragosfotache.gymtracka.data.sync.R05B_CUSTOM_A
-import com.dragosfotache.gymtracka.data.sync.R05B_ENTRY_A1
-import com.dragosfotache.gymtracka.data.sync.R05B_OP_UPSERT
-import com.dragosfotache.gymtracka.data.sync.R05B_ROUTINE_B
-import com.dragosfotache.gymtracka.data.sync.R05B_SET_A1
-import com.dragosfotache.gymtracka.data.sync.R05B_SET_A2
-import com.dragosfotache.gymtracka.data.sync.R05B_TYPE_CUSTOM
-import com.dragosfotache.gymtracka.data.sync.R05B_TYPE_ROUTINE
-import com.dragosfotache.gymtracka.data.sync.R05B_TYPE_WORKOUT
-import com.dragosfotache.gymtracka.data.sync.R05B_WORKOUT_A
-import com.dragosfotache.gymtracka.data.sync.R05C_BUNDLED
-import com.dragosfotache.gymtracka.data.sync.R05C_EQUIPMENT
-import com.dragosfotache.gymtracka.data.sync.R05C_GENERATION
-import com.dragosfotache.gymtracka.data.sync.R05C_MUSCLE_PRIMARY
-import com.dragosfotache.gymtracka.data.sync.R05C_MUSCLE_SECONDARY
-import com.dragosfotache.gymtracka.data.sync.r05bChange
-import com.dragosfotache.gymtracka.data.sync.r05bCustomRecord
-import com.dragosfotache.gymtracka.data.sync.r05bJsonArray
-import com.dragosfotache.gymtracka.data.sync.r05bPull
-import com.dragosfotache.gymtracka.data.sync.r05bRoutineEntry
-import com.dragosfotache.gymtracka.data.sync.r05bRoutineRecord
-import com.dragosfotache.gymtracka.data.sync.r05bRoutineSet
-import com.dragosfotache.gymtracka.data.sync.r05bWorkoutEntry
-import com.dragosfotache.gymtracka.data.sync.r05bWorkoutRecord
-import com.dragosfotache.gymtracka.data.sync.r05bWorkoutSet
-import com.dragosfotache.gymtracka.data.sync.r05cApplyCanonical
-import com.dragosfotache.gymtracka.data.sync.r05cGrantBarrier
-import com.dragosfotache.gymtracka.data.sync.r05cPreparePublication
-import com.dragosfotache.gymtracka.data.sync.r05cStore
+import com.dragosfotache.gymtracka.data.sync.CANONICAL_ACCOUNT
+import com.dragosfotache.gymtracka.data.sync.CANONICAL_BATCH_2
+import com.dragosfotache.gymtracka.data.sync.CANONICAL_CURSOR_2
+import com.dragosfotache.gymtracka.data.sync.CANONICAL_CUSTOM_A
+import com.dragosfotache.gymtracka.data.sync.CANONICAL_ENTRY_A1
+import com.dragosfotache.gymtracka.data.sync.CANONICAL_OP_UPSERT
+import com.dragosfotache.gymtracka.data.sync.CANONICAL_ROUTINE_B
+import com.dragosfotache.gymtracka.data.sync.CANONICAL_SET_A1
+import com.dragosfotache.gymtracka.data.sync.CANONICAL_SET_A2
+import com.dragosfotache.gymtracka.data.sync.CANONICAL_TYPE_CUSTOM
+import com.dragosfotache.gymtracka.data.sync.CANONICAL_TYPE_ROUTINE
+import com.dragosfotache.gymtracka.data.sync.CANONICAL_TYPE_WORKOUT
+import com.dragosfotache.gymtracka.data.sync.CANONICAL_WORKOUT_A
+import com.dragosfotache.gymtracka.data.sync.PROJECTION_BUNDLED
+import com.dragosfotache.gymtracka.data.sync.PROJECTION_EQUIPMENT
+import com.dragosfotache.gymtracka.data.sync.PROJECTION_GENERATION
+import com.dragosfotache.gymtracka.data.sync.PROJECTION_MUSCLE_PRIMARY
+import com.dragosfotache.gymtracka.data.sync.PROJECTION_MUSCLE_SECONDARY
+import com.dragosfotache.gymtracka.data.sync.canonicalChange
+import com.dragosfotache.gymtracka.data.sync.canonicalCustomRecord
+import com.dragosfotache.gymtracka.data.sync.canonicalJsonArray
+import com.dragosfotache.gymtracka.data.sync.canonicalPull
+import com.dragosfotache.gymtracka.data.sync.canonicalRoutineEntry
+import com.dragosfotache.gymtracka.data.sync.canonicalRoutineRecord
+import com.dragosfotache.gymtracka.data.sync.canonicalRoutineSet
+import com.dragosfotache.gymtracka.data.sync.canonicalWorkoutEntry
+import com.dragosfotache.gymtracka.data.sync.canonicalWorkoutRecord
+import com.dragosfotache.gymtracka.data.sync.canonicalWorkoutSet
+import com.dragosfotache.gymtracka.data.sync.projectionApplyCanonical
+import com.dragosfotache.gymtracka.data.sync.projectionGrantBarrier
+import com.dragosfotache.gymtracka.data.sync.projectionPreparePublication
+import com.dragosfotache.gymtracka.data.sync.projectionStore
 import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationBarrier
 import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationLease
 import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationRequest
@@ -84,12 +84,7 @@ import org.junit.runner.RunWith
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * R12b independent QA: actual Compose same-ID refresh.
- *
- * Hand-written from docs/remaining-work/R12b-task.md only. Uses real Room +
- * real complete publications for the selected-feature journey, actual feature
- * screens and stable tags from FocusedComposeInteractionTest. No private
- * composables, no production oracles.
+ * actual Compose same-ID refresh.
  */
 @RunWith(AndroidJUnit4::class)
 class ProjectionFeatureRefreshTest : GymDatabaseTest() {
@@ -124,7 +119,7 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
         composeRule.waitForIdle()
     }
 
-    private fun accountRepository() = GymRepository(database, RepositorySession(R05B_ACCOUNT, R05C_GENERATION))
+    private fun accountRepository() = GymRepository(database, RepositorySession(CANONICAL_ACCOUNT, PROJECTION_GENERATION))
 
     private fun sharedEdits(): FiniteEditCoordinator {
         val coordinatorScope = ownScope()
@@ -135,8 +130,8 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
      * itself pauses the shared coordinator on Main and validates the request. */
     private class AdmissionBarrier(
         private val shared: FiniteEditCoordinator,
-        private val expectedAccount: String = R05B_ACCOUNT,
-        private val expectedGeneration: Long = R05C_GENERATION,
+        private val expectedAccount: String = CANONICAL_ACCOUNT,
+        private val expectedGeneration: Long = PROJECTION_GENERATION,
         private val expectedCacheEpoch: Long = -1L,
     ) : ProjectionPublicationBarrier {
         override suspend fun acquire(request: ProjectionPublicationRequest): ProjectionPublicationLease {
@@ -155,8 +150,8 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
             publication = publicationScope.launch {
                 try {
                     shared.awaitPendingEdits()
-                    database.r05cApplyCanonical(pullJson, expectedEpoch)
-                    val result = database.r05cStore(barrier = AdmissionBarrier(shared, expectedCacheEpoch = expectedEpoch)).publish(expectedEpoch)
+                    database.projectionApplyCanonical(pullJson, expectedEpoch)
+                    val result = database.projectionStore(barrier = AdmissionBarrier(shared, expectedCacheEpoch = expectedEpoch)).publish(expectedEpoch)
                     assertEquals(ProjectionPublicationStatus.PUBLISHED, result.status)
                 } catch (e: Throwable) {
                     publicationError = e
@@ -170,66 +165,66 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
 
     private suspend fun seedLookups() {
         insertMuscleGroups(
-            muscleGroupFixture(id = R05C_MUSCLE_PRIMARY, name = "Chest"),
-            muscleGroupFixture(id = R05C_MUSCLE_SECONDARY, name = "Shoulders"),
+            muscleGroupFixture(id = PROJECTION_MUSCLE_PRIMARY, name = "Chest"),
+            muscleGroupFixture(id = PROJECTION_MUSCLE_SECONDARY, name = "Shoulders"),
         )
-        insertEquipment(equipmentFixture(id = R05C_EQUIPMENT, name = "Dumbbell"))
-        insertExercises(exerciseFixture(id = R05C_BUNDLED, name = "Bench Press"))
+        insertEquipment(equipmentFixture(id = PROJECTION_EQUIPMENT, name = "Dumbbell"))
+        insertExercises(exerciseFixture(id = PROJECTION_BUNDLED, name = "Bench Press"))
     }
 
     private suspend fun publishActiveGraph(customName: String, weightKg: Double) {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, r05bCustomRecord(id = R05B_CUSTOM_A, name = customName, revision = 1L)),
-                r05bChange(
-                    R05B_TYPE_WORKOUT,
-                    R05B_WORKOUT_A,
-                    R05B_OP_UPSERT,
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, canonicalCustomRecord(id = CANONICAL_CUSTOM_A, name = customName, revision = 1L)),
+                canonicalChange(
+                    CANONICAL_TYPE_WORKOUT,
+                    CANONICAL_WORKOUT_A,
+                    CANONICAL_OP_UPSERT,
                     1L,
-                    r05bWorkoutRecord(
+                    canonicalWorkoutRecord(
                         revision = 1L,
-                        exercises = r05bJsonArray(
-                            r05bWorkoutEntry(
-                                exerciseId = R05B_CUSTOM_A,
+                        exercises = canonicalJsonArray(
+                            canonicalWorkoutEntry(
+                                exerciseId = CANONICAL_CUSTOM_A,
                                 exerciseName = "Stale",
-                                sets = r05bJsonArray(r05bWorkoutSet(repetitions = 8, weightKg = weightKg)),
+                                sets = canonicalJsonArray(canonicalWorkoutSet(repetitions = 8, weightKg = weightKg)),
                             ),
                         ),
                     ),
                 ),
             ),
         )
-        val result = database.r05cStore(barrier = r05cGrantBarrier()).publish(0L)
+        val result = database.projectionStore(barrier = projectionGrantBarrier()).publish(0L)
         assertEquals(ProjectionPublicationStatus.PUBLISHED, result.status)
     }
 
-    private fun activeRenameOnlyPull(customName: String, customRevision: Long) = r05bPull(
-        batchId = R05B_BATCH_2,
-        cursor = R05B_CURSOR_2,
-        changes = r05bJsonArray(
-            r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, customRevision, r05bCustomRecord(id = R05B_CUSTOM_A, name = customName, revision = customRevision)),
+    private fun activeRenameOnlyPull(customName: String, customRevision: Long) = canonicalPull(
+        batchId = CANONICAL_BATCH_2,
+        cursor = CANONICAL_CURSOR_2,
+        changes = canonicalJsonArray(
+            canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, customRevision, canonicalCustomRecord(id = CANONICAL_CUSTOM_A, name = customName, revision = customRevision)),
         ),
     )
 
-    private fun activeSetInsertPull() = r05bPull(
-        batchId = R05B_BATCH_2,
-        cursor = R05B_CURSOR_2,
-        changes = r05bJsonArray(
-            r05bChange(
-                R05B_TYPE_WORKOUT,
-                R05B_WORKOUT_A,
-                R05B_OP_UPSERT,
+    private fun activeSetInsertPull() = canonicalPull(
+        batchId = CANONICAL_BATCH_2,
+        cursor = CANONICAL_CURSOR_2,
+        changes = canonicalJsonArray(
+            canonicalChange(
+                CANONICAL_TYPE_WORKOUT,
+                CANONICAL_WORKOUT_A,
+                CANONICAL_OP_UPSERT,
                 3L,
-                r05bWorkoutRecord(
+                canonicalWorkoutRecord(
                     revision = 3L,
-                    exercises = r05bJsonArray(
-                        r05bWorkoutEntry(
-                            exerciseId = R05B_CUSTOM_A,
+                    exercises = canonicalJsonArray(
+                        canonicalWorkoutEntry(
+                            exerciseId = CANONICAL_CUSTOM_A,
                             exerciseName = "Stale",
-                            sets = r05bJsonArray(
-                                r05bWorkoutSet(id = R05B_SET_A2, position = 0, repetitions = 5, weightKg = 40.0),
-                                r05bWorkoutSet(id = R05B_SET_A1, position = 1, repetitions = 8, weightKg = 13.5),
+                            sets = canonicalJsonArray(
+                                canonicalWorkoutSet(id = CANONICAL_SET_A2, position = 0, repetitions = 5, weightKg = 40.0),
+                                canonicalWorkoutSet(id = CANONICAL_SET_A1, position = 1, repetitions = 8, weightKg = 13.5),
                             ),
                         ),
                     ),
@@ -238,23 +233,23 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
         ),
     )
 
-    private fun activeWeightUpdatePull(weightKg: Double) = r05bPull(
-        batchId = R05B_BATCH_2,
-        cursor = R05B_CURSOR_2,
-        changes = r05bJsonArray(
-            r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 2L, r05bCustomRecord(id = R05B_CUSTOM_A, name = "Press Renamed", revision = 2L)),
-            r05bChange(
-                R05B_TYPE_WORKOUT,
-                R05B_WORKOUT_A,
-                R05B_OP_UPSERT,
+    private fun activeWeightUpdatePull(weightKg: Double) = canonicalPull(
+        batchId = CANONICAL_BATCH_2,
+        cursor = CANONICAL_CURSOR_2,
+        changes = canonicalJsonArray(
+            canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 2L, canonicalCustomRecord(id = CANONICAL_CUSTOM_A, name = "Press Renamed", revision = 2L)),
+            canonicalChange(
+                CANONICAL_TYPE_WORKOUT,
+                CANONICAL_WORKOUT_A,
+                CANONICAL_OP_UPSERT,
                 2L,
-                r05bWorkoutRecord(
+                canonicalWorkoutRecord(
                     revision = 2L,
-                    exercises = r05bJsonArray(
-                        r05bWorkoutEntry(
-                            exerciseId = R05B_CUSTOM_A,
+                    exercises = canonicalJsonArray(
+                        canonicalWorkoutEntry(
+                            exerciseId = CANONICAL_CUSTOM_A,
                             exerciseName = "Stale",
-                            sets = r05bJsonArray(r05bWorkoutSet(repetitions = 8, weightKg = weightKg)),
+                            sets = canonicalJsonArray(canonicalWorkoutSet(repetitions = 8, weightKg = weightKg)),
                         ),
                     ),
                 ),
@@ -270,13 +265,13 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
         val endedTimers = mutableListOf<ActiveRestTimer>()
         val shared = sharedEdits()
         val screenScope = ownScope()
-        val state = ActiveWorkoutState(R05B_WORKOUT_A, 1_000L, repository, screenScope, edits = shared)
+        val state = ActiveWorkoutState(CANONICAL_WORKOUT_A, 1_000L, repository, screenScope, edits = shared)
 
         composeRule.setContent {
             MaterialTheme {
                 if (contentEnabled) {
                     ActiveWorkoutScreen(
-                        workoutId = R05B_WORKOUT_A,
+                        workoutId = CANONICAL_WORKOUT_A,
                         workoutStartMillis = 1_000L,
                         activeRestTimer = null,
                         restTimerRemainingSeconds = 0,
@@ -295,7 +290,7 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
                 }
             }
         }
-        val weightTag = "workout-set-weight-$R05B_SET_A1"
+        val weightTag = "workout-set-weight-$CANONICAL_SET_A1"
         composeRule.waitUntil { composeRule.onAllNodesWithTag(weightTag).fetchSemanticsNodes().isNotEmpty() }
         composeRule.onNodeWithTag(weightTag).performClick()
         composeRule.onNodeWithTag(weightTag).assertIsFocused()
@@ -305,7 +300,7 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag(weightTag).assertTextEquals("12.00")
         composeRule.onNodeWithTag(weightTag).assertIsFocused()
-        assertEquals(12.0, runBlocking { repository.workoutDetails(R05B_WORKOUT_A)!!.exercises.single().sets.single().weightKg })
+        assertEquals(12.0, runBlocking { repository.workoutDetails(CANONICAL_WORKOUT_A)!!.exercises.single().sets.single().weightKg })
 
         // Custom-only rename at unchanged parent revision must retain raw text and focus.
         publishLiveUpdate(1L, activeRenameOnlyPull(customName = "Press Renamed", customRevision = 2L), shared)
@@ -329,7 +324,7 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
         composeRule.onNodeWithTag(weightTag).assertIsFocused()
         assertTrue(restStarts.isEmpty())
         assertTrue(endedTimers.isEmpty())
-        val stored = runBlocking { repository.workoutDetails(R05B_WORKOUT_A)!! }
+        val stored = runBlocking { repository.workoutDetails(CANONICAL_WORKOUT_A)!! }
         assertEquals("Press Renamed", stored.exercises.single().workoutExercise.exerciseName)
         assertEquals(false, stored.exercises.single().sets.single().isCompleted)
 
@@ -337,11 +332,11 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
         // original same-ID set (weight/reps/ID, consecutive positions) with
         // focus and text on the original tagged field and no timer callback.
         publishLiveUpdate(3L, activeSetInsertPull(), shared)
-        val afterInsert = runBlocking { repository.workoutDetails(R05B_WORKOUT_A)!! }
+        val afterInsert = runBlocking { repository.workoutDetails(CANONICAL_WORKOUT_A)!! }
         val insertedSets = afterInsert.exercises.single().sets.sortedBy { it.position }
-        assertEquals(listOf(R05B_SET_A2, R05B_SET_A1), insertedSets.map { it.id })
+        assertEquals(listOf(CANONICAL_SET_A2, CANONICAL_SET_A1), insertedSets.map { it.id })
         assertEquals(listOf(0, 1), insertedSets.map { it.position })
-        val surviving = insertedSets.single { it.id == R05B_SET_A1 }
+        val surviving = insertedSets.single { it.id == CANONICAL_SET_A1 }
         assertEquals(13.5, surviving.weightKg)
         assertEquals(8, surviving.repetitions)
         composeRule.waitUntil {
@@ -353,7 +348,7 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
             }
         }
         composeRule.onNodeWithTag(weightTag).assertIsFocused()
-        composeRule.onNodeWithTag("workout-set-weight-$R05B_SET_A2").assertTextEquals("40")
+        composeRule.onNodeWithTag("workout-set-weight-$CANONICAL_SET_A2").assertTextEquals("40")
         assertTrue(restStarts.isEmpty())
         assertTrue(endedTimers.isEmpty())
     }
@@ -362,42 +357,42 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
     fun routineEditorSameIdNameAndSetUpdateRetainsFocus() {
         runBlocking {
             seedLookups()
-            database.r05cPreparePublication(
-                changes = r05bJsonArray(
-                    r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, r05bCustomRecord(id = R05B_CUSTOM_A, name = "Press", revision = 1L)),
-                    r05bChange(
-                        R05B_TYPE_ROUTINE,
-                        R05B_ROUTINE_B,
-                        R05B_OP_UPSERT,
+            database.projectionPreparePublication(
+                changes = canonicalJsonArray(
+                    canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, canonicalCustomRecord(id = CANONICAL_CUSTOM_A, name = "Press", revision = 1L)),
+                    canonicalChange(
+                        CANONICAL_TYPE_ROUTINE,
+                        CANONICAL_ROUTINE_B,
+                        CANONICAL_OP_UPSERT,
                         1L,
-                        r05bRoutineRecord(
-                            id = R05B_ROUTINE_B,
+                        canonicalRoutineRecord(
+                            id = CANONICAL_ROUTINE_B,
                             name = "Legs",
                             isDraft = false,
                             revision = 1L,
-                            exercises = r05bJsonArray(
-                                r05bRoutineEntry(
-                                    exerciseId = R05B_CUSTOM_A,
+                            exercises = canonicalJsonArray(
+                                canonicalRoutineEntry(
+                                    exerciseId = CANONICAL_CUSTOM_A,
                                     exerciseName = "Stale",
-                                    sets = r05bJsonArray(r05bRoutineSet(repetitions = 8, weightKg = 60.0)),
+                                    sets = canonicalJsonArray(canonicalRoutineSet(repetitions = 8, weightKg = 60.0)),
                                 ),
                             ),
                         ),
                     ),
                 ),
             )
-            val first = database.r05cStore(barrier = r05cGrantBarrier()).publish(0L)
+            val first = database.projectionStore(barrier = projectionGrantBarrier()).publish(0L)
             assertEquals(ProjectionPublicationStatus.PUBLISHED, first.status)
         }
         val repository = accountRepository()
         val shared = sharedEdits()
         val screenScope = ownScope()
-        val state = RoutineEditorState(R05B_ROUTINE_B, repository, screenScope, edits = shared)
+        val state = RoutineEditorState(CANONICAL_ROUTINE_B, repository, screenScope, edits = shared)
         composeRule.setContent {
             MaterialTheme {
                 if (contentEnabled) {
                     RoutineEditorScreen(
-                        routineId = R05B_ROUTINE_B,
+                        routineId = CANONICAL_ROUTINE_B,
                         onAddExercise = {},
                         onCancel = {},
                         onSaved = {},
@@ -413,27 +408,27 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
 
         publishLiveUpdate(
             1L,
-            r05bPull(
-                batchId = R05B_BATCH_2,
-                cursor = R05B_CURSOR_2,
-                changes = r05bJsonArray(
-                    r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 2L, r05bCustomRecord(id = R05B_CUSTOM_A, name = "Press Renamed", revision = 2L)),
-                    r05bChange(
-                        R05B_TYPE_ROUTINE,
-                        R05B_ROUTINE_B,
-                        R05B_OP_UPSERT,
+            canonicalPull(
+                batchId = CANONICAL_BATCH_2,
+                cursor = CANONICAL_CURSOR_2,
+                changes = canonicalJsonArray(
+                    canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 2L, canonicalCustomRecord(id = CANONICAL_CUSTOM_A, name = "Press Renamed", revision = 2L)),
+                    canonicalChange(
+                        CANONICAL_TYPE_ROUTINE,
+                        CANONICAL_ROUTINE_B,
+                        CANONICAL_OP_UPSERT,
                         2L,
-                        r05bRoutineRecord(
-                            id = R05B_ROUTINE_B,
+                        canonicalRoutineRecord(
+                            id = CANONICAL_ROUTINE_B,
                             name = "Legs Renamed",
                             isDraft = false,
                             revision = 2L,
-                            exercises = r05bJsonArray(
-                                r05bRoutineEntry(
-                                    id = R05B_ENTRY_A1,
-                                    exerciseId = R05B_CUSTOM_A,
+                            exercises = canonicalJsonArray(
+                                canonicalRoutineEntry(
+                                    id = CANONICAL_ENTRY_A1,
+                                    exerciseId = CANONICAL_CUSTOM_A,
                                     exerciseName = "Stale",
-                                    sets = r05bJsonArray(r05bRoutineSet(id = R05B_SET_A1, repetitions = 10, weightKg = 65.5)),
+                                    sets = canonicalJsonArray(canonicalRoutineSet(id = CANONICAL_SET_A1, repetitions = 10, weightKg = 65.5)),
                                 ),
                             ),
                         ),
@@ -451,9 +446,9 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
             }
         }
         composeRule.onNodeWithTag("routine-name-input").assertIsFocused()
-        composeRule.onNodeWithTag("routine-set-weight-$R05B_SET_A1").assertTextEquals("65.5")
-        composeRule.onNodeWithTag("routine-set-reps-$R05B_SET_A1").assertTextEquals("10")
-        val stored = runBlocking { repository.routineDetails(R05B_ROUTINE_B)!! }
+        composeRule.onNodeWithTag("routine-set-weight-$CANONICAL_SET_A1").assertTextEquals("65.5")
+        composeRule.onNodeWithTag("routine-set-reps-$CANONICAL_SET_A1").assertTextEquals("10")
+        val stored = runBlocking { repository.routineDetails(CANONICAL_ROUTINE_B)!! }
         assertEquals("Legs Renamed", stored.routine.name)
         assertEquals("Press Renamed", stored.exercises.single().routineExercise.exerciseName)
     }
@@ -462,32 +457,32 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
     fun refusedRoutineNameLeavesDisplayedDraftIntact() {
         runBlocking {
             seedLookups()
-            database.r05cPreparePublication(
-                changes = r05bJsonArray(
-                    r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, r05bCustomRecord(id = R05B_CUSTOM_A, name = "Press", revision = 1L)),
-                    r05bChange(
-                        R05B_TYPE_ROUTINE,
-                        R05B_ROUTINE_B,
-                        R05B_OP_UPSERT,
+            database.projectionPreparePublication(
+                changes = canonicalJsonArray(
+                    canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, canonicalCustomRecord(id = CANONICAL_CUSTOM_A, name = "Press", revision = 1L)),
+                    canonicalChange(
+                        CANONICAL_TYPE_ROUTINE,
+                        CANONICAL_ROUTINE_B,
+                        CANONICAL_OP_UPSERT,
                         1L,
-                        r05bRoutineRecord(id = R05B_ROUTINE_B, name = "Base Plan", isDraft = true, revision = 1L),
+                        canonicalRoutineRecord(id = CANONICAL_ROUTINE_B, name = "Base Plan", isDraft = true, revision = 1L),
                     ),
                 ),
             )
-            val first = database.r05cStore(barrier = r05cGrantBarrier()).publish(0L)
+            val first = database.projectionStore(barrier = projectionGrantBarrier()).publish(0L)
             assertEquals(ProjectionPublicationStatus.PUBLISHED, first.status)
         }
         val repository = accountRepository()
         val coordinatorScope = ownScope()
         val shared = FiniteEditCoordinator(coordinatorScope).also { ownedCoordinators += it }
         val screenScope = ownScope()
-        val state = RoutineEditorState(R05B_ROUTINE_B, repository, screenScope, edits = shared)
+        val state = RoutineEditorState(CANONICAL_ROUTINE_B, repository, screenScope, edits = shared)
         composeRule.waitUntil(5_000) { state.details != null }
         composeRule.setContent {
             MaterialTheme {
                 if (contentEnabled) {
                     RoutineEditorScreen(
-                        routineId = R05B_ROUTINE_B,
+                        routineId = CANONICAL_ROUTINE_B,
                         onAddExercise = {},
                         onCancel = {},
                         onSaved = {},
@@ -504,33 +499,33 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
             composeRule.onNodeWithTag("routine-name-input").performTextReplacement("Hacked")
             composeRule.waitForIdle()
             composeRule.onNodeWithTag("routine-name-input").assertTextEquals("Base Plan")
-            assertEquals("Base Plan", runBlocking { repository.routineDetails(R05B_ROUTINE_B)!!.routine.name })
+            assertEquals("Base Plan", runBlocking { repository.routineDetails(CANONICAL_ROUTINE_B)!!.routine.name })
         } finally {
             runBlocking { lease.close() }
         }
 
         composeRule.onNodeWithTag("routine-name-input").performTextReplacement("Allowed")
-        composeRule.waitUntil { runBlocking { repository.routineDetails(R05B_ROUTINE_B)?.routine?.name == "Allowed" } }
+        composeRule.waitUntil { runBlocking { repository.routineDetails(CANONICAL_ROUTINE_B)?.routine?.name == "Allowed" } }
         composeRule.onNodeWithTag("routine-name-input").assertTextEquals("Allowed")
     }
 
-    private fun activeRestUpdatePull(restSeconds: Int) = r05bPull(
-        batchId = R05B_BATCH_2,
-        cursor = R05B_CURSOR_2,
-        changes = r05bJsonArray(
-            r05bChange(
-                R05B_TYPE_WORKOUT,
-                R05B_WORKOUT_A,
-                R05B_OP_UPSERT,
+    private fun activeRestUpdatePull(restSeconds: Int) = canonicalPull(
+        batchId = CANONICAL_BATCH_2,
+        cursor = CANONICAL_CURSOR_2,
+        changes = canonicalJsonArray(
+            canonicalChange(
+                CANONICAL_TYPE_WORKOUT,
+                CANONICAL_WORKOUT_A,
+                CANONICAL_OP_UPSERT,
                 2L,
-                r05bWorkoutRecord(
+                canonicalWorkoutRecord(
                     revision = 2L,
-                    exercises = r05bJsonArray(
-                        r05bWorkoutEntry(
-                            exerciseId = R05B_CUSTOM_A,
+                    exercises = canonicalJsonArray(
+                        canonicalWorkoutEntry(
+                            exerciseId = CANONICAL_CUSTOM_A,
                             exerciseName = "Stale",
                             restDurationSeconds = restSeconds,
-                            sets = r05bJsonArray(r05bWorkoutSet(repetitions = 8, weightKg = 50.0)),
+                            sets = canonicalJsonArray(canonicalWorkoutSet(repetitions = 8, weightKg = 50.0)),
                         ),
                     ),
                 ),
@@ -538,27 +533,27 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
         ),
     )
 
-    private fun routineRestUpdatePull(restSeconds: Int) = r05bPull(
-        batchId = R05B_BATCH_2,
-        cursor = R05B_CURSOR_2,
-        changes = r05bJsonArray(
-            r05bChange(
-                R05B_TYPE_ROUTINE,
-                R05B_ROUTINE_B,
-                R05B_OP_UPSERT,
+    private fun routineRestUpdatePull(restSeconds: Int) = canonicalPull(
+        batchId = CANONICAL_BATCH_2,
+        cursor = CANONICAL_CURSOR_2,
+        changes = canonicalJsonArray(
+            canonicalChange(
+                CANONICAL_TYPE_ROUTINE,
+                CANONICAL_ROUTINE_B,
+                CANONICAL_OP_UPSERT,
                 2L,
-                r05bRoutineRecord(
-                    id = R05B_ROUTINE_B,
+                canonicalRoutineRecord(
+                    id = CANONICAL_ROUTINE_B,
                     name = "Legs",
                     isDraft = false,
                     revision = 2L,
-                    exercises = r05bJsonArray(
-                        r05bRoutineEntry(
-                            id = R05B_ENTRY_A1,
-                            exerciseId = R05B_CUSTOM_A,
+                    exercises = canonicalJsonArray(
+                        canonicalRoutineEntry(
+                            id = CANONICAL_ENTRY_A1,
+                            exerciseId = CANONICAL_CUSTOM_A,
                             exerciseName = "Stale",
                             restDurationSeconds = restSeconds,
-                            sets = r05bJsonArray(r05bRoutineSet(id = R05B_SET_A1, repetitions = 8, weightKg = 60.0)),
+                            sets = canonicalJsonArray(canonicalRoutineSet(id = CANONICAL_SET_A1, repetitions = 8, weightKg = 60.0)),
                         ),
                     ),
                 ),
@@ -574,12 +569,12 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
         val endedTimers = mutableListOf<ActiveRestTimer>()
         val shared = sharedEdits()
         val screenScope = ownScope()
-        val state = ActiveWorkoutState(R05B_WORKOUT_A, 1_000L, repository, screenScope, edits = shared)
+        val state = ActiveWorkoutState(CANONICAL_WORKOUT_A, 1_000L, repository, screenScope, edits = shared)
         composeRule.setContent {
             MaterialTheme {
                 if (contentEnabled) {
                     ActiveWorkoutScreen(
-                        workoutId = R05B_WORKOUT_A,
+                        workoutId = CANONICAL_WORKOUT_A,
                         workoutStartMillis = 1_000L,
                         activeRestTimer = null,
                         restTimerRemainingSeconds = 0,
@@ -613,7 +608,7 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
 
         // Genuinely changed persisted rest commits while the dialog stays open.
         publishLiveUpdate(1L, activeRestUpdatePull(restSeconds = 60), shared)
-        assertEquals(60, runBlocking { repository.workoutDetails(R05B_WORKOUT_A)!!.exercises.single().workoutExercise.restDurationSeconds })
+        assertEquals(60, runBlocking { repository.workoutDetails(CANONICAL_WORKOUT_A)!!.exercises.single().workoutExercise.restDurationSeconds })
         composeRule.waitUntil(5_000) { state.details?.exercises?.single()?.workoutExercise?.restDurationSeconds == 60 }
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Rest timer").assertIsDisplayed()
@@ -622,7 +617,7 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
         // Done confirms the pre-publication user-selected 45s draft, not the
         // newer persisted 60s value.
         composeRule.onNodeWithText("Done").performClick()
-        composeRule.waitUntil { runBlocking { repository.workoutDetails(R05B_WORKOUT_A)?.exercises?.single()?.workoutExercise?.restDurationSeconds == 45 } }
+        composeRule.waitUntil { runBlocking { repository.workoutDetails(CANONICAL_WORKOUT_A)?.exercises?.single()?.workoutExercise?.restDurationSeconds == 45 } }
         composeRule.waitUntil { composeRule.onAllNodesWithText("Rest Timer: 45s").fetchSemanticsNodes().isNotEmpty() }
         composeRule.onAllNodesWithText("Rest timer").assertCountEquals(0)
         composeRule.waitForIdle()
@@ -634,42 +629,42 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
     fun routineRestDialogDraftSurvivesPublicationAndConfirmsOriginal() {
         runBlocking {
             seedLookups()
-            database.r05cPreparePublication(
-                changes = r05bJsonArray(
-                    r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L, r05bCustomRecord(id = R05B_CUSTOM_A, name = "Press", revision = 1L)),
-                    r05bChange(
-                        R05B_TYPE_ROUTINE,
-                        R05B_ROUTINE_B,
-                        R05B_OP_UPSERT,
+            database.projectionPreparePublication(
+                changes = canonicalJsonArray(
+                    canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L, canonicalCustomRecord(id = CANONICAL_CUSTOM_A, name = "Press", revision = 1L)),
+                    canonicalChange(
+                        CANONICAL_TYPE_ROUTINE,
+                        CANONICAL_ROUTINE_B,
+                        CANONICAL_OP_UPSERT,
                         1L,
-                        r05bRoutineRecord(
-                            id = R05B_ROUTINE_B,
+                        canonicalRoutineRecord(
+                            id = CANONICAL_ROUTINE_B,
                             name = "Legs",
                             isDraft = false,
                             revision = 1L,
-                            exercises = r05bJsonArray(
-                                r05bRoutineEntry(
-                                    exerciseId = R05B_CUSTOM_A,
+                            exercises = canonicalJsonArray(
+                                canonicalRoutineEntry(
+                                    exerciseId = CANONICAL_CUSTOM_A,
                                     exerciseName = "Stale",
-                                    sets = r05bJsonArray(r05bRoutineSet(repetitions = 8, weightKg = 60.0)),
+                                    sets = canonicalJsonArray(canonicalRoutineSet(repetitions = 8, weightKg = 60.0)),
                                 ),
                             ),
                         ),
                     ),
                 ),
             )
-            val first = database.r05cStore(barrier = r05cGrantBarrier()).publish(0L)
+            val first = database.projectionStore(barrier = projectionGrantBarrier()).publish(0L)
             assertEquals(ProjectionPublicationStatus.PUBLISHED, first.status)
         }
         val repository = accountRepository()
         val shared = sharedEdits()
         val screenScope = ownScope()
-        val state = RoutineEditorState(R05B_ROUTINE_B, repository, screenScope, edits = shared)
+        val state = RoutineEditorState(CANONICAL_ROUTINE_B, repository, screenScope, edits = shared)
         composeRule.setContent {
             MaterialTheme {
                 if (contentEnabled) {
                     RoutineEditorScreen(
-                        routineId = R05B_ROUTINE_B,
+                        routineId = CANONICAL_ROUTINE_B,
                         onAddExercise = {},
                         onCancel = {},
                         onSaved = {},
@@ -684,14 +679,14 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
         composeRule.onNodeWithText("Done").assertIsDisplayed()
 
         publishLiveUpdate(1L, routineRestUpdatePull(restSeconds = 60), shared)
-        assertEquals(60, runBlocking { repository.routineDetails(R05B_ROUTINE_B)!!.exercises.single().routineExercise.restDurationSeconds })
+        assertEquals(60, runBlocking { repository.routineDetails(CANONICAL_ROUTINE_B)!!.exercises.single().routineExercise.restDurationSeconds })
         composeRule.waitUntil(5_000) { state.details?.exercises?.single()?.routineExercise?.restDurationSeconds == 60 }
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Rest timer").assertIsDisplayed()
         composeRule.onNodeWithText("Done").assertIsDisplayed()
 
         composeRule.onNodeWithText("Done").performClick()
-        composeRule.waitUntil { runBlocking { repository.routineDetails(R05B_ROUTINE_B)?.exercises?.single()?.routineExercise?.restDurationSeconds == 30 } }
+        composeRule.waitUntil { runBlocking { repository.routineDetails(CANONICAL_ROUTINE_B)?.exercises?.single()?.routineExercise?.restDurationSeconds == 30 } }
         composeRule.waitUntil { composeRule.onAllNodesWithText("Rest Timer: 30s").fetchSemanticsNodes().isNotEmpty() }
         composeRule.onAllNodesWithText("Rest timer").assertCountEquals(0)
         composeRule.waitForIdle()

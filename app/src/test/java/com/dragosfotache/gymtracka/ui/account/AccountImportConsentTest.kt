@@ -16,19 +16,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * R13c independent QA (JVM): opaque import-consent decision bridge.
- *
- * Derived ONLY from docs/archive/remaining-work/R13c-task.md AccountImportConsent
- * contract plus coordinator appendix: one current nonqueueing deferred decision,
- * opaque token (no request data), caller cancellation releases it, stale token
- * after cancellation/close cannot consent a future request, close permanently
- * fences. Virtual time only; no sleeps. Request data never displayed/saved.
+ * Virtual-time checks for one nonqueueing opaque import decision, cancellation release, stale-
+ * token refusal and permanent close. Request data is neither displayed nor persisted.
  */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class AccountImportConsentTest {
 
     private companion object {
-        const val ORIGIN = "https://sync-r13c.example.test"
+        const val ORIGIN = "https://sync-startup.example.test"
         const val ACCOUNT = "c13c9001-1111-4111-8111-111111111111"
         const val OPERATION = "d13c9001-1111-4111-8111-111111111111"
         const val MUTATION = "e13c9001-1111-4111-8111-111111111111"

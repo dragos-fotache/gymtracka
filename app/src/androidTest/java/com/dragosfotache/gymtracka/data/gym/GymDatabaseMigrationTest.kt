@@ -30,20 +30,35 @@ class GymDatabaseMigrationTest {
 
     @Test
     fun everySupportedVersion_migratesToCurrentSchemaAndPreservesAvailableData() {
-        for (startVersion in 1..13) {
-            val databaseName = "migration-$startVersion-to-14.db"
+        for (startVersion in 1..14) {
+            val databaseName = "migration-$startVersion-to-15.db"
             migrationHelper.createDatabase(databaseName, startVersion).use { database ->
                 seedLegacyDatabase(database, startVersion)
             }
 
             migrationHelper.runMigrationsAndValidate(
                 databaseName,
-                14,
+                15,
                 true,
                 *GymDatabase.MIGRATIONS,
             ).use { database ->
                 assertMigratedData(database, startVersion)
             }
+        }
+    }
+
+    @Test
+    fun versionFourteen_preservesAllOutboxBytesAndKeepsExistingDeadlinesProtected() {
+        val name = "migration-retry-cause-14-to-15.db"
+        val columns = "sequence, mutation_id, account_id, aggregate_type, aggregate_id, mutation_type," +
+            " local_generation, payload_version, payload_json, state, attempt_count, retry_after_millis, error_code, error_message"
+        val before = migrationHelper.createDatabase(name, 14).use { database ->
+            seedPopulatedVersionNine(database)
+            snapshotRows(database, "SELECT $columns FROM sync_outbox ORDER BY sequence", 14)
+        }
+        migrationHelper.runMigrationsAndValidate(name, 15, true, *GymDatabase.MIGRATIONS).use { database ->
+            assertEquals(before, snapshotRows(database, "SELECT $columns FROM sync_outbox ORDER BY sequence", 14))
+            assertEquals(6, database.singleInt("SELECT COUNT(*) FROM sync_outbox WHERE retry_cause = 'unknown'"))
         }
     }
 

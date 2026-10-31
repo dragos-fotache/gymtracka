@@ -6,7 +6,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Durable legacy-import singleton journal for R13a inert capture/recovery.
+ * Durable legacy-import singleton journal for local capture inert capture/recovery.
  * One row with id 1, no foreign keys to domain/outbox so evidence survives
  * their later removal. Holds only nonsecret identity/progress state plus
  * immutable raw source evidence. Phase is `captured` or `blocked`; neither
@@ -64,7 +64,7 @@ data class SyncLegacyImportEntryEntity(
 }
 
 /**
- * R13b current-lineage anchor for one captured migration. Singleton id=1.
+ * current-lineage anchor for one captured migration. Singleton id=1.
  * Binds through the immutable `sync_legacy_import` origin/account; it is
  * NOT independent session authority. `operation_id` is null only for the
  * signed-out fence; `active_consent_mutation_id` holds the exact original
@@ -89,7 +89,7 @@ data class SyncLegacyImportProgressEntity(
 }
 
 /**
- * R13b immutable acceptance receipt for one validated accepted or
+ * immutable acceptance receipt for one validated accepted or
  * original-accepted outcome. Ordinal is consecutive zero-based; `batch_json`
  * is the validated complete accepted canonical batch via the strict batch
  * codec. No cascades into domain/outbox and no automatic cleanup.

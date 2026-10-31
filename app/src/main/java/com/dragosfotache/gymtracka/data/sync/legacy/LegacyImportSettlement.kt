@@ -42,7 +42,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * R13b consolidated strict progress/acceptance validator for the private
+ * consolidated strict progress/acceptance validator for the private
  * import. Single authority for journal/entry/progress/receipt validation:
  * raw SQL scalar types/counts only, no coercive DAO success. Any duplicate,
  * orphan, malformed, mismatched, nonconsecutive-prefix or anchor failure

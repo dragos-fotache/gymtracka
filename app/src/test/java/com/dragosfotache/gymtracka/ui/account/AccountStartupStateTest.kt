@@ -31,23 +31,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * R13c independent QA (JVM): AccountStartupState controller composition.
- *
- * Derived ONLY from docs/archive/remaining-work/R13c-task.md required AccountStartupState
- * contract plus the coordinator appendix (state/room/intent shapes, intent/
- * operation selection, at-most-one activation, blocked/corrupt refusal, one
- * nonqueueing owned operation with occupation/generation fencing, fresh recover
- * per action, cancel settles read-only recovery without auto activation, dispose
- * fences without cancelling borrowed scope). Independently written literals;
- * fake operations only (no HTTP, no Room); TestScope/virtual time, no sleeps.
- * StageId values are recorded but never asserted beyond non-blank/at-most-once:
- * the contract fixes count/freshness, not the stage derivation.
+ * Virtual-time controller checks for fresh recovery per action, private intent/operation
+ * selection, at-most-one activation, busy/generation fences, cancellation and disposal. Stage IDs
+ * are checked for nonblank/freshness semantics rather than a particular derivation.
  */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class AccountStartupStateTest {
 
     private companion object {
-        const val ORIGIN = "https://sync-r13c.example.test"
+        const val ORIGIN = "https://sync-startup.example.test"
         const val ACCOUNT = "c13c1001-1111-4111-8111-111111111111"
         const val OP_RETAINED = "d13c1001-1111-4111-8111-111111111111"
         const val OP_FRESH_A = "d13c1002-2222-4222-8222-222222222222"
@@ -73,7 +65,7 @@ class AccountStartupStateTest {
             sessionGeneration = generation,
             cachedAccountId = ACCOUNT,
             phase = RecoveryRoomPhase.PREPARING,
-            identity = RecoveryIdentity(binding(), operationId),
+            identity = RecoveryIdentity(binding(generation = generation), operationId),
             baselineComplete = false,
         )
 
@@ -203,9 +195,54 @@ class AccountStartupStateTest {
 
         fun next(): String {
             calls += 1
-            if (calls == throwOnCall) throw CancellationException("r13c-uuid-cancel-fixture")
+            if (calls == throwOnCall) throw CancellationException("startup-uuid-cancel-fixture")
             return values[(calls - 1) % values.size]
         }
+    }
+
+    @Test
+    fun cancelDeferredActivation_disarmsRetryWithoutChangingSavedAuthority() = runTest {
+        val saved = AppSessionState.Private(
+            com.dragosfotache.gymtracka.data.sync.session.AppSessionReason.PREPARATION_REQUIRED,
+            preparing(),
+            retryAtMillis = 300_000L,
+        )
+        val ops = FakeOps(saved)
+        val state = AccountStartupState(ops, false, backgroundScope)
+        state.start()
+        runCurrent()
+        state.continuePreparation()
+        runCurrent()
+        assertEquals(AccountStartupError.PREPARATION_PAUSED, state.uiState.value.error)
+        val completions = ops.completeCalls
+        state.cancel()
+        runCurrent()
+        assertEquals(AccountStartupError.CANCELLED, state.uiState.value.error)
+        assertEquals(saved, ops.state.value)
+        assertEquals(completions, ops.completeCalls)
+        state.dispose()
+    }
+
+    @Test
+    fun laterSuccessfulSyncClearsFailedAuthentication_butKeepsUnrelatedEditorError() = runTest {
+        val failed = AccountStartupState(FakeOps(), false, backgroundScope)
+        failed.signIn()
+        runCurrent()
+        assertEquals(AccountStartupError.SIGN_IN_FAILED, failed.uiState.value.error)
+        failed.onSyncSucceeded()
+        assertEquals(null, failed.uiState.value.error)
+        failed.dispose()
+
+        val ops = FakeOps().also {
+            it.recoverFaults.add(AccountStartupException(AccountStartupError.EDITOR_OPEN))
+        }
+        val editor = AccountStartupState(ops, true, backgroundScope)
+        editor.signIn()
+        runCurrent()
+        assertEquals(AccountStartupError.EDITOR_OPEN, editor.uiState.value.error)
+        editor.onSyncSucceeded()
+        assertEquals(AccountStartupError.EDITOR_OPEN, editor.uiState.value.error)
+        editor.dispose()
     }
 
     @Test
@@ -341,7 +378,7 @@ class AccountStartupStateTest {
     }
 
     @Test
-    fun signIn_preparingOrdinaryUsesExactOperationIdNeverInitial() = runTest {
+    fun signIn_blockedImportRefusesFreshSessionAndActivation() = runTest {
         val ops = FakeOps()
         val snapshot = preparing(OP_RETAINED)
         val retained = AppSessionState.Private(
@@ -359,16 +396,64 @@ class AccountStartupStateTest {
         startup.signIn()
         advanceUntilIdle()
         runCurrent()
-        assertTrue(ops.signInCalls <= 1)
-        if (ops.signInCalls == 1) {
-            assertNotEquals(
-                "blocked evidence must not bypass to initial sign-in",
-                ForegroundSignInIntent.INITIAL_SIGN_IN,
-                ops.seenIntents.single(),
-            )
-            assertEquals(OP_RETAINED, ops.seenOperationIds.single())
-        }
+        assertEquals(0, ops.signInCalls)
         assertEquals("blocked observation refuses activation", 0, ops.completeCalls)
+        startup.dispose()
+    }
+
+    @Test
+    fun signIn_interruptedOrdinaryUsesFreshSessionThenFreshActivationExpectation() = runTest {
+        for (phase in listOf(RecoveryRoomPhase.PREPARING, RecoveryRoomPhase.TRANSITIONING)) {
+            val before = preparing().copy(phase = phase)
+            val after = preparing(OP_FRESH_A, generation = 2L, revision = 6L)
+            val ops = FakeOps()
+            ops.answerRecover(
+                AppSessionState.Private(com.dragosfotache.gymtracka.data.sync.session.AppSessionReason.PREPARATION_REQUIRED, before),
+                AppSessionState.Private(com.dragosfotache.gymtracka.data.sync.session.AppSessionReason.PREPARATION_REQUIRED, after),
+            )
+            ops.signInScript += AppSessionState.Private(
+                com.dragosfotache.gymtracka.data.sync.session.AppSessionReason.PREPARATION_REQUIRED, after,
+            )
+            val uuids = ScriptedUuids(listOf(OP_FRESH_A, OP_FRESH_B))
+            val startup = AccountStartupState(ops, true, backgroundScope, uuidProvider = { uuids.next() })
+            startup.signIn()
+            runCurrent()
+            assertEquals(listOf(ForegroundSignInIntent.SAME_ACCOUNT_REAUTHENTICATION), ops.seenIntents)
+            assertEquals(listOf(OP_FRESH_A), ops.seenOperationIds)
+            assertEquals(listOf(before, after), ops.seenExpected)
+            assertEquals(listOf(OP_FRESH_B), ops.seenStageIds)
+            startup.dispose()
+        }
+    }
+
+    @Test
+    fun finishSigningIn_resumesFreshSavedExpectationWithoutSignInOrNewReservation() = runTest {
+        val saved = preparing()
+        val ops = FakeOps()
+        ops.answerRecover(AppSessionState.Private(
+            com.dragosfotache.gymtracka.data.sync.session.AppSessionReason.PREPARATION_REQUIRED, saved,
+        ))
+        val startup = AccountStartupState(ops, false, backgroundScope, uuidProvider = { OP_FRESH_A })
+        startup.continuePreparation()
+        runCurrent()
+        assertEquals(0, ops.signInCalls)
+        assertEquals(listOf(saved), ops.seenExpected)
+        assertEquals(listOf(OP_FRESH_A), ops.seenStageIds)
+        startup.dispose()
+    }
+
+    @Test
+    fun signIn_interruptedRejectsReusedOperationWithoutEffects() = runTest {
+        val ops = FakeOps()
+        ops.answerRecover(AppSessionState.Private(
+            com.dragosfotache.gymtracka.data.sync.session.AppSessionReason.PREPARATION_REQUIRED, preparing(),
+        ))
+        val startup = AccountStartupState(ops, true, backgroundScope, uuidProvider = { OP_RETAINED })
+        startup.signIn()
+        runCurrent()
+        assertEquals(0, ops.signInCalls)
+        assertEquals(0, ops.completeCalls)
+        assertEquals(AccountStartupError.UNAVAILABLE, startup.uiState.value.error)
         startup.dispose()
     }
 
@@ -409,7 +494,7 @@ class AccountStartupStateTest {
                 preparing(),
             ),
         )
-        ops.legacyFault = IllegalStateException("r13c-corrupt-fixture")
+        ops.legacyFault = IllegalStateException("startup-corrupt-fixture")
         val startup = AccountStartupState(ops, true, backgroundScope)
         startup.start()
         advanceUntilIdle()
@@ -444,7 +529,7 @@ class AccountStartupStateTest {
         assertEquals(LegacyImportProgressPhase.CAPTURED, startup.uiState.value.importProgress?.phase)
         // Observation failure retains prior progress instead of nulling it, and
         // surfaces the settled UNAVAILABLE mapping (not a silent null pass).
-        ops.legacyFault = IllegalStateException("r13c-observe-fault")
+        ops.legacyFault = IllegalStateException("startup-observe-fault")
         startup.continuePreparation()
         advanceUntilIdle()
         runCurrent()
@@ -546,7 +631,7 @@ class AccountStartupStateTest {
         assertEquals(0, ops.completeCalls)
         assertEquals(0, ops.signInCalls)
         try {
-            backgroundScope.async { throw CancellationException("r13c-scope-live") }.await()
+            backgroundScope.async { throw CancellationException("startup-scope-live") }.await()
             assertTrue(false)
         } catch (_: CancellationException) {
         }
@@ -629,7 +714,7 @@ class AccountStartupStateTest {
                 preparing(),
             ),
         )
-        ops.legacyFault = IllegalStateException("r13c-corrupt-start")
+        ops.legacyFault = IllegalStateException("startup-corrupt-start")
         val startup = AccountStartupState(ops, true, backgroundScope)
         startup.start()
         advanceUntilIdle()
@@ -665,7 +750,7 @@ class AccountStartupStateTest {
         ops.legacyValue = blockedImport()
         // Fresh pre-sign-in recover succeeds; fresh post-sign-in recover fails.
         // The stale pre-sign-in snapshot must never authorize activation.
-        ops.recoverFaults += IllegalStateException("r13c-post-signin-recover-fault")
+        ops.recoverFaults += IllegalStateException("startup-post-signin-recover-fault")
         val uuids = ScriptedUuids(listOf(OP_FRESH_A, OP_FRESH_B, OP_FRESH_C))
         val startup = AccountStartupState(ops, true, backgroundScope, uuidProvider = { uuids.next() })
         startup.start()
@@ -679,7 +764,7 @@ class AccountStartupStateTest {
         startup.signIn()
         advanceUntilIdle()
         runCurrent()
-        ops.recoverFaults += IllegalStateException("r13c-post-signin-recover-fault")
+        ops.recoverFaults += IllegalStateException("startup-post-signin-recover-fault")
         startup.continuePreparation()
         advanceUntilIdle()
         runCurrent()

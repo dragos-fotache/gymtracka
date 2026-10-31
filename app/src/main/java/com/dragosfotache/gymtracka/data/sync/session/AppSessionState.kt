@@ -4,14 +4,14 @@ import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationLease
 import com.dragosfotache.gymtracka.data.sync.store.RepositorySession
 
 /**
- * R09h app-facing transition pause/drain barrier. Acquired while the previous
+ * app-facing transition pause/drain barrier. Acquired while the previous
  * account handle is still valid so accepted edits and terminal rest can persist
  * before invalidation. There is no permissive default; the caller supplies real
- * admission/drain machinery (R12c owns canonical timer-impact decisions).
+ * admission/drain machinery (account runtime owns canonical timer-impact decisions).
  *
  * Safety contract: an implementation must release an acquired pause if prompt
  * cancellation prevents delivering its result, so a cancelled acquisition can
- * never hold the app drain open. (R12a owns this release safety.)
+ * never hold the app drain open. (finite edit barriers owns this release safety.)
  */
 internal fun interface AppSessionTransitionBarrier {
     suspend fun acquire(previous: RepositorySession?): ProjectionPublicationLease
@@ -47,6 +47,8 @@ internal sealed interface AppSessionState {
     data class Private(
         val reason: AppSessionReason,
         val room: RecoveryRoomSnapshot?,
+        /** Advisory deadline from this activation's deferred upload; never grants authority. */
+        val retryAtMillis: Long? = null,
     ) : AppSessionState {
         override fun toString(): String = "Private(reason=$reason)"
     }

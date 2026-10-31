@@ -78,7 +78,7 @@ internal sealed interface SessionReauthenticationRecovery {
  * Advisory settled old-ACTIVE eligibility after inert exact-pending-refresh
  * reconciliation: the unchanged old ACTIVE Room observation plus the positive
  * vault revision holding its exact settled ACTIVE grant with no pending
- * predecessor. Carries no grant, token, or lease; R09e must freshly
+ * predecessor. Carries no grant, token, or lease; reauthentication must freshly
  * read/admit it again before any replacement. Displays are fixed and redacted.
  */
 internal data class SettledSessionObservation(

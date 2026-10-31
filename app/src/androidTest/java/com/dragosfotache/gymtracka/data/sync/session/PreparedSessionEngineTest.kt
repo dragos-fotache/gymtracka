@@ -19,14 +19,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R09c independent QA: private prepared-session engine admission and bootstrap.
- *
- * Derived ONLY from docs/remaining-work/R09c-task.md contracts and its "QA
- * harness facts" section plus QA-owned harness facts (see
- * PreparedSessionEngineTestSupport header). No production declarations,
- * diffs, Worker work, generated sources, decompiled classes or schema JSON
- * inspected. Each test proves a distinct new authorization/composition
- * defect with independent literals; no exhaustive matrix.
+ * private prepared-session engine admission and bootstrap.
  */
 @RunWith(AndroidJUnit4::class)
 class PreparedSessionEngineTest {
@@ -220,7 +213,7 @@ class PreparedSessionEngineTest {
             assertNotNull(cache)
             assertEquals(1L, cache!!.baselineComplete)
             assertEquals(1L, cache.cacheEpoch)
-            // No publisher runs in R09c: canonical completion dirties projection
+            // No publisher runs in prepared engine: canonical completion dirties projection
             // while materialization stays at zero, even on an empty account.
             assertEquals(1L, cache.projectionDirty)
             assertEquals(0L, cache.materializedEpoch)

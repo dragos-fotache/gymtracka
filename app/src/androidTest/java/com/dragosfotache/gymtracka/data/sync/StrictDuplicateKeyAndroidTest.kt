@@ -13,11 +13,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R02a Android platform smoke test for raw JSON duplicate-key rejection.
- *
- * Independent expectations from docs/remaining-work/R02a-task.md; hand-authored
- * fixtures only. Covers exact/escaped/nested duplicate rejection plus distinct
- * siblings and escaped string-value acceptance on the Android org.json platform.
+ * Android platform smoke test for raw JSON duplicate-key rejection.
  */
 @RunWith(AndroidJUnit4::class)
 class StrictDuplicateKeyAndroidTest {

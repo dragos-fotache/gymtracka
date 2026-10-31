@@ -38,14 +38,9 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R06b independent outcome acceptance: complete accepted/duplicate snapshots
- * stay read-only, rejections/retained failures persist exact codes with fixed
- * context and block successors, malformed evidence stays frozen, and
- * auth/reauth remain read-only without bootstrapping. Real Room, no mocked
- * DAOs, no sleeps.
- *
- * All expectations are literals authored from docs/archive/remaining-work/R06b-task.md;
- * no production encoder output is used as an oracle.
+ * Real Room checks that accepted/duplicate results stay read-only, rejected/retained errors block
+ * the head, malformed evidence stays frozen, and authentication stops preserve work without
+ * bootstrap.
  */
 class PushOutcomeTest : GymDatabaseTest() {
 

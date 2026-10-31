@@ -4,9 +4,9 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
- * Additive data-preserving 13→14 migration for R13b private import delivery.
- * Creates dedicated progress/acceptance tables; R13a journal/entries stay
- * immutable. Valid captured R13a rows initialize the current-lineage anchor
+ * Additive data-preserving 13→14 migration for private import delivery.
+ * Creates dedicated progress/acceptance tables; local capture journal/entries stay
+ * immutable. Valid captured local capture rows initialize the current-lineage anchor
  * to their recorded PREPARING revision/generation/operation; blocked and
  * no-journal rows gain no progress row. No consent/receipt is fabricated.
  */

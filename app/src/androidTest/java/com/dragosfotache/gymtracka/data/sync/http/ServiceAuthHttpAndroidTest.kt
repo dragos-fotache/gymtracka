@@ -19,8 +19,8 @@ import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
 
-// R03c QA Android smoke: platform scalar overflow/duplicates and auth TLS.
-// No production source inspected. Plain identifiers only for DEX.
+// tests Android smoke: platform scalar overflow/duplicates and auth TLS.
+// Fixture labels remain plain identifiers for DEX compatibility.
 
 private const val ANDROID_CHALLENGE = "{\"challengeId\":\"11111111-1111-1111-1111-111111111111\",\"nonce\":\"opaque nonce\",\"expiresAt\":\"2026-10-03T12:05:00Z\"}"
 private const val ANDROID_GRANT = "{\"account\":{\"id\":\"22222222-2222-2222-2222-222222222222\",\"displayName\":null},\"accessToken\":\"opaque access\",\"accessExpiresAt\":\"2026-10-03T12:15:00Z\",\"refreshToken\":\"opaque refresh\",\"refreshExpiresAt\":\"2026-11-02T12:00:00Z\"}"

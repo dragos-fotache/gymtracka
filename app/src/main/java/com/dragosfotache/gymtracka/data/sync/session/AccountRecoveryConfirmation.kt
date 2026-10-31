@@ -8,7 +8,7 @@ import com.dragosfotache.gymtracka.data.gym.SyncOutboxEntity
 import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportProgress
 
 /**
- * R13d raw legacy evidence snapshot. Strict journal/entry/source/progress/receipt rows read
+ * raw legacy evidence snapshot. Strict journal/entry/source/progress/receipt rows read
  * inside one fenced transaction; data-class equality refuses any drift. Original import
  * evidence is never a discard target.
  */
@@ -22,7 +22,7 @@ internal data class LegacyEvidenceSnapshot(
 }
 
 /**
- * R13d opaque process-local ordinary-recovery confirmation. Issued only by
+ * opaque process-local ordinary-recovery confirmation. Issued only by
  * [AppSessionCoordinator.prepareOrdinaryRecovery] after frozen-only settlement, full-row
  * capture under a real pause/drain lease and strict legacy proof, and registered with the
  * issuing coordinator. Binding to the issuing owner, exact handle and process fence means a

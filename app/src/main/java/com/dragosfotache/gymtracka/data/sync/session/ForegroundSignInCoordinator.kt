@@ -29,7 +29,7 @@ private const val RETIREMENT_MESSAGE = "Foreground sign-in was retired"
 private const val SEAM_CANCEL_MESSAGE = "Foreground sign-in seam cancelled"
 
 /**
- * R11b explicitly constructed, SDK-independent foreground sign-in and
+ * explicitly constructed, SDK-independent foreground sign-in and
  * reauthentication orchestrator. Obtains one SIGN_IN challenge, supplies its
  * exact nonce to the Google provider, captures one exact exchange attempt,
  * retries that attempt within a finite foreground budget, and consumes the

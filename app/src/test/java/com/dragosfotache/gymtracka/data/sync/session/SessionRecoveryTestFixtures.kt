@@ -9,13 +9,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 
 /**
- * R04c independent QA fixtures only. No production declarations.
- *
- * All values derive from the R04c spec's supplied API/harness facts plus the
- * already QA-owned R04a/R04b fixtures (RefreshTestFixtures, VaultTestFixtures,
- * FakeSessionVault, FakeServiceAuthApi, realVault, InMemoryVaultFileStorage,
- * IdentityVaultCipher). No production source, diff, or LSP navigation was used.
- *
  * Constructors below use only spec-fixed names/signatures:
  * RecoveryIdentity(binding, operationId), RecoveryRoomSnapshot(revision,
  * sessionGeneration, cachedAccountId, phase, identity, baselineComplete),
@@ -162,7 +155,7 @@ internal object SessionRecoveryTestFixtures {
         return VaultPendingRefresh(operationId = operationId, attempt = attempt)
     }
 
-    /** Exact body with newlines/tabs; mirrors the QA-owned whitespace fixture spelling. */
+    /** Exact body with newlines/tabs; mirrors the test whitespace fixture spelling. */
     fun multilinePending(
         operationId: String = OP_A,
         key: String = KEY_A,

@@ -11,7 +11,7 @@ internal const val SESSION_VAULT_TEST_NAMESPACE_PREFIX: String = "gymtracka-test
 /**
  * Inert production construction path for the encrypted session vault:
  * Keystore AES/GCM cipher over app-private `noBackupFilesDir` ciphertext.
- * Construction performs no I/O and activates nothing; the later app owns one
+ * Construction performs no I/O and activates nothing; the app owns one
  * process singleton. The default and test factories share one process-wide
  * mutex, and the injectable mutex on [EncryptedSessionVault] exists only for
  * independent storage tests. No multiprocess support is claimed. The test

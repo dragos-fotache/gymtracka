@@ -31,18 +31,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R09b independent QA: actual Room + actual test-owned Android encrypted vault.
- *
- * Derived ONLY from docs/remaining-work/R09b-task.md concrete API/harness facts
- * (Room.inMemoryDatabaseBuilder/databaseBuilder, RoomSessionAuthority(database)
- * read/beginPreparation/fencePrivate, AndroidSessionVault.createForTesting
- * namespace/alias rules, AndroidVaultFileStorage(context,namespace,faults) +
- * VaultWriteFaults/VaultWriteStage fault harness on test-owned paths only,
- * singleton journal/device columns, raw-SQL snapshot patterns) plus QA-owned R09a
- * literal preservation/cleanup shapes. No production declarations, diffs, Worker
- * work, generated sources, decompiled classes or schema JSON inspected. Private
- * independent fixtures below (canonical values only); androidTest does not
- * compile src/test fixtures.
+ * actual Room + actual test-owned Android encrypted vault.
  *
  * Each test proves a distinct new defect with a representative rich fixture;
  * no exhaustive matrix. Deterministic only, no sleeps.
@@ -110,7 +99,7 @@ class SessionPreparationRoomVaultTest {
     private val usedDatabases: MutableList<String> = mutableListOf()
 
     private fun testNamespace(suffix: String): String {
-        val namespace = "gymtracka-test-r09b-$suffix"
+        val namespace = "gymtracka-test-preparation-$suffix"
         usedNamespaces.add(namespace)
         return namespace
     }
@@ -278,7 +267,7 @@ class SessionPreparationRoomVaultTest {
                 " VALUES ('$ACCOUNT_A', 'workout', '$WORKOUT_A', 7, 'upsert'," +
                 " '{\"id\":\"$WORKOUT_A\"}', 4, 5)",
         )
-        // Representative sync stage plus one child record (R09a literal reuse).
+        // Representative sync stage plus one child record (Room authority literal reuse).
         db.execSQL(
             "INSERT INTO sync_snapshot_stages (stage_id, account_id, session_generation, cache_epoch," +
                 " page_limit, source_state_present, source_cursor, source_last_success_millis," +
@@ -307,7 +296,7 @@ class SessionPreparationRoomVaultTest {
     fun successfulReservationWriteAndReopenRecoversPrepared() = runTest {
         val namespace = testNamespace("happy")
         deleteNamespacePath(namespace)
-        val dbName = "r09b-happy.db"
+        val dbName = "preparation-happy.db"
         val database = openFileDb(dbName)
         try {
             seedRepresentativeFixture(database)

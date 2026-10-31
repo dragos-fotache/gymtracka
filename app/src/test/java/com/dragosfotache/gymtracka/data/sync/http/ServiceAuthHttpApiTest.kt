@@ -42,8 +42,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 
-// R03c QA: exact-body service-auth adapter over accepted R03a I/O and R03b parsing.
-// No production source inspected. Independent raw strings only.
+// exact-body service-auth adapter over accepted HTTP transport I/O and sync HTTP parsing.
+// Expected values are independent literal JSON strings.
 
 private const val CHALLENGE_ID = "11111111-1111-1111-1111-111111111111"
 private const val ACCOUNT_ID = "22222222-2222-2222-2222-222222222222"
@@ -369,7 +369,7 @@ class ServiceAuthHttpApiTest {
     }
 
     @Test fun classifyOuterWhitespaceHintsAreValid() {
-        // R03a strips outer SP/HTAB: padded hints remain valid bounded delays.
+        // strips outer SP/HTAB: padded hints remain valid bounded delays.
         for (v in listOf(" 1", "1 ", "\t1\t", "  299  ")) {
             val t = classifyAuthHttpFailure(AuthHttpOperation.CHALLENGE, 429, null, mapOf("Retry-After" to listOf(v)))
             val expected = if (v.trim().toLong() >= 300L) 300000L else v.trim().toLong() * 1000L

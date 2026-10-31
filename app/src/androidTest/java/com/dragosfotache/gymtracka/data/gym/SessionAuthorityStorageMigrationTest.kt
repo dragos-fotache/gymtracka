@@ -11,20 +11,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R09a independent QA: populated 11 -> 12 storage migration acceptance.
- *
- * Derived ONLY from docs/archive/remaining-work/R09a-task.md (additive
- * sync_session_authority, no fabricated authority) plus exported schemas 1-11
- * column facts and the existing SnapshotStorageMigrationTest harness pattern.
- * No production declarations/diffs, new schema12, Worker work or decompiled
- * classes inspected. Every seeded value is an independent literal; canonical
- * bodies are hand-authored bytes compared for exact preservation.
- *
- * The every-supported-start 1..11 -> 12 loop and copied-asset empty-new-table
- * check live in [GymDatabaseMigrationTest]; here a fully populated v11
- * migrates to 12 with every prior table byte-identical, sequence allocation
- * and FK/index schema preserved, and the single new authority table present
- * but empty.
+ * Checks populated 11 -> 12 migration with preserved prior rows, canonical bytes, sequence
+ * allocation, foreign keys and indexes. The new authority table starts empty; device/cache labels
+ * do not fabricate activation.
  */
 @RunWith(AndroidJUnit4::class)
 class SessionAuthorityStorageMigrationTest {

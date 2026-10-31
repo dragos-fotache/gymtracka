@@ -22,16 +22,9 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import java.util.UUID
 
 /**
- * R04b QA-owned fixtures only. No production declarations.
- *
- * Values derive from the R04b spec's supplied API facts plus the
- * coordinator-supplied model/fixture facts (result shapes, empty-response
- * bodies, rejected-outcome shape, `decodeDurableRequest` in
- * `data.sync.codec`). Never from production source inspection.
- *
  * ONE shared lease per activation: every helper builds a single lease per
  * vault activation; concurrent callers in a test share that lease, matching
- * the future foreground/background owner.
+ * the caller.
  */
 internal object RefreshTestFixtures {
     const val ACCOUNT_ID = "b5827485-c9d6-49aa-9578-7a2f637cb8bc"
@@ -140,7 +133,7 @@ internal object RefreshTestFixtures {
         return { throw error }
     }
 
-    // ---- Canned HTTP bodies (coordinator-supplied fixture facts) ----
+
 
     const val EMPTY_PUSH_BODY = """{"results":[]}"""
     const val EMPTY_PULL_BODY = """{"batches":[],"nextCursor":"same-input","hasMore":false}"""
@@ -174,7 +167,7 @@ internal object RefreshTestFixtures {
 
     fun reauthBody(): String = """{"errorCode":"reauthentication_required"}"""
 
-    // ---- Canonical wrapper fixtures (coordinator-supplied, verbatim shapes) ----
+
 
     const val MUT_A = "55555555-5555-5555-5555-555555555555"
     const val MUT_B = "66666666-6666-6666-6666-666666666666"
@@ -330,13 +323,13 @@ internal class FakeServiceAuthApi : ServiceAuthApi {
     override suspend fun challenge(
         purpose: com.dragosfotache.gymtracka.data.sync.api.GoogleChallengePurpose,
     ): com.dragosfotache.gymtracka.data.sync.api.ServiceChallenge {
-        throw UnsupportedOperationException("R04b uses refresh only")
+        throw UnsupportedOperationException("refresh uses refresh only")
     }
 
     override suspend fun exchange(
         attempt: com.dragosfotache.gymtracka.data.sync.api.GoogleExchangeAttempt,
     ): ServiceSession {
-        throw UnsupportedOperationException("R04b uses refresh only")
+        throw UnsupportedOperationException("refresh uses refresh only")
     }
 
     override suspend fun refresh(attempt: ServiceRefreshAttempt): ServiceSession {
@@ -349,7 +342,7 @@ internal class FakeServiceAuthApi : ServiceAuthApi {
     }
 
     override suspend fun logout(refreshToken: OpaqueToken) {
-        throw UnsupportedOperationException("R04b uses refresh only")
+        throw UnsupportedOperationException("refresh uses refresh only")
     }
 }
 

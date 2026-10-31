@@ -23,94 +23,90 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R12b independent QA: real-Room projection observation.
- *
- * Hand-written from docs/remaining-work/R12b-task.md only. Reuses existing
- * R05b/R05c builders and barriers; raw SQL oracles follow the exported Room12
- * schema. No DAO mocks, no production oracles, no R05 matrix repetition.
+ * real-Room projection observation.
  */
 class ProjectionObservationTest : GymDatabaseTest() {
     private fun accountRepo(
-        account: String? = R05B_ACCOUNT,
-        generation: Long = R05C_GENERATION,
+        account: String? = CANONICAL_ACCOUNT,
+        generation: Long = PROJECTION_GENERATION,
     ) = GymRepository(database, RepositorySession(account, generation))
 
     private suspend fun seedSelectedDevice() {
-        database.r05cSeedDevice(R05B_ACCOUNT, R05C_GENERATION)
+        database.projectionSeedDevice(CANONICAL_ACCOUNT, PROJECTION_GENERATION)
     }
 
     private suspend fun seedLookups() {
         insertMuscleGroups(
-            muscleGroupFixture(id = R05C_MUSCLE_PRIMARY, name = "Chest"),
-            muscleGroupFixture(id = R05C_MUSCLE_SECONDARY, name = "Shoulders"),
+            muscleGroupFixture(id = PROJECTION_MUSCLE_PRIMARY, name = "Chest"),
+            muscleGroupFixture(id = PROJECTION_MUSCLE_SECONDARY, name = "Shoulders"),
         )
-        insertEquipment(equipmentFixture(id = R05C_EQUIPMENT, name = "Dumbbell"))
-        insertExercises(exerciseFixture(id = R05C_BUNDLED, name = "Bench Press"))
+        insertEquipment(equipmentFixture(id = PROJECTION_EQUIPMENT, name = "Dumbbell"))
+        insertExercises(exerciseFixture(id = PROJECTION_BUNDLED, name = "Bench Press"))
     }
 
-    private fun customRecord(revision: Long = 1L, name: String = "Fly") = r05bCustomRecord(
-        id = R05B_CUSTOM_A,
+    private fun customRecord(revision: Long = 1L, name: String = "Fly") = canonicalCustomRecord(
+        id = CANONICAL_CUSTOM_A,
         name = name,
         revision = revision,
     )
 
     private fun workoutChange(
-        id: String = R05B_WORKOUT_A,
+        id: String = CANONICAL_WORKOUT_A,
         revision: Long = 1L,
         status: String = "active",
-        startedAt: String = R05B_STARTED_AT,
+        startedAt: String = CANONICAL_STARTED_AT,
         finishedAt: String? = null,
-        entryId: String = R05B_ENTRY_A1,
-        setId: String = R05B_SET_A1,
+        entryId: String = CANONICAL_ENTRY_A1,
+        setId: String = CANONICAL_SET_A1,
         completed: Boolean = false,
-    ) = r05bChange(
-        R05B_TYPE_WORKOUT,
+    ) = canonicalChange(
+        CANONICAL_TYPE_WORKOUT,
         id,
-        R05B_OP_UPSERT,
+        CANONICAL_OP_UPSERT,
         revision,
-        r05bWorkoutRecord(
+        canonicalWorkoutRecord(
             id = id,
             status = status,
             startedAt = startedAt,
             finishedAt = finishedAt,
             revision = revision,
-            exercises = r05bJsonArray(
-                r05bWorkoutEntry(
+            exercises = canonicalJsonArray(
+                canonicalWorkoutEntry(
                     id = entryId,
-                    exerciseId = R05B_CUSTOM_A,
+                    exerciseId = CANONICAL_CUSTOM_A,
                     exerciseName = "Stale Press",
-                    sets = r05bJsonArray(r05bWorkoutSet(id = setId, repetitions = 8, weightKg = 50.0, isCompleted = completed)),
+                    sets = canonicalJsonArray(canonicalWorkoutSet(id = setId, repetitions = 8, weightKg = 50.0, isCompleted = completed)),
                 ),
             ),
         ),
     )
 
     private fun historyChange(revision: Long = 1L) = workoutChange(
-        id = R05B_WORKOUT_B,
+        id = CANONICAL_WORKOUT_B,
         revision = revision,
         status = "finished",
-        startedAt = R05B_STARTED_AT,
-        finishedAt = R05B_FINISHED_AT,
-        entryId = R05B_ENTRY_A2,
-        setId = R05B_SET_A2,
+        startedAt = CANONICAL_STARTED_AT,
+        finishedAt = CANONICAL_FINISHED_AT,
+        entryId = CANONICAL_ENTRY_A2,
+        setId = CANONICAL_SET_A2,
         completed = true,
     )
 
-    private fun routineChange(revision: Long = 1L) = r05bChange(
-        R05B_TYPE_ROUTINE,
-        R05B_ROUTINE_B,
-        R05B_OP_UPSERT,
+    private fun routineChange(revision: Long = 1L) = canonicalChange(
+        CANONICAL_TYPE_ROUTINE,
+        CANONICAL_ROUTINE_B,
+        CANONICAL_OP_UPSERT,
         revision,
-        r05bRoutineRecord(
-            id = R05B_ROUTINE_B,
+        canonicalRoutineRecord(
+            id = CANONICAL_ROUTINE_B,
             name = "Legs",
             isDraft = false,
             revision = revision,
-            exercises = r05bJsonArray(
-                r05bRoutineEntry(
-                    exerciseId = R05B_CUSTOM_A,
+            exercises = canonicalJsonArray(
+                canonicalRoutineEntry(
+                    exerciseId = CANONICAL_CUSTOM_A,
                     exerciseName = "Stale Press",
-                    sets = r05bJsonArray(r05bRoutineSet(repetitions = 10, weightKg = 40.0)),
+                    sets = canonicalJsonArray(canonicalRoutineSet(repetitions = 10, weightKg = 40.0)),
                 ),
             ),
         ),
@@ -122,27 +118,27 @@ class ProjectionObservationTest : GymDatabaseTest() {
         workoutRevision: Long = 1L,
     ) {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, customRevision, customRecord(customRevision, customName)),
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, customRevision, customRecord(customRevision, customName)),
                 workoutChange(revision = workoutRevision),
             ),
         )
-        val result = database.r05cStore(barrier = r05cGrantBarrier()).publish(0L)
+        val result = database.projectionStore(barrier = projectionGrantBarrier()).publish(0L)
         assertEquals(ProjectionPublicationStatus.PUBLISHED, result.status)
     }
 
     private suspend fun publishFullGraph(customName: String = "Fly", customRevision: Long = 1L) {
         seedLookups()
-        database.r05cPreparePublication(
-            changes = r05bJsonArray(
-                r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, customRevision, customRecord(customRevision, customName)),
-                workoutChange(id = R05B_WORKOUT_A, revision = 1L),
+        database.projectionPreparePublication(
+            changes = canonicalJsonArray(
+                canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, customRevision, customRecord(customRevision, customName)),
+                workoutChange(id = CANONICAL_WORKOUT_A, revision = 1L),
                 historyChange(revision = 1L),
                 routineChange(revision = 1L),
             ),
         )
-        val result = database.r05cStore(barrier = r05cGrantBarrier()).publish(0L)
+        val result = database.projectionStore(barrier = projectionGrantBarrier()).publish(0L)
         assertEquals(ProjectionPublicationStatus.PUBLISHED, result.status)
     }
 
@@ -177,34 +173,34 @@ class ProjectionObservationTest : GymDatabaseTest() {
             assertEquals(1L, withTimeout(5_000) { epochs.receive() })
 
             // Canonical-only, dirty, foreign outbox and foreign cache progress: no new epoch.
-            database.r05cApplyCanonical(
-                r05bPull(
-                    batchId = R05B_BATCH_2,
-                    cursor = R05B_CURSOR_2,
-                    changes = r05bJsonArray(workoutChange(revision = 2L)),
+            database.projectionApplyCanonical(
+                canonicalPull(
+                    batchId = CANONICAL_BATCH_2,
+                    cursor = CANONICAL_CURSOR_2,
+                    changes = canonicalJsonArray(workoutChange(revision = 2L)),
                 ),
                 1L,
             )
-            database.r05cSetCache(R05B_ACCOUNT, projectionDirty = true)
-            database.r05cInsertOutbox(
+            database.projectionSetCache(CANONICAL_ACCOUNT, projectionDirty = true)
+            database.projectionInsertOutbox(
                 mutationId = "30000000-0000-4000-8000-000000000001",
-                account = R05B_OTHER_ACCOUNT,
+                account = CANONICAL_OTHER_ACCOUNT,
             )
-            database.r05cSeedCache(R05B_OTHER_ACCOUNT, true, 9L, false, 9L)
+            database.projectionSeedCache(CANONICAL_OTHER_ACCOUNT, true, 9L, false, 9L)
             assertNull(withTimeoutOrNull(1_000) { epochs.receive() })
 
-            database.r05cApplyCanonical(
-                r05bPull(
-                    batchId = R05B_BATCH_2,
-                    cursor = R05B_CURSOR_2,
-                    changes = r05bJsonArray(
-                        r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 2L, customRecord(2L, "Fly v2")),
+            database.projectionApplyCanonical(
+                canonicalPull(
+                    batchId = CANONICAL_BATCH_2,
+                    cursor = CANONICAL_CURSOR_2,
+                    changes = canonicalJsonArray(
+                        canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 2L, customRecord(2L, "Fly v2")),
                         workoutChange(revision = 2L),
                     ),
                 ),
                 1L,
             )
-            val second = database.r05cStore(barrier = r05cGrantBarrier()).publish(1L)
+            val second = database.projectionStore(barrier = projectionGrantBarrier()).publish(1L)
             assertEquals(ProjectionPublicationStatus.PUBLISHED, second.status)
             assertEquals(2L, withTimeout(5_000) { epochs.receive() })
             assertNull(withTimeoutOrNull(500) { epochs.receive() })
@@ -212,9 +208,9 @@ class ProjectionObservationTest : GymDatabaseTest() {
             // Revoking the selected session terminates the running stream fail-closed.
             database.syncDao().upsertDeviceState(
                 SyncDeviceStateEntity(
-                    activeAccountId = R05B_OTHER_ACCOUNT,
-                    cachedAccountId = R05B_OTHER_ACCOUNT,
-                    sessionGeneration = R05C_GENERATION,
+                    activeAccountId = CANONICAL_OTHER_ACCOUNT,
+                    cachedAccountId = CANONICAL_OTHER_ACCOUNT,
+                    sessionGeneration = PROJECTION_GENERATION,
                 ),
             )
             val failure = withTimeout(5_000) { errors.receive() }
@@ -232,18 +228,18 @@ class ProjectionObservationTest : GymDatabaseTest() {
         publishSimpleGraph()
         assertEquals(1L, accountRepo().observeProjectionEpoch().first())
 
-        database.r05cApplyCanonical(
-            r05bPull(
-                batchId = R05B_BATCH_2,
-                cursor = R05B_CURSOR_2,
-                changes = r05bJsonArray(
-                    r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 2L, customRecord(2L, "Fly v2")),
+        database.projectionApplyCanonical(
+            canonicalPull(
+                batchId = CANONICAL_BATCH_2,
+                cursor = CANONICAL_CURSOR_2,
+                changes = canonicalJsonArray(
+                    canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 2L, customRecord(2L, "Fly v2")),
                     workoutChange(revision = 2L),
                 ),
             ),
             1L,
         )
-        val second = database.r05cStore(barrier = r05cGrantBarrier()).publish(1L)
+        val second = database.projectionStore(barrier = projectionGrantBarrier()).publish(1L)
         assertEquals(ProjectionPublicationStatus.PUBLISHED, second.status)
         assertEquals(2L, accountRepo().observeProjectionEpoch().first())
     }
@@ -252,38 +248,38 @@ class ProjectionObservationTest : GymDatabaseTest() {
     fun equalParentRenameResolvesCurrentJoinedLabelsEverywhere() = runTest {
         publishFullGraph(customName = "Fly")
         val repo = accountRepo()
-        assertEquals("Fly", repo.workoutDetails(R05B_WORKOUT_A)!!.exercises.single().workoutExercise.exerciseName)
-        assertEquals("Fly", repo.workoutDetails(R05B_WORKOUT_B)!!.exercises.single().workoutExercise.exerciseName)
-        assertEquals("Fly", repo.routineDetails(R05B_ROUTINE_B)!!.exercises.single().routineExercise.exerciseName)
-        assertEquals("Fly", repo.exerciseDetails(R05B_CUSTOM_A)!!.exercise.name)
+        assertEquals("Fly", repo.workoutDetails(CANONICAL_WORKOUT_A)!!.exercises.single().workoutExercise.exerciseName)
+        assertEquals("Fly", repo.workoutDetails(CANONICAL_WORKOUT_B)!!.exercises.single().workoutExercise.exerciseName)
+        assertEquals("Fly", repo.routineDetails(CANONICAL_ROUTINE_B)!!.exercises.single().routineExercise.exerciseName)
+        assertEquals("Fly", repo.exerciseDetails(CANONICAL_CUSTOM_A)!!.exercise.name)
 
         // Parent revisions stay at 1 while only the custom rename advances: every
         // selected reference must resolve the current label, not stored stale text.
         // Only the custom rename advances; parents are untouched deltas and keep
         // revision 1 while every selected reference resolves the current label.
-        database.r05cApplyCanonical(
-            r05bPull(
-                batchId = R05B_BATCH_2,
-                cursor = R05B_CURSOR_2,
-                changes = r05bJsonArray(
-                    r05bChange(R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 2L, customRecord(2L, "Fly Renamed")),
+        database.projectionApplyCanonical(
+            canonicalPull(
+                batchId = CANONICAL_BATCH_2,
+                cursor = CANONICAL_CURSOR_2,
+                changes = canonicalJsonArray(
+                    canonicalChange(CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 2L, customRecord(2L, "Fly Renamed")),
                 ),
             ),
             1L,
         )
-        val result = database.r05cStore(barrier = r05cGrantBarrier()).publish(1L)
+        val result = database.projectionStore(barrier = projectionGrantBarrier()).publish(1L)
         assertEquals(ProjectionPublicationStatus.PUBLISHED, result.status)
         assertEquals(2L, repo.observeProjectionEpoch().first())
 
-        assertEquals("Fly Renamed", repo.workoutDetails(R05B_WORKOUT_A)!!.exercises.single().workoutExercise.exerciseName)
-        assertEquals("Fly Renamed", repo.workoutDetails(R05B_WORKOUT_B)!!.exercises.single().workoutExercise.exerciseName)
-        assertEquals("Fly Renamed", repo.routineDetails(R05B_ROUTINE_B)!!.exercises.single().routineExercise.exerciseName)
-        assertEquals("Fly Renamed", repo.exerciseDetails(R05B_CUSTOM_A)!!.exercise.name)
+        assertEquals("Fly Renamed", repo.workoutDetails(CANONICAL_WORKOUT_A)!!.exercises.single().workoutExercise.exerciseName)
+        assertEquals("Fly Renamed", repo.workoutDetails(CANONICAL_WORKOUT_B)!!.exercises.single().workoutExercise.exerciseName)
+        assertEquals("Fly Renamed", repo.routineDetails(CANONICAL_ROUTINE_B)!!.exercises.single().routineExercise.exerciseName)
+        assertEquals("Fly Renamed", repo.exerciseDetails(CANONICAL_CUSTOM_A)!!.exercise.name)
         val historyLabels = repo.finishedWorkoutSummaries().flatMap { summary -> summary.exercises.map { it.exerciseName } }
         assertTrue(historyLabels.contains("Fly Renamed"))
         val routineLabels = repo.savedRoutineDetails().single().exercises.map { it.routineExercise.exerciseName }
         assertEquals(listOf("Fly Renamed"), routineLabels)
-        val catalogueNames = repo.exerciseSummaries().filter { it.exercise.id == R05B_CUSTOM_A }.map { it.exercise.name }
+        val catalogueNames = repo.exerciseSummaries().filter { it.exercise.id == CANONICAL_CUSTOM_A }.map { it.exercise.name }
         assertEquals(listOf("Fly Renamed"), catalogueNames)
     }
 
@@ -292,45 +288,45 @@ class ProjectionObservationTest : GymDatabaseTest() {
         publishSimpleGraph()
         assertEquals(1L, accountRepo().observeProjectionEpoch().first())
 
-        database.r05cApplyCanonical(
-            r05bPull(
-                batchId = R05B_BATCH_2,
-                cursor = R05B_CURSOR_2,
-                changes = r05bJsonArray(workoutChange(revision = 2L)),
+        database.projectionApplyCanonical(
+            canonicalPull(
+                batchId = CANONICAL_BATCH_2,
+                cursor = CANONICAL_CURSOR_2,
+                changes = canonicalJsonArray(workoutChange(revision = 2L)),
             ),
             1L,
         )
         assertEquals(1L, accountRepo().observeProjectionEpoch().first())
 
-        database.r05cSetCache(R05B_ACCOUNT, projectionDirty = true)
-        database.r05cInsertOutbox(mutationId = "30000000-0000-4000-8000-000000000001")
+        database.projectionSetCache(CANONICAL_ACCOUNT, projectionDirty = true)
+        database.projectionInsertOutbox(mutationId = "30000000-0000-4000-8000-000000000001")
         assertEquals(1L, accountRepo().observeProjectionEpoch().first())
 
         // Baseline progress alone (cache epoch advances while materialized stays put)
         // is not a publication signal: the observed value must stay at materialized 1.
-        database.r05cSetCache(R05B_ACCOUNT, cacheEpoch = 2L)
+        database.projectionSetCache(CANONICAL_ACCOUNT, cacheEpoch = 2L)
         assertEquals(1L, accountRepo().observeProjectionEpoch().first())
 
-        database.r05cSeedCache(R05B_OTHER_ACCOUNT, true, 9L, false, 9L)
+        database.projectionSeedCache(CANONICAL_OTHER_ACCOUNT, true, 9L, false, 9L)
         assertEquals(1L, accountRepo().observeProjectionEpoch().first())
         try {
-            accountRepo(R05B_OTHER_ACCOUNT).observeProjectionEpoch().first()
+            accountRepo(CANONICAL_OTHER_ACCOUNT).observeProjectionEpoch().first()
             fail("Foreign scope must stay fenced while device selects A")
         } catch (_: StaleSessionException) {
         }
         database.syncDao().upsertDeviceState(
             SyncDeviceStateEntity(
-                activeAccountId = R05B_OTHER_ACCOUNT,
-                cachedAccountId = R05B_OTHER_ACCOUNT,
-                sessionGeneration = R05C_GENERATION,
+                activeAccountId = CANONICAL_OTHER_ACCOUNT,
+                cachedAccountId = CANONICAL_OTHER_ACCOUNT,
+                sessionGeneration = PROJECTION_GENERATION,
             ),
         )
-        assertEquals(9L, accountRepo(R05B_OTHER_ACCOUNT).observeProjectionEpoch().first())
+        assertEquals(9L, accountRepo(CANONICAL_OTHER_ACCOUNT).observeProjectionEpoch().first())
         database.syncDao().upsertDeviceState(
             SyncDeviceStateEntity(
-                activeAccountId = R05B_ACCOUNT,
-                cachedAccountId = R05B_ACCOUNT,
-                sessionGeneration = R05C_GENERATION,
+                activeAccountId = CANONICAL_ACCOUNT,
+                cachedAccountId = CANONICAL_ACCOUNT,
+                sessionGeneration = PROJECTION_GENERATION,
             ),
         )
         assertEquals(1L, accountRepo().observeProjectionEpoch().first())
@@ -340,18 +336,18 @@ class ProjectionObservationTest : GymDatabaseTest() {
     fun rollbackAndNoOpIsolationKeepEpoch() = runTest {
         publishSimpleGraph()
         assertEquals(1L, accountRepo().observeProjectionEpoch().first())
-        val before = database.r05cDumpAll()
+        val before = database.projectionDumpAll()
 
-        val unchanged = database.r05cStore(barrier = r05cGrantBarrier()).publish(1L)
+        val unchanged = database.projectionStore(barrier = projectionGrantBarrier()).publish(1L)
         assertEquals(ProjectionPublicationStatus.UNCHANGED, unchanged.status)
         assertEquals(1L, unchanged.materializedEpoch)
         assertEquals(1L, accountRepo().observeProjectionEpoch().first())
-        assertEquals(before, database.r05cDumpAll())
+        assertEquals(before, database.projectionDumpAll())
 
-        val lease = R05cTestLease()
+        val lease = ProjectionTestLease()
         lease.revoke()
         try {
-            database.r05cStore(barrier = r05cGrantBarrier(lease)).publish(1L)
+            database.projectionStore(barrier = projectionGrantBarrier(lease)).publish(1L)
             fail("Expected revoked lease failure")
         } catch (_: com.dragosfotache.gymtracka.data.sync.store.ProjectionLeaseInvalidException) {
         }
@@ -361,7 +357,7 @@ class ProjectionObservationTest : GymDatabaseTest() {
     @Test
     fun staleSessionNeverFollowsNewScope() = runTest {
         publishSimpleGraph()
-        val stale = accountRepo(generation = R05C_GENERATION - 1)
+        val stale = accountRepo(generation = PROJECTION_GENERATION - 1)
         try {
             stale.observeProjectionEpoch().first()
             fail("Expected StaleSessionException")
@@ -370,9 +366,9 @@ class ProjectionObservationTest : GymDatabaseTest() {
 
         database.syncDao().upsertDeviceState(
             SyncDeviceStateEntity(
-                activeAccountId = R05B_OTHER_ACCOUNT,
-                cachedAccountId = R05B_OTHER_ACCOUNT,
-                sessionGeneration = R05C_GENERATION,
+                activeAccountId = CANONICAL_OTHER_ACCOUNT,
+                cachedAccountId = CANONICAL_OTHER_ACCOUNT,
+                sessionGeneration = PROJECTION_GENERATION,
             ),
         )
         try {
@@ -381,11 +377,11 @@ class ProjectionObservationTest : GymDatabaseTest() {
         } catch (_: StaleSessionException) {
         }
         try {
-            stale.workoutDetails(R05B_WORKOUT_A)
+            stale.workoutDetails(CANONICAL_WORKOUT_A)
             fail("Stale reads must never follow account B")
         } catch (_: StaleSessionException) {
         }
-        assertNull(accountRepo(R05B_OTHER_ACCOUNT).workoutDetails(R05B_WORKOUT_A))
+        assertNull(accountRepo(CANONICAL_OTHER_ACCOUNT).workoutDetails(CANONICAL_WORKOUT_A))
     }
 
     @Test
@@ -403,7 +399,7 @@ class ProjectionObservationTest : GymDatabaseTest() {
     @Test
     fun negativeMetadataFailsClosedWithoutVisiblePublication() = runTest {
         publishSimpleGraph()
-        database.r05cSetCache(R05B_ACCOUNT, materializedEpoch = 5L)
+        database.projectionSetCache(CANONICAL_ACCOUNT, materializedEpoch = 5L)
         try {
             accountRepo().observeProjectionEpoch().first()
             fail("Out-of-range materialized epoch must fail closed")
@@ -416,6 +412,6 @@ class ProjectionObservationTest : GymDatabaseTest() {
         } catch (e: Exception) {
             assertTrue(e !is StaleSessionException)
         }
-        assertTrue(database.r05cQuery("SELECT id FROM workouts WHERE id = ?", arrayOf(R05B_WORKOUT_A)).isNotEmpty())
+        assertTrue(database.projectionQuery("SELECT id FROM workouts WHERE id = ?", arrayOf(CANONICAL_WORKOUT_A)).isNotEmpty())
     }
 }

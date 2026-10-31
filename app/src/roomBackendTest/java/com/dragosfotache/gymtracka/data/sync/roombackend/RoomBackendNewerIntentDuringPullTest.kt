@@ -20,7 +20,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R10a matrix 3: newer local intent during an actual pull.
+ * RoomBackend matrix 3: newer local intent during an actual pull.
  *
  * A populated workout plus its custom settle into BOTH stores first. B commits
  * a remote rename/notes edit. A starts delivery with the real pull response
@@ -37,34 +37,34 @@ import org.junit.runner.RunWith
 class RoomBackendNewerIntentDuringPullTest {
 
     companion object {
-        const val SETTLED_NAME = "R10a Settled Intent"
-        const val SETTLED_NOTES = "R10a settled notes"
-        const val REMOTE_NAME = "R10a Remote Rename"
-        const val REMOTE_NOTES = "R10a remote notes"
-        const val LOCAL_NAME = "R10a Local Rename"
-        const val LOCAL_NOTES = "R10a local notes"
+        const val SETTLED_NAME = "RoomBackend Settled Intent"
+        const val SETTLED_NOTES = "RoomBackend settled notes"
+        const val REMOTE_NAME = "RoomBackend Remote Rename"
+        const val REMOTE_NOTES = "RoomBackend remote notes"
+        const val LOCAL_NAME = "RoomBackend Local Rename"
+        const val LOCAL_NOTES = "RoomBackend local notes"
         const val STARTED_AT_MILLIS = 1_790_259_300_000L
     }
 
     @Test
     fun newerLocalIntentDuringActualPull() = runBlocking(Dispatchers.IO) {
-        val inputs = r10aRequireInputs()
-        val transport = r10aNewTransport(inputs)
+        val inputs = roomBackendRequireInputs()
+        val transport = roomBackendNewTransport(inputs)
         try {
-            val account = r10aMintAccount(transport, inputs.port)
+            val account = roomBackendMintAccount(transport, inputs.port)
             val context = InstrumentationRegistry.getInstrumentation().targetContext
-            val storeA = r10aOpenStore(context, "intent-a", account.accountId)
-            val storeB = r10aOpenStore(context, "intent-b", account.accountId)
+            val storeA = roomBackendOpenStore(context, "intent-a", account.accountId)
+            val storeB = roomBackendOpenStore(context, "intent-b", account.accountId)
             try {
-                val apiA = r10aNewApi(transport, account)
-                val apiB = r10aNewApi(transport, account)
-                r10aSnapshotConverge(storeA, account.accountId, apiA, R10aTestLease())
-                r10aSnapshotConverge(storeB, account.accountId, apiB, R10aTestLease())
+                val apiA = roomBackendNewApi(transport, account)
+                val apiB = roomBackendNewApi(transport, account)
+                roomBackendSnapshotConverge(storeA, account.accountId, apiA, RoomBackendTestLease())
+                roomBackendSnapshotConverge(storeB, account.accountId, apiB, RoomBackendTestLease())
 
                 // Settle a populated workout plus its custom into BOTH stores.
                 val repoB = storeB.repository()
                 val customId = repoB.createCustomExercise(
-                    "R10a Intent Press", null, emptySet(), null, null, "",
+                    "RoomBackend Intent Press", null, emptySet(), null, null, "",
                 )
                 val settled = repoB.startEmptyWorkout(STARTED_AT_MILLIS)
                 repoB.updateWorkoutName(settled.id, SETTLED_NAME)
@@ -77,9 +77,9 @@ class RoomBackendNewerIntentDuringPullTest {
                         settledEntry.sets.single().copy(repetitions = 6, weightKg = 45.0, isCompleted = true),
                     ),
                 )
-                assertNotNull(r10aDeliverAndPublish(storeB, account.accountId, apiB, R10aTestLease()).second)
+                assertNotNull(roomBackendDeliverAndPublish(storeB, account.accountId, apiB, RoomBackendTestLease()).second)
                 assertNotNull(
-                    r10aDeliverAndPublish(storeA, account.accountId, apiA, R10aTestLease()).second,
+                    roomBackendDeliverAndPublish(storeA, account.accountId, apiA, RoomBackendTestLease()).second,
                 )
                 assertEquals(
                     SETTLED_NAME,
@@ -90,14 +90,14 @@ class RoomBackendNewerIntentDuringPullTest {
                 repoB.updateWorkoutName(settled.id, REMOTE_NAME)
                 repoB.updateWorkoutExerciseNotes(entryId, REMOTE_NOTES)
                 assertNotNull(
-                    r10aDeliverAndPublish(storeB, account.accountId, apiB, R10aTestLease()).second,
+                    roomBackendDeliverAndPublish(storeB, account.accountId, apiB, RoomBackendTestLease()).second,
                 )
 
                 // A starts delivery with the received real pull response gated.
                 val gate = CompletableDeferred<Unit>()
-                val gated = R10aGatePullApi(apiA, gate)
+                val gated = RoomBackendGatePullApi(apiA, gate)
                 val pushStoreA = PushStore(storeA.database, storeA.session, storeA.owner)
-                val epochA = r10aDurableEpoch(storeA.database, account.accountId)
+                val epochA = roomBackendDurableEpoch(storeA.database, account.accountId)
                 val pending = async(Dispatchers.IO) {
                     pushStoreA.withRun(epochA) { run ->
                         SyncDeliveryLoop(pushStoreA, gated).deliver(run)
@@ -109,7 +109,7 @@ class RoomBackendNewerIntentDuringPullTest {
                 val repoA = storeA.repository()
                 repoA.updateWorkoutName(settled.id, LOCAL_NAME)
                 repoA.updateWorkoutExerciseNotes(entryId, LOCAL_NOTES)
-                val pendingRows = storeA.database.r10aOutboxRows(account.accountId)
+                val pendingRows = storeA.database.roomBackendOutboxRows(account.accountId)
                 assertTrue("A must hold the newer intent", pendingRows.isNotEmpty())
 
                 // Release the held actual production pull response.
@@ -120,12 +120,12 @@ class RoomBackendNewerIntentDuringPullTest {
 
                 // Paired publication must stay PROTECTED: remote canonical applies
                 // but the remote domain is NOT materialized.
-                val leaseA = R10aTestLease()
+                val leaseA = RoomBackendTestLease()
                 val guarded = pushStoreA.withRun(
-                    r10aDurableEpoch(storeA.database, account.accountId),
+                    roomBackendDurableEpoch(storeA.database, account.accountId),
                 ) { run ->
                     run.publishProjection(
-                        ProjectionStore(storeA.database, storeA.session, R10aRecordingBarrier(leaseA)),
+                        ProjectionStore(storeA.database, storeA.session, RoomBackendRecordingBarrier(leaseA)),
                     )
                 }
                 assertEquals(ProjectionPublicationStatus.PROTECTED, guarded.status)
@@ -141,7 +141,7 @@ class RoomBackendNewerIntentDuringPullTest {
                 )
                 val canonicalObj = JSONObject(
                     checkNotNull(
-                        storeA.database.r10aReadCanonicalJson(account.accountId, "workout", settled.id),
+                        storeA.database.roomBackendReadCanonicalJson(account.accountId, "workout", settled.id),
                     ) { "remote canonical must apply under PROTECTED" },
                 )
                 assertEquals(REMOTE_NAME, canonicalObj.getString("name"))
@@ -155,16 +155,16 @@ class RoomBackendNewerIntentDuringPullTest {
                 assertEquals(
                     "PROTECTED must preserve the exact pending wrapper/generation",
                     pendingRows,
-                    storeA.database.r10aOutboxRows(account.accountId),
+                    storeA.database.roomBackendOutboxRows(account.accountId),
                 )
 
                 // After A sends the later complete upsert, both converge.
                 assertNotNull(
-                    r10aDeliverAndPublish(
-                        storeA, account.accountId, r10aNewApi(transport, account), R10aTestLease(),
+                    roomBackendDeliverAndPublish(
+                        storeA, account.accountId, roomBackendNewApi(transport, account), RoomBackendTestLease(),
                     ).second,
                 )
-                assertNotNull(r10aDeliverAndPublish(storeB, account.accountId, apiB, R10aTestLease()).second)
+                assertNotNull(roomBackendDeliverAndPublish(storeB, account.accountId, apiB, RoomBackendTestLease()).second)
                 for ((label, store) in listOf("A" to storeA, "B" to storeB)) {
                     val final = checkNotNull(store.repository().workoutDetails(settled.id)) {
                         "$label must converge on the sole-active root"
@@ -182,16 +182,16 @@ class RoomBackendNewerIntentDuringPullTest {
                     assertEquals(
                         "$label canonical winner",
                         "upsert",
-                        checkNotNull(store.database.r10aReadCanonical(account.accountId, "workout", settled.id))
+                        checkNotNull(store.database.roomBackendReadCanonical(account.accountId, "workout", settled.id))
                             .canonicalState,
                     )
-                    r10aAssertOutboxEmpty(store.database, account.accountId, "$label converged")
+                    roomBackendAssertOutboxEmpty(store.database, account.accountId, "$label converged")
                 }
-                r10aAssertQuiescentTail(storeA, account.accountId, apiA, "A quiescent")
-                r10aAssertQuiescentTail(storeB, account.accountId, apiB, "B quiescent")
+                roomBackendAssertQuiescentTail(storeA, account.accountId, apiA, "A quiescent")
+                roomBackendAssertQuiescentTail(storeB, account.accountId, apiB, "B quiescent")
             } finally {
-                r10aCloseAndDelete(context, storeA)
-                r10aCloseAndDelete(context, storeB)
+                roomBackendCloseAndDelete(context, storeA)
+                roomBackendCloseAndDelete(context, storeB)
             }
         } finally {
             transport.client.dispatcher.executorService.shutdown()

@@ -7,7 +7,7 @@ import com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid
 /**
  * SDK-independent identity/token boundary, without implementation. Android
  * Activity, Google SDK, HTTP, and vault types are constructor concerns for
- * later adapters and never appear in method or model types here.
+ * transport adapters and never appear in method or model types here.
  *
  * Field mapping follows authentication.md: the service account UUID and
  * nullable display name, the challenge UUID/nonce/expiry, and the grant
@@ -92,8 +92,7 @@ data class ServiceSession(
 /**
  * Foreground identity provider. Obtains an opaque Google identity credential
  * for a supplied server nonce and can clear credential state. No interactive
- * credential UI may run from a worker; that restriction belongs to the later
- * Android adapter.
+ * credential UI may run from a worker; that restriction belongs to the Activity-owned Android adapter.
  */
 interface GoogleIdentityProvider {
     suspend fun credentialFor(nonce: String): OpaqueToken
@@ -114,7 +113,7 @@ interface GoogleIdentityProvider {
  * sign-out itself always succeeds offline and is handled outside this
  * interface.
  *
- * Future retry orchestration retains and reuses a typed attempt. Repeatedly
+ * Retry orchestration retains and reuses a typed attempt. Repeatedly
  * invoking a convenience method captures a fresh body each time and is not
  * durable recovery; only the typed methods preserve arbitrary restored bytes.
  */

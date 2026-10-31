@@ -51,7 +51,7 @@ internal enum class GrantOutcome {
 }
 
 /**
- * R12a app-owned admission barrier for finite local edits and timer publication leases.
+ * app-owned admission barrier for finite local edits and timer publication leases.
  *
  * Production constructs no engine or publisher here: this coordinator only serializes accepted
  * finite writes, retains their outcomes by stable mutation identity, and fences publication
@@ -169,7 +169,7 @@ internal class FiniteEditCoordinator(private val scope: CoroutineScope) {
     private val disposedCause = CancellationException("FiniteEditCoordinator is disposed")
 
     /**
-     * R13d monotonic conflated successful-commit notification. Incremented exactly once per
+     * monotonic conflated successful-commit notification. Incremented exactly once per
      * [settleSuccess] (normal, exclusive and terminal commits); failed, cancelled, refused
      * and untracked work never advances it. The counter saturates at [Long.MAX_VALUE] rather
      * than wrapping or throwing after persistence, so late observers never observe a

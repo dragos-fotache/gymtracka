@@ -25,7 +25,7 @@ import org.junit.runner.RunWith
 import java.util.concurrent.TimeUnit
 
 /**
- * R03a QA Android smoke (API 37 execution only; API 24 image absent — no min-API claim).
+ * tests Android smoke (API 37 execution only; API 24 image absent — no min-API claim).
  * Target application context: INTERNET permission, cleartext policy, unconfigured
  * construction and local-CA HTTPS/cancellation where feasible. No personal
  * account or app configuration touched.

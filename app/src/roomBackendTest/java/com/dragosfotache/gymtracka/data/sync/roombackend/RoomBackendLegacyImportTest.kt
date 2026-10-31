@@ -54,25 +54,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R13b independent QA: isolated black-box Room HTTP import-to-activation.
- *
- * Derived ONLY from docs/archive/remaining-work/R13b-task.md (settlement/consent/
- * activation sequencing, risk obligation 8), docs/archive/remaining-work/R13b-harness.md
- * (real relay controls, TLS transport, `/__r10__/same-account-session`
- * contract, vault namespace/alias patterns) and coordinator-supplied missing
- * contracts (typed transient stops, real-collision procedure, ack-rollback
- * trigger, completion-gap lease fault, snapshot-only failure wrapper).
- * Local graphs are seeded genuinely local — default null-account repository
- * or raw local SQL, never an account claim. Domain successes come from the
- * real backend only; wrappers gate/drop real responses or fail selected
- * phases, never synthesize domain data. No backend source, config, host
- * implementation, production diagnostics or production-encoder output
- * inspected. All seeds are this slice's own literals with exact byte
- * equality, never substrings.
- *
- * Requires coordinator relay args (`roomBackendPort`, `roomBackendCertificate`)
- * and the same-account-session host gate; missing inputs FAIL, never skip.
- * Live readiness is coordinator-owned (Docker restoration pending).
+ * Real Room/HTTP import-to-activation checks seed local graphs through the null-account repository
+ * or raw local SQL. Wrappers gate/drop real responses or fail phases without fabricating domain
+ * success. Requires roomBackendPort, roomBackendCertificate and the same-account-session relay
+ * endpoint; missing inputs fail.
  */
 @RunWith(AndroidJUnit4::class)
 class RoomBackendLegacyImportTest {
@@ -103,11 +88,11 @@ class RoomBackendLegacyImportTest {
         override suspend fun challenge(
             purpose: com.dragosfotache.gymtracka.data.sync.api.GoogleChallengePurpose,
         ): com.dragosfotache.gymtracka.data.sync.api.ServiceChallenge =
-            throw UnsupportedOperationException("R13b relay grants only")
+            throw UnsupportedOperationException("import relay grants only")
 
         override suspend fun exchange(
             attempt: com.dragosfotache.gymtracka.data.sync.api.GoogleExchangeAttempt,
-        ): ServiceSession = throw UnsupportedOperationException("R13b relay grants only")
+        ): ServiceSession = throw UnsupportedOperationException("import relay grants only")
 
         override suspend fun refresh(attempt: ServiceRefreshAttempt): ServiceSession =
             throw SyncApiException.Transient()
@@ -145,9 +130,9 @@ class RoomBackendLegacyImportTest {
                 .request(httpRequest)
                 .protocol(Protocol.HTTP_1_1)
                 .code(500)
-                .message("R13b snapshot down")
+                .message("import snapshot down")
                 .header("Content-Type", "application/json")
-                .body("""{"error":"r13b-snapshot-down"}""".toResponseBody("application/json".toMediaType()))
+                .body("""{"error":"import-snapshot-down"}""".toResponseBody("application/json".toMediaType()))
                 .build()
             val wire = ServiceHttpResponse(callClient.newCall(httpRequest), httpResponse)
             try {
@@ -165,10 +150,10 @@ class RoomBackendLegacyImportTest {
     )
 
     private suspend fun mintSessionGrant(
-        transport: R10aTransport,
+        transport: RoomBackendTransport,
         port: Int,
     ): Grant {
-        val body = r10aPostControl(transport, port, "/__r10__/session", bearer = null)
+        val body = roomBackendPostControl(transport, port, "/__test__/session", bearer = null)
         val json = JSONObject(body)
         val accountId = json.getString("accountId")
         val accessToken = json.getString("accessToken")
@@ -183,11 +168,11 @@ class RoomBackendLegacyImportTest {
     }
 
     private suspend fun mintSameAccountGrant(
-        transport: R10aTransport,
+        transport: RoomBackendTransport,
         port: Int,
         bearer: String,
     ): Grant {
-        val body = r10aPostControl(transport, port, "/__r10__/same-account-session", bearer = bearer)
+        val body = roomBackendPostControl(transport, port, "/__test__/same-account-session", bearer = bearer)
         val json = JSONObject(body)
         val accountId = json.getString("accountId")
         val accessToken = json.getString("accessToken")
@@ -209,7 +194,7 @@ class RoomBackendLegacyImportTest {
     private fun reopenDb(context: Context, name: String): GymDatabase =
         Room.databaseBuilder(context, GymDatabase::class.java, name).build()
 
-    private fun vaultNamespace(): String = "gymtracka-test-r13b-${UUID.randomUUID()}"
+    private fun vaultNamespace(): String = "gymtracka-test-import-${UUID.randomUUID()}"
 
     private fun testAlias(namespace: String): String =
         "com.dragosfotache.gymtracka.session.$namespace"
@@ -244,9 +229,9 @@ class RoomBackendLegacyImportTest {
     /** Genuinely local seed: default null-account repository, never an account claim. */
     private suspend fun seedLocalGraph(database: GymDatabase) {
         val repository = GymRepository(database)
-        val customId = repository.createCustomExercise("R13b Live Press", null, emptySet(), null, null, "")
+        val customId = repository.createCustomExercise("import Live Press", null, emptySet(), null, null, "")
         val workout = repository.startEmptyWorkout(1_790_259_200_000L)
-        repository.updateWorkoutName(workout.id, "R13b Live W")
+        repository.updateWorkoutName(workout.id, "import Live W")
         repository.addExercisesToWorkout(workout.id, listOf(customId))
     }
 
@@ -296,13 +281,13 @@ class RoomBackendLegacyImportTest {
 
     @Test
     fun fileCapture_survivesCloseReopenWithActualVaultAndExactReplay() {
-        val inputs = r10aRequireInputs()
-        val transport = r10aNewTransport(inputs)
+        val inputs = roomBackendRequireInputs()
+        val transport = roomBackendNewTransport(inputs)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         runBlocking {
-            val account = r10aMintAccount(transport, inputs.port)
+            val account = roomBackendMintAccount(transport, inputs.port)
             val namespace = vaultNamespace()
-            val name = "r13b-reopen-${UUID.randomUUID()}.db"
+            val name = "import-reopen-${UUID.randomUUID()}.db"
             try {
                 var database = fileDb(context, name)
                 assertNotNull(AndroidSessionVault.createForTesting(context, namespace))
@@ -354,13 +339,13 @@ class RoomBackendLegacyImportTest {
 
     @Test
     fun sharedUuidCrossFamily_survivesReopenWithPerFamilyBinding() {
-        val inputs = r10aRequireInputs()
-        val transport = r10aNewTransport(inputs)
+        val inputs = roomBackendRequireInputs()
+        val transport = roomBackendNewTransport(inputs)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         runBlocking {
-            val account = r10aMintAccount(transport, inputs.port)
+            val account = roomBackendMintAccount(transport, inputs.port)
             val namespace = vaultNamespace()
-            val name = "r13b-shared-${UUID.randomUUID()}.db"
+            val name = "import-shared-${UUID.randomUUID()}.db"
             val shared = "99999999-d13b-4d13-8d13-d13bd13bd13b"
             val sharedRe = "f1000013-d13b-4d13-8d13-d13bd13bd13b"
             val sharedRs = "f2000013-d13b-4d13-8d13-d13bd13bd13b"
@@ -462,13 +447,13 @@ class RoomBackendLegacyImportTest {
 
     @Test
     fun wholeGraphJourney_realBackendDeliversAllFamilies() {
-        val inputs = r10aRequireInputs()
-        val transport = r10aNewTransport(inputs)
+        val inputs = roomBackendRequireInputs()
+        val transport = roomBackendNewTransport(inputs)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         runBlocking {
             val grant = mintSessionGrant(transport, inputs.port)
             val namespace = vaultNamespace()
-            val name = "r13b-whole-${UUID.randomUUID()}.db"
+            val name = "import-whole-${UUID.randomUUID()}.db"
             // Mutable roots/children use independently generated per-test
             // canonical UUIDs: no global cross-account ID reservations on reruns.
             // Pinned/shared catalogue identities come from the bundled asset DB
@@ -508,7 +493,7 @@ class RoomBackendLegacyImportTest {
                         "INSERT INTO exercises (id, name, type, difficulty_level, force_type, mechanics, category," +
                             " instructions, is_user_created, account_id, server_revision, local_generation," +
                             " sync_state, deleted_at_millis)" +
-                            " VALUES ('$customRich', 'R13b Rich', 'reps', 'beginner', 'push', 'compound'," +
+                            " VALUES ('$customRich', 'import Rich', 'reps', 'beginner', 'push', 'compound'," +
                             " 'strength', '[\"One\",\"Two\"]', 1, NULL, NULL, 3, 'local_only', NULL)",
                     )
                     db.execSQL("INSERT INTO exercise_muscle_groups (exercise_id, muscle_group_id, type) VALUES ('$customRich', '$muscle', 'primary')")
@@ -517,7 +502,7 @@ class RoomBackendLegacyImportTest {
                         "INSERT INTO exercises (id, name, type, difficulty_level, force_type, mechanics, category," +
                             " instructions, is_user_created, account_id, server_revision, local_generation," +
                             " sync_state, deleted_at_millis)" +
-                            " VALUES ('$customMin', 'R13b Min', 'reps', NULL, NULL, NULL, 'strength'," +
+                            " VALUES ('$customMin', 'import Min', 'reps', NULL, NULL, NULL, 'strength'," +
                             " NULL, 1, NULL, NULL, 1, 'local_only', NULL)",
                     )
                     db.execSQL(
@@ -533,7 +518,7 @@ class RoomBackendLegacyImportTest {
                     db.execSQL(
                         "INSERT INTO routines (id, name, is_draft, account_id, server_revision, local_generation," +
                             " sync_state, deleted_at_millis)" +
-                            " VALUES ('$routinePop', 'R13b Populated', 0, NULL, NULL, 6, 'local_only', NULL)",
+                            " VALUES ('$routinePop', 'import Populated', 0, NULL, NULL, 6, 'local_only', NULL)",
                     )
                     db.execSQL(
                         "INSERT INTO routine_exercises (id, routine_id, exercise_id, position, rest_duration_seconds)" +
@@ -546,7 +531,7 @@ class RoomBackendLegacyImportTest {
                     db.execSQL(
                         "INSERT INTO workouts (id, name, started_at_millis, finished_at_millis, status, account_id," +
                             " server_revision, local_generation, sync_state, deleted_at_millis)" +
-                            " VALUES ('$workoutFin', 'R13b Finished', 1000, 2000, 'finished', NULL, NULL, 4," +
+                            " VALUES ('$workoutFin', 'import Finished', 1000, 2000, 'finished', NULL, NULL, 4," +
                             " 'local_only', NULL)",
                     )
                     db.execSQL(
@@ -560,7 +545,7 @@ class RoomBackendLegacyImportTest {
                     db.execSQL(
                         "INSERT INTO workouts (id, name, started_at_millis, finished_at_millis, status, account_id," +
                             " server_revision, local_generation, sync_state, deleted_at_millis)" +
-                            " VALUES ('$workoutAct', 'R13b Active', 5000, NULL, 'active', NULL, NULL, 5," +
+                            " VALUES ('$workoutAct', 'import Active', 5000, NULL, 'active', NULL, NULL, 5," +
                             " 'local_only', NULL)",
                     )
                     db.execSQL(
@@ -634,7 +619,7 @@ class RoomBackendLegacyImportTest {
                     // Full materialization: names, draft/saved flags, children,
                     // references, nullable fields and optional metadata survive.
                     assertEquals(
-                        "R13b Rich",
+                        "import Rich",
                         rows(database, "SELECT name FROM exercises WHERE id = '$customRich'", 1).single()[0],
                     )
                     assertEquals(
@@ -654,11 +639,11 @@ class RoomBackendLegacyImportTest {
                         ),
                     )
                     assertEquals(
-                        "R13b Finished",
+                        "import Finished",
                         rows(database, "SELECT name FROM workouts WHERE id = '$workoutFin'", 1).single()[0],
                     )
                     assertEquals(
-                        "R13b Active",
+                        "import Active",
                         rows(database, "SELECT name FROM workouts WHERE id = '$workoutAct'", 1).single()[0],
                     )
                     database.openHelper.readableDatabase.query(
@@ -775,10 +760,10 @@ class RoomBackendLegacyImportTest {
 
     @Test
     fun sameAccountSessionControl_returnsCompleteGrantShapeWithoutLogging() {
-        val inputs = r10aRequireInputs()
-        val transport = r10aNewTransport(inputs)
+        val inputs = roomBackendRequireInputs()
+        val transport = roomBackendNewTransport(inputs)
         runBlocking {
-            val account = r10aMintAccount(transport, inputs.port)
+            val account = roomBackendMintAccount(transport, inputs.port)
             val grant = mintSameAccountGrant(transport, inputs.port, account.accessToken)
             assertEquals(account.accountId, grant.accountId)
             val rendered = grant.session.toString()
@@ -790,23 +775,23 @@ class RoomBackendLegacyImportTest {
 
     @Test
     fun loseNextPushControl_acceptedForRelayAccount() {
-        val inputs = r10aRequireInputs()
-        val transport = r10aNewTransport(inputs)
+        val inputs = roomBackendRequireInputs()
+        val transport = roomBackendNewTransport(inputs)
         runBlocking {
-            val account = r10aMintAccount(transport, inputs.port)
-            r10aLoseNextPush(transport, inputs.port, account)
+            val account = roomBackendMintAccount(transport, inputs.port)
+            roomBackendLoseNextPush(transport, inputs.port, account)
         }
     }
 
     @Test
     fun blackBoxImportToActivation_realBackendSettlesOriginalSequence() {
-        val inputs = r10aRequireInputs()
-        val transport = r10aNewTransport(inputs)
+        val inputs = roomBackendRequireInputs()
+        val transport = roomBackendNewTransport(inputs)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         runBlocking {
             val grant = mintSessionGrant(transport, inputs.port)
             val namespace = vaultNamespace()
-            val name = "r13b-activation-${UUID.randomUUID()}.db"
+            val name = "import-activation-${UUID.randomUUID()}.db"
             try {
                 val database = fileDb(context, name)
                 try {
@@ -876,13 +861,13 @@ class RoomBackendLegacyImportTest {
 
     @Test
     fun lostPushResponse_returnsPreparationRequiredThenExactDuplicateSettles() {
-        val inputs = r10aRequireInputs()
-        val transport = r10aNewTransport(inputs)
+        val inputs = roomBackendRequireInputs()
+        val transport = roomBackendNewTransport(inputs)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         runBlocking {
             val grant = mintSessionGrant(transport, inputs.port)
             val namespace = vaultNamespace()
-            val name = "r13b-lost-${UUID.randomUUID()}.db"
+            val name = "import-lost-${UUID.randomUUID()}.db"
             try {
                 var database = fileDb(context, name)
                 seedLocalGraph(database)
@@ -908,7 +893,7 @@ class RoomBackendLegacyImportTest {
                 // typed transient stop returns Private(PREPARATION_REQUIRED)
                 // with the frozen head retained for retry.
                 var now = System.currentTimeMillis()
-                r10aLoseNextPush(transport, inputs.port, R10aAccount(grant.accountId, grant.accessToken))
+                roomBackendLoseNextPush(transport, inputs.port, RoomBackendAccount(grant.accountId, grant.accessToken))
                 val first = facade(
                     database, context, namespace, origin, transport.transport,
                     clockMillis = { now },
@@ -962,28 +947,28 @@ class RoomBackendLegacyImportTest {
 
     @Test
     fun preCreatedCloudRoot_returnsRetainedCollisionWithoutOverwrite() {
-        val inputs = r10aRequireInputs()
-        val transport = r10aNewTransport(inputs)
+        val inputs = roomBackendRequireInputs()
+        val transport = roomBackendNewTransport(inputs)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         runBlocking {
             val grant = mintSessionGrant(transport, inputs.port)
             // Pre-create the intended root on the SAME grant account through
             // actual production HTTP (ordinary sync path, separate mutation).
-            val serverStore = r10aOpenStore(context, "r13b-collide-server", grant.accountId)
+            val serverStore = roomBackendOpenStore(context, "import-collide-server", grant.accountId)
             val sharedCustomId: String
             try {
                 val serverRepo = serverStore.repository()
                 sharedCustomId = serverRepo.createCustomExercise(
-                    "R13b Server Press", null, emptySet(), null, null, "",
+                    "import Server Press", null, emptySet(), null, null, "",
                 )
-                val api = r10aNewApi(transport, R10aAccount(grant.accountId, grant.accessToken))
-                r10aDeliverAndPublish(serverStore, grant.accountId, api, R10aTestLease())
+                val api = roomBackendNewApi(transport, RoomBackendAccount(grant.accountId, grant.accessToken))
+                roomBackendDeliverAndPublish(serverStore, grant.accountId, api, RoomBackendTestLease())
             } finally {
-                r10aCloseAndDelete(context, serverStore)
+                roomBackendCloseAndDelete(context, serverStore)
             }
 
             val namespace = vaultNamespace()
-            val name = "r13b-collision-${UUID.randomUUID()}.db"
+            val name = "import-collision-${UUID.randomUUID()}.db"
             try {
                 val database = fileDb(context, name)
                 try {
@@ -992,7 +977,7 @@ class RoomBackendLegacyImportTest {
                         "INSERT INTO exercises (id, name, type, difficulty_level, force_type, mechanics," +
                             " category, instructions, is_user_created, account_id, server_revision," +
                             " local_generation, sync_state, deleted_at_millis)" +
-                            " VALUES ('$sharedCustomId', 'R13b Local Press', 'reps', NULL, NULL, NULL," +
+                            " VALUES ('$sharedCustomId', 'import Local Press', 'reps', NULL, NULL, NULL," +
                             " 'strength', '[\"Step\"]', 1, NULL, NULL, 1, 'local_only', NULL)",
                     )
                     val origin = ServiceOrigin.parse("https://localhost:${inputs.port}")
@@ -1026,7 +1011,7 @@ class RoomBackendLegacyImportTest {
                     assertEquals(1L, journalCount(database))
                     assertTrue(count(database, "SELECT COUNT(*) FROM sync_outbox") > 0)
                     assertEquals(
-                        "R13b Local Press",
+                        "import Local Press",
                         rows(database, "SELECT name FROM exercises WHERE id = '$sharedCustomId'", 1)
                             .single()[0],
                     )
@@ -1042,13 +1027,13 @@ class RoomBackendLegacyImportTest {
 
     @Test
     fun acceptanceInsertFault_rollsBackWholeAcknowledgment() {
-        val inputs = r10aRequireInputs()
-        val transport = r10aNewTransport(inputs)
+        val inputs = roomBackendRequireInputs()
+        val transport = roomBackendNewTransport(inputs)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         runBlocking {
             val grant = mintSessionGrant(transport, inputs.port)
             val namespace = vaultNamespace()
-            val name = "r13b-rollback-${UUID.randomUUID()}.db"
+            val name = "import-rollback-${UUID.randomUUID()}.db"
             try {
                 val database = fileDb(context, name)
                 try {
@@ -1098,9 +1083,9 @@ class RoomBackendLegacyImportTest {
                     // Fault the receipt insert during an actual successful push:
                     // the whole ack (canonical/metadata/head/receipt) must roll back.
                     database.openHelper.writableDatabase.execSQL(
-                        "CREATE TRIGGER r13b_abort_acceptance BEFORE INSERT" +
+                        "CREATE TRIGGER import_abort_acceptance BEFORE INSERT" +
                             " ON sync_legacy_import_acceptances BEGIN" +
-                            " SELECT RAISE(ABORT, 'r13b-qa-abort-acceptance'); END",
+                            " SELECT RAISE(ABORT, 'import-test-abort-acceptance'); END",
                     )
                     try {
                         val outcome = runCatching {
@@ -1116,7 +1101,7 @@ class RoomBackendLegacyImportTest {
                         )
                     } finally {
                         database.openHelper.writableDatabase.execSQL(
-                            "DROP TRIGGER IF EXISTS r13b_abort_acceptance",
+                            "DROP TRIGGER IF EXISTS import_abort_acceptance",
                         )
                     }
                     assertEquals(0L, count(database, "SELECT COUNT(*) FROM sync_legacy_import_acceptances"))
@@ -1159,13 +1144,13 @@ class RoomBackendLegacyImportTest {
 
     @Test
     fun lineageProgressFault_rollsBackPublicationPreservingPreparedVault() {
-        val inputs = r10aRequireInputs()
-        val transport = r10aNewTransport(inputs)
+        val inputs = roomBackendRequireInputs()
+        val transport = roomBackendNewTransport(inputs)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         runBlocking {
             val grant = mintSessionGrant(transport, inputs.port)
             val namespace = vaultNamespace()
-            val name = "r13b-linrollback-${UUID.randomUUID()}.db"
+            val name = "import-linrollback-${UUID.randomUUID()}.db"
             try {
                 val database = fileDb(context, name)
                 try {
@@ -1217,10 +1202,10 @@ class RoomBackendLegacyImportTest {
                     // durable while the combined publication/ACTIVE transaction
                     // rolls back around it.
                     database.openHelper.writableDatabase.execSQL(
-                        "CREATE TRIGGER r13b_corrupt_lineage AFTER UPDATE" +
+                        "CREATE TRIGGER import_corrupt_lineage AFTER UPDATE" +
                             " ON sync_legacy_import_progress WHEN NEW.room_phase = 'active' BEGIN" +
                             " DELETE FROM sync_legacy_import_acceptances;" +
-                            " SELECT RAISE(ABORT, 'r13b-qa-abort-lineage'); END",
+                            " SELECT RAISE(ABORT, 'import-test-abort-lineage'); END",
                     )
                     try {
                         val outcome = runCatching {
@@ -1240,7 +1225,7 @@ class RoomBackendLegacyImportTest {
                         )
                     } finally {
                         database.openHelper.writableDatabase.execSQL(
-                            "DROP TRIGGER IF EXISTS r13b_corrupt_lineage",
+                            "DROP TRIGGER IF EXISTS import_corrupt_lineage",
                         )
                     }
                     // Accepted prefix survives the publication rollback: both
@@ -1328,13 +1313,13 @@ class RoomBackendLegacyImportTest {
 
     @Test
     fun failedSnapshot_remainsPrivateWithEvidenceUntouched() {
-        val inputs = r10aRequireInputs()
-        val transport = r10aNewTransport(inputs)
+        val inputs = roomBackendRequireInputs()
+        val transport = roomBackendNewTransport(inputs)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         runBlocking {
             val grant = mintSessionGrant(transport, inputs.port)
             val namespace = vaultNamespace()
-            val name = "r13b-snapfail-${UUID.randomUUID()}.db"
+            val name = "import-snapfail-${UUID.randomUUID()}.db"
             try {
                 val database = fileDb(context, name)
                 try {
@@ -1390,13 +1375,13 @@ class RoomBackendLegacyImportTest {
 
     @Test
     fun promotionGapCloseFault_recoversExactPairWithoutHttp() {
-        val inputs = r10aRequireInputs()
-        val transport = r10aNewTransport(inputs)
+        val inputs = roomBackendRequireInputs()
+        val transport = roomBackendNewTransport(inputs)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         runBlocking {
             val grant = mintSessionGrant(transport, inputs.port)
             val namespace = vaultNamespace()
-            val name = "r13b-gap-${UUID.randomUUID()}.db"
+            val name = "import-gap-${UUID.randomUUID()}.db"
             try {
                 var database = fileDb(context, name)
                 seedLocalGraph(database)
@@ -1428,7 +1413,7 @@ class RoomBackendLegacyImportTest {
                                 if (!cursor.moveToFirst()) null else cursor.getString(0)
                             }
                             if (phase == "active" && gapFired.compareAndSet(false, true)) {
-                                throw IllegalStateException("r13b-qa-gap-close")
+                                throw IllegalStateException("import-test-gap-close")
                             }
                         }
                 }
@@ -1490,13 +1475,13 @@ class RoomBackendLegacyImportTest {
 
     @Test
     fun corruptReceiptInGap_preventsPromotion() {
-        val inputs = r10aRequireInputs()
-        val transport = r10aNewTransport(inputs)
+        val inputs = roomBackendRequireInputs()
+        val transport = roomBackendNewTransport(inputs)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         runBlocking {
             val grant = mintSessionGrant(transport, inputs.port)
             val namespace = vaultNamespace()
-            val name = "r13b-gapcorrupt-${UUID.randomUUID()}.db"
+            val name = "import-gapcorrupt-${UUID.randomUUID()}.db"
             try {
                 var database = fileDb(context, name)
                 seedLocalGraph(database)
@@ -1526,7 +1511,7 @@ class RoomBackendLegacyImportTest {
                                 if (!cursor.moveToFirst()) null else cursor.getString(0)
                             }
                             if (phase == "active" && gapFired.compareAndSet(false, true)) {
-                                throw IllegalStateException("r13b-qa-gap-close")
+                                throw IllegalStateException("import-test-gap-close")
                             }
                         }
                 }
@@ -1588,13 +1573,13 @@ class RoomBackendLegacyImportTest {
 
     @Test
     fun freshSameAccountGrant_preservesOriginalMigrationOperation() {
-        val inputs = r10aRequireInputs()
-        val transport = r10aNewTransport(inputs)
+        val inputs = roomBackendRequireInputs()
+        val transport = roomBackendNewTransport(inputs)
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         runBlocking {
             val grant = mintSessionGrant(transport, inputs.port)
             val namespace = vaultNamespace()
-            val name = "r13b-reauth-${UUID.randomUUID()}.db"
+            val name = "import-reauth-${UUID.randomUUID()}.db"
             try {
                 val database = fileDb(context, name)
                 try {

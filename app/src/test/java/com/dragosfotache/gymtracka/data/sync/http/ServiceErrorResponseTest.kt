@@ -10,7 +10,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R03b QA: strict service-error reader tables.
+ * strict service-error reader tables.
  *
  * Independent raw JSON bodies only, never production encoders.
  */

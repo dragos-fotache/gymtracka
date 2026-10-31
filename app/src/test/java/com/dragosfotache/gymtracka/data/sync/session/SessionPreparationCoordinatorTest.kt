@@ -20,14 +20,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R09b independent QA: prepared vault/Room coordination.
- *
- * Derived ONLY from docs/remaining-work/R09b-task.md concrete API contract,
- * preparation protocol, stable reread/recover rules, coordinator contract
- * clarifications and risk obligations, plus QA-owned fixtures/doubles. No
- * production declarations, diffs, Worker work, generated sources or decompiled
- * classes inspected. Literal independent oracles throughout; deterministic gates
- * only (deferred/barrier/fault queues, no sleeps).
+ * prepared vault/Room coordination.
  *
  * Each test proves a distinct new defect; representative refusal cases are grouped
  * without an exhaustive matrix. Safety obligations (redaction, closed causes,
@@ -190,7 +183,7 @@ class SessionPreparationCoordinatorTest {
     @Test
     fun postcommitReservationCancellationNeedsGrantWithoutVaultWrite() = runTest {
         val s = setup()
-        val injected = CancellationException("postcommit-reserve-cancel-r09b")
+        val injected = CancellationException("postcommit-reserve-cancel-preparation")
         s.authority.commitBeforeBeginError = true
         s.authority.pendingBeginError = injected
         try {
@@ -213,7 +206,7 @@ class SessionPreparationCoordinatorTest {
     @Test
     fun reservationCancellationIdentityEscapesWithoutVaultWrite() = runTest {
         val s = setup()
-        val injected = CancellationException("reserve-cancel-r09b")
+        val injected = CancellationException("reserve-cancel-preparation")
         s.authority.beginFaults += injected
         try {
             s.coordinator.prepare(F.signedOut(), F.OP_A, F.session())
@@ -257,7 +250,7 @@ class SessionPreparationCoordinatorTest {
     fun vaultCommitThenCancelEscapesIdenticallyWithFreshPreparedRecovery() = runTest {
         val s = setup()
         val grant = F.session()
-        val injected = CancellationException("postcommit-vault-cancel-r09b")
+        val injected = CancellationException("postcommit-vault-cancel-preparation")
         var loads = 0
         s.vault.loadGate = {
             loads += 1
@@ -898,7 +891,7 @@ class SessionPreparationCoordinatorTest {
     @Test
     fun callerCancellationAtPreCasBoundaryEscapesIdentically() = runTest {
         val s = setup()
-        val injected = CancellationException("pre-cas-cancel-r09b")
+        val injected = CancellationException("pre-cas-cancel-preparation")
         s.authority.beginGate = { throw injected }
         // Authority double throws the active cancellation identity directly; the
         // coordinator must let the identical object escape, not map it.
@@ -914,7 +907,7 @@ class SessionPreparationCoordinatorTest {
     @Test
     fun actualCallerCancellationPreemptsRacingSeamError() = runTest {
         val s = setup()
-        val callerCancel = CancellationException("actual-caller-cancel-r09b")
+        val callerCancel = CancellationException("actual-caller-cancel-preparation")
         val holder = arrayOfNulls<Job>(1)
         // The seam cancels the ACTUAL caller and then reports its own error; the
         // real caller cancellation must win over the racing seam mapping.

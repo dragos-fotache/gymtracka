@@ -17,7 +17,7 @@ import com.dragosfotache.gymtracka.data.sync.model.WorkoutRecordModel
 import com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid
 
 /**
- * Focused whole-graph helpers for R05c publication. Workout and routine
+ * Focused whole-graph helpers for Projection publication. Workout and routine
  * namespaces are independent; exercise roots validate within the exercises
  * table only. Cross-namespace UUID equality (workout vs routine vs exercise
  * reference) is allowed. Same-family role/parent aliases still fail closed.

@@ -25,14 +25,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R09a independent QA: atomicity, reopen and rich preservation obligations.
- *
- * Contract-only; raw SQL literals; existing file-reopen + trigger patterns
- * reused from CanonicalBatchTest/PushClaimTestSupport shapes (no production
- * inspection). Covers task obligations 4 and 6: abort-trigger rollback with
- * reread, reopen of preparing/private states with no in-memory success
- * dependency, and exact preservation of a rich outbox/cursor/stage/canonical/
- * watermark/domain/foreign/cache/catalogue fixture through private fence.
+ * Real Room checks that preparation and private fencing preserve domain graphs, canonical records,
+ * exact outbox bytes, checkpoints, stages, and foreign scopes.
  */
 @RunWith(AndroidJUnit4::class)
 class RoomSessionAuthorityPreservationTest {
@@ -469,8 +463,8 @@ class RoomSessionAuthorityPreservationTest {
         // Abort the device write (second write of the atomic pair): the journal
         // write must roll back with it; reread observes only committed state.
         database.openHelper.writableDatabase.execSQL(
-            "CREATE TRIGGER r09a_abort_device BEFORE UPDATE ON sync_device_state" +
-                " BEGIN SELECT RAISE(ABORT, 'r09a-blocked'); END",
+            "CREATE TRIGGER authority_abort_device BEFORE UPDATE ON sync_device_state" +
+                " BEGIN SELECT RAISE(ABORT, 'authority-blocked'); END",
         )
         // Seed a device row so the transaction performs an UPDATE (trigger path).
         database.openHelper.writableDatabase.execSQL(
@@ -490,7 +484,7 @@ class RoomSessionAuthorityPreservationTest {
                     e.failure == RoomSessionAuthorityFailure.CORRUPT_AUTHORITY,
             )
         } finally {
-            database.openHelper.writableDatabase.execSQL("DROP TRIGGER IF EXISTS r09a_abort_device")
+            database.openHelper.writableDatabase.execSQL("DROP TRIGGER IF EXISTS authority_abort_device")
         }
         // Reread durable state: still the seeded signed-out observation, journal
         // absent, device unchanged.
@@ -502,7 +496,7 @@ class RoomSessionAuthorityPreservationTest {
     @Test
     fun reopenObservesPreparingAndPrivate_withoutInMemorySuccess() = runTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val name = "r09a-authority-reopen.db"
+        val name = "authority-authority-reopen.db"
         context.deleteDatabase(name)
         try {
             val fileDatabase = Room.databaseBuilder(context, GymDatabase::class.java, name).build()
@@ -549,7 +543,7 @@ class RoomSessionAuthorityPreservationTest {
     fun staleSignedOutRepository_fencedAfterGenerationAdvance() = runTest {
         // Contract seam: GymRepository(database, RepositorySession.SIGNED_OUT)
         // before the initial reservation; the TestScope pattern below mirrors the
-        // ScopedRepositoryTest TEST stale-fence examples (no production inspection).
+        // Scoped repository stale-session refusal preserves the stored rows.
         database.openHelper.writableDatabase.execSQL(
             "INSERT INTO sync_device_state (id, active_account_id, cached_account_id," +
                 " session_generation, cache_state)" +
@@ -598,7 +592,7 @@ class RoomSessionAuthorityPreservationTest {
         // CompletableDeferred gates, virtual time only, no sleeps.
         val entered = CompletableDeferred<Unit>()
         val hold = CompletableDeferred<Unit>()
-        val probe = CancellationException("qa-authority-cancel")
+        val probe = CancellationException("test-authority-cancel")
         val child = async {
             database.withTransaction {
                 authority.beginPreparation(fresh, ServiceOrigin.parse(ORIGIN_A), ACCOUNT_A, OP_A)
@@ -646,14 +640,14 @@ class RoomSessionAuthorityPreservationTest {
         // The WHEN guard matches only the provisional 'preparing' write, so the
         // inner rewrite to 'local_only' cannot refire (no recursive abort path).
         db.execSQL(
-            "CREATE TRIGGER r09a_rewrite_device AFTER UPDATE ON sync_device_state" +
+            "CREATE TRIGGER authority_rewrite_device AFTER UPDATE ON sync_device_state" +
                 " WHEN NEW.cache_state = 'preparing'" +
                 " BEGIN UPDATE sync_device_state SET cache_state = 'local_only' WHERE id = 1; END",
         )
         // Fixture precondition proof: the guard is installed as written.
         val triggerSql = database.openHelper.readableDatabase.query(
             "SELECT sql FROM sqlite_master WHERE type = 'trigger'" +
-                " AND name = 'r09a_rewrite_device'",
+                " AND name = 'authority_rewrite_device'",
         ).use { cursor ->
             assertTrue(cursor.moveToFirst())
             cursor.getString(0)
@@ -672,13 +666,13 @@ class RoomSessionAuthorityPreservationTest {
             // authority transaction, not the installed trigger DDL.
             database.openHelper.readableDatabase.query(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger'" +
-                    " AND name = 'r09a_rewrite_device'",
+                    " AND name = 'authority_rewrite_device'",
             ).use { cursor ->
                 assertTrue(cursor.moveToFirst())
                 assertEquals(1, cursor.getInt(0))
             }
         } finally {
-            db.execSQL("DROP TRIGGER IF EXISTS r09a_rewrite_device")
+            db.execSQL("DROP TRIGGER IF EXISTS authority_rewrite_device")
         }
         // Rollback, not altered-rows authority: reread is the pre-call observation
         // and the raw rows are byte-identical (snapshot equality alone would not

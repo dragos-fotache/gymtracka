@@ -12,8 +12,8 @@ import com.dragosfotache.gymtracka.data.sync.api.ServiceRefreshAttempt
 import com.dragosfotache.gymtracka.data.sync.api.ServiceSession
 import com.dragosfotache.gymtracka.data.sync.http.ServiceOrigin
 import com.dragosfotache.gymtracka.data.sync.http.ServiceSessionBinding
-import com.dragosfotache.gymtracka.data.sync.R05cTestLease
-import com.dragosfotache.gymtracka.data.sync.r05cGrantBarrier
+import com.dragosfotache.gymtracka.data.sync.ProjectionTestLease
+import com.dragosfotache.gymtracka.data.sync.projectionGrantBarrier
 import com.dragosfotache.gymtracka.data.sync.store.PushRunOwner
 import java.io.File
 import java.security.KeyStore
@@ -39,22 +39,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R09g independent QA: real Room + test-owned Android encrypted vault + file reopen.
- *
- * Derived ONLY from docs/archive/remaining-work/R09g-task.md normative contracts plus
- * QA-owned harness facts (R09e RoomVault literal seeds/retained-row helpers and
- * rewrite-trigger shape, R09a rich child/relationship/catalogue literals,
- * R09b preparation admission, R09c engine auth/lease harness shapes, R09e
- * reauthentication write shape, coroutine Room query-callback lesson,
- * namespace/alias rules, real RoomSessionAuthority,
- * AndroidSessionVault.createForTesting). No production declarations, diffs,
- * Worker work, generated sources, decompiled classes or schema JSON inspected.
- * Deterministic only, no sleeps.
- *
- * Source rule: SIGNED_OUT retained recovery at generation 7 admits only
- * strictly LOWER generations with exact pending evidence for archiving;
- * ACTIVE interruption uses the generation-7 uncertain predecessor. prepare
- * performs TWO Room revisions (reserve + finalize): SIGNED_OUT 10 -> 11 -> 12.
+ * Real Room and namespaced Android encrypted-vault checks for same-account recovery, uncertain
+ * evidence preservation and file reopen.
  */
 @RunWith(AndroidJUnit4::class)
 class SameAccountRecoveryRoomVaultTest {
@@ -64,7 +50,7 @@ class SameAccountRecoveryRoomVaultTest {
         const val ACCOUNT_B = "c6938596-d7e7-50bb-0689-8b3f748dccd1"
         const val OP_OLD = "11111111-1111-1111-1111-111111111111"
         const val OP_FRESH = "33333333-3333-3333-3333-333333333333"
-        const val OP_R09E = "66666666-6666-6666-6666-666666666666"
+        const val OP_REAUTHENTICATION = "66666666-6666-6666-6666-666666666666"
         const val OP_OTHER = "77777777-7777-7777-7777-777777777777"
         const val KEY_OLD = "44444444-4444-4444-4444-444444444444"
         const val ORIGIN_A = "https://sync.example.test:443"
@@ -93,9 +79,9 @@ class SameAccountRecoveryRoomVaultTest {
 
     private fun freshGrant(): ServiceSession = ServiceSession(
         ServiceAccountRef(ACCOUNT_A, null),
-        OpaqueToken("opaque-access-fresh-r09g"),
+        OpaqueToken("opaque-access-fresh-retained-recovery"),
         NOW,
-        OpaqueToken("opaque-refresh-fresh-r09g"),
+        OpaqueToken("opaque-refresh-fresh-retained-recovery"),
         NOW + 30L * 24 * 60 * 60 * 1000,
     )
 
@@ -108,7 +94,7 @@ class SameAccountRecoveryRoomVaultTest {
     private fun frozenWrapper(): String {
         val inner = "{\"mutationId\":\"$MUT_FROZEN\",\"type\":\"workout.start\"," +
             "\"aggregateType\":\"workout\",\"aggregateId\":\"$WORKOUT_A\"," +
-            "\"localGeneration\":4,\"payload\":{\"id\":\"$WORKOUT_A\",\"name\":\"R09g\"}}"
+            "\"localGeneration\":4,\"payload\":{\"id\":\"$WORKOUT_A\",\"name\":\"retained-recovery\"}}"
         val escaped = inner.replace("\\", "\\\\").replace("\"", "\\\"")
         return "{\"payloadVersion\":1,\"requestJson\":\"$escaped\"," +
             "\"affectedRoots\":[{\"aggregateType\":\"workout\",\"aggregateId\":\"$WORKOUT_A\"," +
@@ -122,7 +108,7 @@ class SameAccountRecoveryRoomVaultTest {
     private val usedDatabases = mutableListOf<String>()
 
     private fun testNamespace(suffix: String): String {
-        val namespace = "gymtracka-test-r09g-$suffix"
+        val namespace = "gymtracka-test-retained-recovery-$suffix"
         usedNamespaces.add(namespace)
         return namespace
     }
@@ -543,7 +529,7 @@ class SameAccountRecoveryRoomVaultTest {
             assertEquals(1L, observation.vaultRevision)
             assertEquals(freshGrant(), vault.load().record?.session)
             assertEquals(before, retainedSnapshot(database))
-            assertFalse(observation.toString().contains("opaque-access-fresh-r09g"))
+            assertFalse(observation.toString().contains("opaque-access-fresh-retained-recovery"))
         } finally {
             database.close()
         }
@@ -863,7 +849,7 @@ class SameAccountRecoveryRoomVaultTest {
             // matches only the provisional reservation write, so the inner
             // rewrite cannot refire.
             db.execSQL(
-                "CREATE TRIGGER r09g_rewrite_op AFTER UPDATE ON sync_session_authority" +
+                "CREATE TRIGGER retained_recovery_rewrite_op AFTER UPDATE ON sync_session_authority" +
                     " WHEN NEW.operation_id = '$OP_FRESH'" +
                     " BEGIN UPDATE sync_session_authority SET operation_id = '$OP_OTHER' WHERE id = 1; END",
             )
@@ -872,7 +858,7 @@ class SameAccountRecoveryRoomVaultTest {
                     authority.beginSameAccountRecovery(expected, originA(), ACCOUNT_A, OP_FRESH)
                 }
             } finally {
-                db.execSQL("DROP TRIGGER IF EXISTS r09g_rewrite_op")
+                db.execSQL("DROP TRIGGER IF EXISTS retained_recovery_rewrite_op")
             }
             assertEquals(expected, authority.read())
             assertEquals(listOf("10", "7", "signed_out", ORIGIN_A, ACCOUNT_A, null), journalCells(database))
@@ -889,7 +875,7 @@ class SameAccountRecoveryRoomVaultTest {
         val writeSeen = AtomicBoolean(false)
         val fired = AtomicBoolean(false)
         lateinit var runnerJob: Job
-        val probe = NoncopyingProbeCancellation("r09g-postwrite-cancel")
+        val probe = NoncopyingProbeCancellation("retained-recovery-postwrite-cancel")
         var caught: Throwable? = null
         // Test-only real Room query hook: observe the first journal/device
         // write, then cancel the caller Job on the FOLLOWING query. Callbacks
@@ -959,7 +945,7 @@ class SameAccountRecoveryRoomVaultTest {
     fun fileReopenLostReturnGapResumesWithExactEvidence() = runTest {
         val namespace = testNamespace("gap")
         deleteNamespacePath(namespace)
-        val dbName = "r09g-gap.db"
+        val dbName = "retained-recovery-gap.db"
         val database = createFileDb(dbName)
         lateinit var outerBefore: Map<String, List<List<String?>>>
         try {
@@ -1024,7 +1010,7 @@ class SameAccountRecoveryRoomVaultTest {
         // appended archive, then idempotent resumption duplicates nothing.
         val namespace = testNamespace("precommit")
         deleteNamespacePath(namespace)
-        val dbName = "r09g-precommit.db"
+        val dbName = "retained-recovery-precommit.db"
         val database = createFileDb(dbName)
         lateinit var outerBefore: Map<String, List<List<String?>>>
         try {
@@ -1096,7 +1082,7 @@ class SameAccountRecoveryRoomVaultTest {
         // Separate minimal coherent scope (empty domain, no cache/stage/
         // outbox rows): engine-fixture identity, genuine same-account
         // preparation over a minimal ACTIVE incomplete-baseline scope.
-        val engHarness = PreparedEngineHarness("r09g-eng")
+        val engHarness = PreparedEngineHarness("retained-recovery-eng")
         val EF = PreparedEngineFixtures
         val C = PreparedCompletionSupport
         val database = engHarness.openInMemoryDb()
@@ -1127,7 +1113,7 @@ class SameAccountRecoveryRoomVaultTest {
             val coordinator = SameAccountRecoveryCoordinator(
                 EF.origin(), authority, vault, PushRunOwner(), Mutex(),
             )
-            val rotatedGrant = EF.grant(refresh = "r09c-refresh-r09g")
+            val rotatedGrant = EF.grant(refresh = "bootstrap-refresh-retained-recovery")
             val observation = coordinator.prepare(authority.read(), EF.OTHER_OP, rotatedGrant)
             // Room 1->2->3 PREPARING/gen2; vault 1->2 with the genuine archive.
             assertEquals(3L, observation.room.revision)
@@ -1159,8 +1145,8 @@ class SameAccountRecoveryRoomVaultTest {
             assertEquals(pair.supersededSessions, vault.load().record?.supersededSessions)
             // Existing completion tail: Room4 ACTIVE/gen2, vault3 ACTIVE — the
             // phase promotion CAS increments the vault revision.
-            val lease = R05cTestLease()
-            val barrier = r05cGrantBarrier(lease)
+            val lease = ProjectionTestLease()
+            val barrier = projectionGrantBarrier(lease)
             val result = engine.completePreparation(barrier)
             assertEquals(PreparedCompletionStatus.COMPLETED, result.status)
             val delivery = checkNotNull(result.delivery)
@@ -1185,7 +1171,7 @@ class SameAccountRecoveryRoomVaultTest {
             assertEquals(2L, barrier.requests.single().sessionGeneration)
             assertEquals(1, lease.closeCount)
             C.assertRedactedCompletion(result.toString())
-            assertFalse(result.toString().contains("r09c-refresh-r09g"))
+            assertFalse(result.toString().contains("bootstrap-refresh-retained-recovery"))
             engine.invalidate()
         } finally {
             database.close()
@@ -1194,8 +1180,8 @@ class SameAccountRecoveryRoomVaultTest {
     }
 
     @Test
-    fun subsequentSettledR09eWriteCarriesArchiveThroughChangedPropagation() = runTest {
-        val namespace = testNamespace("r09ewrite")
+    fun subsequentSettledReauthenticationCarriesArchiveThroughChangedPropagation() = runTest {
+        val namespace = testNamespace("reauthenticationwrite")
         deleteNamespacePath(namespace)
         val database = openInMemoryDb()
         try {
@@ -1219,9 +1205,9 @@ class SameAccountRecoveryRoomVaultTest {
                 bindingA(7L), OP_OLD, VaultSessionPhase.ACTIVE,
                 ServiceSession(
                     ServiceAccountRef(ACCOUNT_A, null),
-                    OpaqueToken("opaque-access-r09e-current"),
+                    OpaqueToken("opaque-access-reauthentication-current"),
                     NOW,
-                    OpaqueToken("opaque-refresh-r09e-current"),
+                    OpaqueToken("opaque-refresh-reauthentication-current"),
                     NOW + 30L * 24 * 60 * 60 * 1000,
                 ),
                 null,
@@ -1232,18 +1218,18 @@ class SameAccountRecoveryRoomVaultTest {
                 ),
             )
             vault.compareAndSet(1L, archived)
-            // Settled R09e replacement write carries the archive forward.
+            // Settled reauthentication replacement write carries the archive forward.
             val rotated = ServiceSession(
                 ServiceAccountRef(ACCOUNT_A, null),
-                OpaqueToken("opaque-access-r09e-new"),
+                OpaqueToken("opaque-access-reauthentication-new"),
                 NOW,
-                OpaqueToken("opaque-refresh-r09e-new"),
+                OpaqueToken("opaque-refresh-reauthentication-new"),
                 NOW + 30L * 24 * 60 * 60 * 1000,
             )
             val reauth = SessionReauthenticationCoordinator(
                 originA(), authority, vault, PushRunOwner(), Mutex(),
             )
-            val obs = reauth.reauthenticate(authority.read(), OP_R09E, rotated)
+            val obs = reauth.reauthenticate(authority.read(), OP_REAUTHENTICATION, rotated)
             assertEquals(13L, obs.room.revision)
             assertEquals(3L, obs.vaultRevision)
             assertEquals(rotated, vault.load().record?.session)

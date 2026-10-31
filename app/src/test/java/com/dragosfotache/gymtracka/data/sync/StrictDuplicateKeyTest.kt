@@ -23,11 +23,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R02a: raw JSON duplicate object-member rejection at the shared JSON-object boundary.
- *
- * Independent behavioral expectations derived from docs/remaining-work/R02a-task.md and the
- * shared backend contract only. All JSON fixtures are hand-authored string literals; no
- * production encoder is used as an oracle.
+ * raw JSON validation: raw JSON duplicate object-member rejection at the shared JSON-object boundary.
  */
 class StrictDuplicateKeyTest {
 
@@ -598,7 +594,7 @@ class StrictDuplicateKeyTest {
             "   ",
         )
         // NOTE (coordinator baseline fact): the raw boundary normalizes untyped tokens
-        // such as NaN/Infinity/0x1/01 to strings (pre-R02a behavior); R02a must not add
+        // such as NaN/Infinity/0x1/01 to strings (pre-raw JSON validation behavior); raw JSON validation must not add
         // numeric grammar or replace the parser, so no raw-boundary cases assert on them.
         // Typed model readers remain the rejection boundary (see
         // nonfiniteAndUntypedNumericsRejectAtTypedReaders).

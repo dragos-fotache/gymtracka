@@ -8,20 +8,13 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 
 /**
- * R09d independent QA support only. No production declarations inspected.
- *
- * Derived ONLY from docs/archive/remaining-work/R09d-task.md normative API/safety
- * matrix plus the coordinator-supplied completion contract (session-package
- * result/status types, SyncDeliveryResult field shapes, barrier request
- * semantics, frame-consumption sequence, failure-class mapping) and vetted
- * QA-owned helpers (PreparedEngineFixtures/Harness/Transport/AuthApi,
- * R05c lease/barrier fakes). All wire literals are independently authored;
- * completion tail bodies are hand-written strings, never production output.
+ * Prepared-session fixtures and fault gates for complete publication, Room readiness, exact vault
+ * promotion and durable reread.
  */
 internal object PreparedCompletionSupport {
     /** Empty terminal pull at the post-bootstrap TAIL cursor (same-cursor rule). */
     const val TAIL_EMPTY_PULL_BODY =
-        """{"batches":[],"nextCursor":"r09c-tail","hasMore":false}"""
+        """{"batches":[],"nextCursor":"bootstrap-tail","hasMore":false}"""
 
     fun queueBootstrapEmpty(transport: PreparedEngineTransport) {
         transport.queueOk(PreparedEngineFixtures.EMPTY_SNAPSHOT_BODY)
@@ -43,7 +36,7 @@ internal object PreparedCompletionSupport {
         transport.queueOk(TAIL_EMPTY_PULL_BODY)
     }
 
-    /** Actual R07 push rejection envelope for one held head (vetted R09c shape). */
+    /** Actual shared delivery push rejection envelope for one held head (vetted prepared engine shape). */
     fun pushRejectionBody(mutationId: String): String =
         """{"results":[{"mutationId":"$mutationId","status":"rejected","errorCode":"gone","batch":null}]}"""
 
@@ -94,7 +87,7 @@ internal object PreparedCompletionSupport {
         assertEquals("1", journal[1])
         assertEquals("active", journal[2])
         // Durable canonical origin keeps the explicit effective port
-        // (coordinator-supplied storage fact, not production output).
+
         assertEquals("${PreparedEngineFixtures.ORIGIN_ROOT}:443", journal[3])
         assertEquals(account, journal[4])
         assertEquals(PreparedEngineFixtures.OP, journal[5])
@@ -141,7 +134,7 @@ internal object PreparedCompletionSupport {
 }
 
 /**
- * QA-only vault read/CAS hook (vetted DelayedReturnVault delegate shape).
+ * tests-only vault read/CAS hook (vetted DelayedReturnVault delegate shape).
  * Hook fields are installed per-phase; null means pass-through.
  */
 internal class HookSessionVault(
@@ -178,6 +171,6 @@ internal class ThrowingCloseLease : ProjectionPublicationLease {
 
     override fun close() {
         closeCount++
-        throw RuntimeException("r09d-lease-close-fault")
+        throw RuntimeException("completion-lease-close-fault")
     }
 }

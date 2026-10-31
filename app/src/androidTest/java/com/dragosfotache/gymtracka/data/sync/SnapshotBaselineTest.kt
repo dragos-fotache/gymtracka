@@ -25,15 +25,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * R08c independent baseline acceptance: complete-snapshot canonical
- * establishment, absence semantics and protected publication recovery.
- *
- * Real Room, no mocked DAOs/stores/admission, no sleeps. Every expectation is
- * a literal authored from docs/archive/remaining-work/R08c-task.md and the
- * coordinator-confirmed API contracts; no production encoder output is used as
- * an oracle and no production source was inspected. Existing strict-codec,
- * budget, staging, driver and publisher matrices are reused, not duplicated.
- * Structured child contexts are inherited; no Gradle execution occurs here.
+ * Real Room checks for complete-snapshot canonical establishment, absence semantics and protected
+ * publication recovery. Expected graphs are independent literals and child operations inherit the
+ * admitted run context.
  */
 class SnapshotBaselineTest : GymDatabaseTest() {
 
@@ -100,7 +94,7 @@ class SnapshotBaselineTest : GymDatabaseTest() {
 
         // Canonical baseline installed at epoch+1; source last-success exact;
         // materialized epoch preserved; stage deleted.
-        val cache = database.r05cReadCache(CLAIM_ACCOUNT_A)!!
+        val cache = database.projectionReadCache(CLAIM_ACCOUNT_A)!!
         assertTrue(cache.baselineComplete)
         assertEquals(1L, cache.cacheEpoch)
         assertTrue(cache.projectionDirty)
@@ -108,23 +102,23 @@ class SnapshotBaselineTest : GymDatabaseTest() {
         val state = database.syncDao().getSyncState(CLAIM_ACCOUNT_A)!!
         assertEquals(BASE_BASELINE_1, state.cursor)
         assertEquals(BASE_LAST_SUCCESS, state.lastSuccessMillis)
-        assertEquals("upsert", database.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_WORKOUT_1))
-        assertEquals(7L, database.baseCanonicalRevision(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_WORKOUT_1))
-        assertNotNull(database.baseCanonicalJson(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_WORKOUT_1))
-        assertEquals("upsert", database.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_ROUTINE, BASE_ROUTINE_1))
-        assertEquals(3L, database.baseCanonicalRevision(CLAIM_ACCOUNT_A, R05B_TYPE_ROUTINE, BASE_ROUTINE_1))
-        assertEquals("upsert", database.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_CUSTOM, BASE_CUSTOM_1))
-        assertEquals(5L, database.baseCanonicalRevision(CLAIM_ACCOUNT_A, R05B_TYPE_CUSTOM, BASE_CUSTOM_1))
+        assertEquals("upsert", database.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_WORKOUT_1))
+        assertEquals(7L, database.baseCanonicalRevision(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_WORKOUT_1))
+        assertNotNull(database.baseCanonicalJson(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_WORKOUT_1))
+        assertEquals("upsert", database.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_ROUTINE, BASE_ROUTINE_1))
+        assertEquals(3L, database.baseCanonicalRevision(CLAIM_ACCOUNT_A, CANONICAL_TYPE_ROUTINE, BASE_ROUTINE_1))
+        assertEquals("upsert", database.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_CUSTOM, BASE_CUSTOM_1))
+        assertEquals(5L, database.baseCanonicalRevision(CLAIM_ACCOUNT_A, CANONICAL_TYPE_CUSTOM, BASE_CUSTOM_1))
         // Previously unknown staged roots carry a zero local-generation watermark.
-        assertEquals(0L, database.baseWatermark(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_WORKOUT_1))
-        assertEquals(0L, database.baseWatermark(CLAIM_ACCOUNT_A, R05B_TYPE_CUSTOM, BASE_CUSTOM_1))
+        assertEquals(0L, database.baseWatermark(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_WORKOUT_1))
+        assertEquals(0L, database.baseWatermark(CLAIM_ACCOUNT_A, CANONICAL_TYPE_CUSTOM, BASE_CUSTOM_1))
         assertTrue(database.stageRowsFor(CLAIM_ACCOUNT_A).isEmpty())
 
         // No visible domain publication: the old/local graph is byte-identical across every domain table.
         assertEquals(domainBefore, database.baseDomainSnapshot())
         // Other scope preserved exactly.
         assertEquals(STAGE_SYNC_CURSOR_2, database.syncDao().getSyncState(CLAIM_ACCOUNT_B)?.cursor)
-        assertEquals(BASE_EPOCH, database.r05cReadCache(CLAIM_ACCOUNT_B)!!.cacheEpoch)
+        assertEquals(BASE_EPOCH, database.projectionReadCache(CLAIM_ACCOUNT_B)!!.cacheEpoch)
 
         // A second snapshot carrying the old unchanged root plus a new draft
         // rebases without any retained pull history.
@@ -152,9 +146,9 @@ class SnapshotBaselineTest : GymDatabaseTest() {
             loop.complete(run, terminal)
         }
         assertBaselineResult(second, 2L, BASE_BASELINE_2, 1L, 3L, false)
-        assertEquals(7L, database.baseCanonicalRevision(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_WORKOUT_1))
-        assertEquals("upsert", database.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_CUSTOM, BASE_CUSTOM_1))
-        assertEquals("upsert", database.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_ROUTINE, BASE_ROUTINE_2))
+        assertEquals(7L, database.baseCanonicalRevision(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_WORKOUT_1))
+        assertEquals("upsert", database.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_CUSTOM, BASE_CUSTOM_1))
+        assertEquals("upsert", database.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_ROUTINE, BASE_ROUTINE_2))
         assertEquals(BASE_BASELINE_2, database.syncDao().getSyncState(CLAIM_ACCOUNT_A)?.cursor)
         assertEquals(BASE_LAST_SUCCESS, database.syncDao().getSyncState(CLAIM_ACCOUNT_A)?.lastSuccessMillis)
         assertEquals(domainBefore, database.baseDomainSnapshot())
@@ -205,8 +199,8 @@ class SnapshotBaselineTest : GymDatabaseTest() {
             owner, BASE_STAGE_2, listOf(SnapshotScriptResponse.Page(renamedPage)), epoch = 1L,
         )
         assertBaselineResult(renamed.second, 2L, BASE_BASELINE_2, 1L, 2L, false)
-        assertEquals(7L, database.baseCanonicalRevision(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_WORKOUT_1))
-        val retainedJson = checkNotNull(database.baseCanonicalJson(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_WORKOUT_1))
+        assertEquals(7L, database.baseCanonicalRevision(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_WORKOUT_1))
+        val retainedJson = checkNotNull(database.baseCanonicalJson(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_WORKOUT_1))
         val retainedEntries = JSONObject(retainedJson).getJSONArray("exercises")
         assertEquals(1, retainedEntries.length())
         assertEquals("Renamed Press", retainedEntries.getJSONObject(0).getString("exerciseName"))
@@ -227,8 +221,8 @@ class SnapshotBaselineTest : GymDatabaseTest() {
             expectBaselineReject("lower frozen revision") { loop.complete(run, terminal) }
             assertEquals(beforeStale, database.claimSnapshot())
         }
-        assertEquals(7L, database.baseCanonicalRevision(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_WORKOUT_1))
-        assertEquals(2L, database.r05cReadCache(CLAIM_ACCOUNT_A)!!.cacheEpoch)
+        assertEquals(7L, database.baseCanonicalRevision(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_WORKOUT_1))
+        assertEquals(2L, database.projectionReadCache(CLAIM_ACCOUNT_A)!!.cacheEpoch)
         assertEquals(1, database.stageRowsFor(CLAIM_ACCOUNT_A).size)
         database.baseAbandonObserved(owner, 2L)
 
@@ -255,7 +249,7 @@ class SnapshotBaselineTest : GymDatabaseTest() {
             expectBaselineReject("conflicting equal revision") { loop.complete(run, terminal) }
             assertEquals(beforeConflict, database.claimSnapshot())
         }
-        assertEquals(7L, database.baseCanonicalRevision(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_WORKOUT_1))
+        assertEquals(7L, database.baseCanonicalRevision(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_WORKOUT_1))
     }
 
     @Test
@@ -282,8 +276,8 @@ class SnapshotBaselineTest : GymDatabaseTest() {
             owner, BASE_STAGE_1, listOf(SnapshotScriptResponse.Page(seedPage)),
         )
         assertBaselineResult(seeded.second, 1L, BASE_BASELINE_1, 1L, 3L, false)
-        database.r05bSeedCanonicalRow(
-            CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_UNKNOWN, 11L, "delete", null, 1L, 1L,
+        database.canonicalSeedCanonicalRow(
+            CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_UNKNOWN, 11L, "delete", null, 1L, 1L,
         )
 
         // The empty download starts with an empty outbox; the unsent local
@@ -299,7 +293,7 @@ class SnapshotBaselineTest : GymDatabaseTest() {
             db.claimSeedWorkout(BASE_LOCAL_NEW, CLAIM_ACCOUNT_A, "Unsent local")
             val captureStore = db.claimCaptureStore(claimSession(), mutableListOf(BASE_MUTATION_1))
             val captured = db.claimCaptureStart(captureStore, CLAIM_ACCOUNT_A, BASE_LOCAL_NEW)
-            val watermarkBefore = db.baseWatermark(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_LOCAL_NEW)
+            val watermarkBefore = db.baseWatermark(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_LOCAL_NEW)
             assertTrue((watermarkBefore ?: 0L) > 0L)
             // Whole-domain oracle starts AFTER the legitimate capture, BEFORE complete.
             val domainAfterCapture = db.baseDomainSnapshot()
@@ -310,31 +304,31 @@ class SnapshotBaselineTest : GymDatabaseTest() {
             // Every previously observed root missing from the complete empty
             // graph is absent with known revisions retained; the unsent
             // reservation stays unobserved with its watermark intact.
-            assertEquals("snapshot_absent", db.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_WORKOUT_1))
-            assertEquals(7L, db.baseCanonicalRevision(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_WORKOUT_1))
-            assertNull(db.baseCanonicalJson(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_WORKOUT_1))
-            assertEquals("snapshot_absent", db.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_ROUTINE, BASE_ROUTINE_1))
-            assertEquals(3L, db.baseCanonicalRevision(CLAIM_ACCOUNT_A, R05B_TYPE_ROUTINE, BASE_ROUTINE_1))
-            assertEquals("snapshot_absent", db.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_CUSTOM, BASE_CUSTOM_1))
-            assertEquals(5L, db.baseCanonicalRevision(CLAIM_ACCOUNT_A, R05B_TYPE_CUSTOM, BASE_CUSTOM_1))
-            assertEquals("snapshot_absent", db.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_UNKNOWN))
-            assertEquals(11L, db.baseCanonicalRevision(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_UNKNOWN))
-            assertEquals(1L, db.baseWatermark(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_UNKNOWN))
-            assertEquals("unobserved", db.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_LOCAL_NEW))
-            assertEquals(watermarkBefore, db.baseWatermark(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_LOCAL_NEW))
+            assertEquals("snapshot_absent", db.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_WORKOUT_1))
+            assertEquals(7L, db.baseCanonicalRevision(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_WORKOUT_1))
+            assertNull(db.baseCanonicalJson(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_WORKOUT_1))
+            assertEquals("snapshot_absent", db.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_ROUTINE, BASE_ROUTINE_1))
+            assertEquals(3L, db.baseCanonicalRevision(CLAIM_ACCOUNT_A, CANONICAL_TYPE_ROUTINE, BASE_ROUTINE_1))
+            assertEquals("snapshot_absent", db.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_CUSTOM, BASE_CUSTOM_1))
+            assertEquals(5L, db.baseCanonicalRevision(CLAIM_ACCOUNT_A, CANONICAL_TYPE_CUSTOM, BASE_CUSTOM_1))
+            assertEquals("snapshot_absent", db.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_UNKNOWN))
+            assertEquals(11L, db.baseCanonicalRevision(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_UNKNOWN))
+            assertEquals(1L, db.baseWatermark(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_UNKNOWN))
+            assertEquals("unobserved", db.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_LOCAL_NEW))
+            assertEquals(watermarkBefore, db.baseWatermark(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_LOCAL_NEW))
 
             // Newer captured intent is preserved byte-exact and protects the whole projection.
             val outbox = db.syncDao().getOutboxForAccount(CLAIM_ACCOUNT_A)
             assertEquals(1, outbox.size)
             assertEquals(captured.mutationId, outbox.single().mutationId)
-            val lease = R05cTestLease()
-            val publication = run.publishProjection(db.r05cStore(barrier = r05cGrantBarrier(lease)))
+            val lease = ProjectionTestLease()
+            val publication = run.publishProjection(db.projectionStore(barrier = projectionGrantBarrier(lease)))
             assertEquals(ProjectionPublicationStatus.PROTECTED, publication.status)
             assertEquals(1, lease.closeCount)
             assertEquals(domainAfterCapture, db.baseDomainSnapshot())
         }
-        assertEquals(2L, database.r05cReadCache(CLAIM_ACCOUNT_A)!!.cacheEpoch)
-        assertTrue(database.r05cReadCache(CLAIM_ACCOUNT_A)!!.projectionDirty)
+        assertEquals(2L, database.projectionReadCache(CLAIM_ACCOUNT_A)!!.cacheEpoch)
+        assertTrue(database.projectionReadCache(CLAIM_ACCOUNT_A)!!.projectionDirty)
         assertNotNull(database.syncDao().getOutboxMutation(BASE_MUTATION_1, CLAIM_ACCOUNT_A))
     }
 
@@ -362,26 +356,26 @@ class SnapshotBaselineTest : GymDatabaseTest() {
         assertBaselineResult(baseline, 1L, BASE_BASELINE_1, 1L, 0L, false)
 
         // The old visible account graph disappears ONLY on clean publication.
-        assertEquals(1, database.r05cQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_WORKOUT_1)).size)
-        val lease = R05cTestLease()
+        assertEquals(1, database.projectionQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_WORKOUT_1)).size)
+        val lease = ProjectionTestLease()
         val publication = database.baseWithLoop(owner, emptyApi, 1L) { run, _ ->
-            run.publishProjection(database.r05cStore(barrier = r05cGrantBarrier(lease)))
+            run.publishProjection(database.projectionStore(barrier = projectionGrantBarrier(lease)))
         }
         assertEquals(ProjectionPublicationStatus.PUBLISHED, publication.status)
         assertEquals(2L, publication.cacheEpoch)
         assertEquals(1, lease.closeCount)
-        val cache = database.r05cReadCache(CLAIM_ACCOUNT_A)!!
+        val cache = database.projectionReadCache(CLAIM_ACCOUNT_A)!!
         assertEquals(2L, cache.cacheEpoch)
         assertEquals(2L, cache.materializedEpoch)
         assertFalse(cache.projectionDirty)
-        assertTrue(database.r05cQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_WORKOUT_1)).isEmpty())
-        assertEquals(1, database.r05cQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_LOCAL_NEW)).size)
-        assertEquals(1, database.r05cQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_WORKOUT_2)).size)
+        assertTrue(database.projectionQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_WORKOUT_1)).isEmpty())
+        assertEquals(1, database.projectionQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_LOCAL_NEW)).size)
+        assertEquals(1, database.projectionQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_WORKOUT_2)).size)
 
         // A clean equal-epoch retry is an unchanged no-op with no new signal.
-        val retryLease = R05cTestLease()
+        val retryLease = ProjectionTestLease()
         val retry = database.baseWithLoop(owner, emptyApi, 2L) { run, _ ->
-            run.publishProjection(database.r05cStore(barrier = r05cGrantBarrier(retryLease)))
+            run.publishProjection(database.projectionStore(barrier = projectionGrantBarrier(retryLease)))
         }
         assertEquals(ProjectionPublicationStatus.UNCHANGED, retry.status)
         assertEquals(2L, retry.cacheEpoch)
@@ -393,7 +387,7 @@ class SnapshotBaselineTest : GymDatabaseTest() {
         database.claimSeedDevice(CLAIM_ACCOUNT_A, CLAIM_GENERATION)
         val owner = claimOwner()
         assertNull(database.syncDao().getSyncState(CLAIM_ACCOUNT_A))
-        assertNull(database.r05cReadCache(CLAIM_ACCOUNT_A))
+        assertNull(database.projectionReadCache(CLAIM_ACCOUNT_A))
         val page = stagePage(
             listOf(stageCustomUpsert(id = BASE_CUSTOM_1, name = "Base Custom", revision = 5L)),
             BASE_BASELINE_1, null, false,
@@ -406,11 +400,11 @@ class SnapshotBaselineTest : GymDatabaseTest() {
         val state = database.syncDao().getSyncState(CLAIM_ACCOUNT_A)!!
         assertEquals(BASE_BASELINE_1, state.cursor)
         assertNull(state.lastSuccessMillis)
-        val cache = database.r05cReadCache(CLAIM_ACCOUNT_A)!!
+        val cache = database.projectionReadCache(CLAIM_ACCOUNT_A)!!
         assertTrue(cache.baselineComplete)
         assertEquals(1L, cache.cacheEpoch)
         assertTrue(cache.projectionDirty)
-        assertEquals("upsert", database.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_CUSTOM, BASE_CUSTOM_1))
+        assertEquals("upsert", database.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_CUSTOM, BASE_CUSTOM_1))
     }
 
     @Test
@@ -516,8 +510,8 @@ class SnapshotBaselineTest : GymDatabaseTest() {
         assertEquals(1, db.stageRowsFor(CLAIM_ACCOUNT_A).size)
 
         // Nothing was ever established: no canonical rows, incomplete baseline, original cursor.
-        assertTrue(db.r05cQuery("SELECT * FROM sync_canonical_roots").isEmpty())
-        assertEquals(false, db.r05cReadCache(CLAIM_ACCOUNT_A)!!.baselineComplete)
+        assertTrue(db.projectionQuery("SELECT * FROM sync_canonical_roots").isEmpty())
+        assertEquals(false, db.projectionReadCache(CLAIM_ACCOUNT_A)!!.baselineComplete)
         assertEquals(STAGE_SYNC_CURSOR, db.syncDao().getSyncState(CLAIM_ACCOUNT_A)?.cursor)
         assertEquals(BASE_LAST_SUCCESS, db.syncDao().getSyncState(CLAIM_ACCOUNT_A)?.lastSuccessMillis)
     }
@@ -562,7 +556,7 @@ class SnapshotBaselineTest : GymDatabaseTest() {
             db.claimSeedWorkout(BASE_LOCAL_NEW, CLAIM_ACCOUNT_A, "Racing edit")
             val captureStore = db.claimCaptureStore(claimSession(), mutableListOf(BASE_MUTATION_1))
             val captured = db.claimCaptureStart(captureStore, CLAIM_ACCOUNT_A, BASE_LOCAL_NEW)
-            val watermarkBefore = db.baseWatermark(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_LOCAL_NEW)
+            val watermarkBefore = db.baseWatermark(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_LOCAL_NEW)
 
             val downloaded = loop.continueDownload(run, limited, maxPages = 5)
             assertTrue(downloaded.stop is SnapshotDownloadStop.Downloaded)
@@ -577,20 +571,20 @@ class SnapshotBaselineTest : GymDatabaseTest() {
             assertEquals(1, outbox.size)
             assertEquals(captured.mutationId, outbox.single().mutationId)
             assertEquals(captured.payloadJson, outbox.single().payloadJson)
-            assertEquals(watermarkBefore, db.baseWatermark(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_LOCAL_NEW))
+            assertEquals(watermarkBefore, db.baseWatermark(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_LOCAL_NEW))
 
             // ANY selected outbox row protects the ENTIRE old/local graph.
-            val lease = R05cTestLease()
-            val publication = run.publishProjection(db.r05cStore(barrier = r05cGrantBarrier(lease)))
+            val lease = ProjectionTestLease()
+            val publication = run.publishProjection(db.projectionStore(barrier = projectionGrantBarrier(lease)))
             assertEquals(ProjectionPublicationStatus.PROTECTED, publication.status)
             assertEquals(1L, publication.cacheEpoch)
             assertEquals(1, lease.closeCount)
             assertEquals(domainAfterCapture, db.baseDomainSnapshot())
         }
         assertEquals(1, database.syncDao().getOutboxForAccount(CLAIM_ACCOUNT_A).size)
-        assertEquals(1, database.r05cQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_WORKOUT_2)).size)
-        assertEquals(1, database.r05cQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_LOCAL_NEW)).size)
-        assertTrue(database.r05cReadCache(CLAIM_ACCOUNT_A)!!.projectionDirty)
+        assertEquals(1, database.projectionQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_WORKOUT_2)).size)
+        assertEquals(1, database.projectionQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_LOCAL_NEW)).size)
+        assertTrue(database.projectionReadCache(CLAIM_ACCOUNT_A)!!.projectionDirty)
     }
 
     @Test
@@ -624,23 +618,23 @@ class SnapshotBaselineTest : GymDatabaseTest() {
         }
         assertBaselineResult(baseline, 1L, BASE_BASELINE_1, 1L, 2L, false)
 
-        val lease = R05cTestLease()
+        val lease = ProjectionTestLease()
         val api = baseApi(page)
         database.baseWithLoop(owner, api, 1L) { run, _ ->
             expectBaselineReject("physical collision") {
-                run.publishProjection(database.r05cStore(barrier = r05cGrantBarrier(lease)))
+                run.publishProjection(database.projectionStore(barrier = projectionGrantBarrier(lease)))
             }
         }
         assertEquals(1, lease.closeCount)
         // The committed dirty baseline, cursor and old visible graph survive the failed publication.
-        assertEquals("upsert", database.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_WORKOUT_1))
-        assertEquals(7L, database.baseCanonicalRevision(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_WORKOUT_1))
-        val cache = database.r05cReadCache(CLAIM_ACCOUNT_A)!!
+        assertEquals("upsert", database.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_WORKOUT_1))
+        assertEquals(7L, database.baseCanonicalRevision(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_WORKOUT_1))
+        val cache = database.projectionReadCache(CLAIM_ACCOUNT_A)!!
         assertTrue(cache.baselineComplete)
         assertEquals(1L, cache.cacheEpoch)
         assertTrue(cache.projectionDirty)
         assertEquals(BASE_BASELINE_1, database.syncDao().getSyncState(CLAIM_ACCOUNT_A)?.cursor)
-        assertEquals(1, database.r05cQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_WORKOUT_1)).size)
+        assertEquals(1, database.projectionQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_WORKOUT_1)).size)
 
         // Crash/uncertain publication recovery on a fresh file-backed reopen:
         // a new run at the durable epoch publishes without another snapshot.
@@ -678,15 +672,15 @@ class SnapshotBaselineTest : GymDatabaseTest() {
 
             val reopened = claimFileDatabase(context, name)
             try {
-                val reopenLease = R05cTestLease()
+                val reopenLease = ProjectionTestLease()
                 val reopenApi = SnapshotDeliveryScriptApi(reopened, mutableListOf(), mutableListOf())
                 val publication = reopened.baseWithLoop(fileOwner, reopenApi, 1L) { run, _ ->
-                    run.publishProjection(reopened.r05cStore(barrier = r05cGrantBarrier(reopenLease)))
+                    run.publishProjection(reopened.projectionStore(barrier = projectionGrantBarrier(reopenLease)))
                 }
                 assertEquals(ProjectionPublicationStatus.PUBLISHED, publication.status)
                 assertEquals(2L, publication.cacheEpoch)
                 assertEquals(1, reopenLease.closeCount)
-                val reopenedCache = reopened.r05cReadCache(CLAIM_ACCOUNT_A)!!
+                val reopenedCache = reopened.projectionReadCache(CLAIM_ACCOUNT_A)!!
                 assertEquals(2L, reopenedCache.cacheEpoch)
                 assertEquals(2L, reopenedCache.materializedEpoch)
                 assertFalse(reopenedCache.projectionDirty)
@@ -694,7 +688,7 @@ class SnapshotBaselineTest : GymDatabaseTest() {
                 assertEquals(BASE_LAST_SUCCESS, reopened.syncDao().getSyncState(CLAIM_ACCOUNT_A)?.lastSuccessMillis)
                 assertEquals(
                     1,
-                    reopened.r05cQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_WORKOUT_1)).size,
+                    reopened.projectionQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_WORKOUT_1)).size,
                 )
             } finally {
                 reopened.close()
@@ -734,8 +728,8 @@ class SnapshotBaselineTest : GymDatabaseTest() {
 
             // Publication increments AGAIN on the same run; the old pull
             // token is retired by the attempt while the fresh read works.
-            val lease = R05cTestLease()
-            val publication = run.publishProjection(db.r05cStore(barrier = r05cGrantBarrier(lease)))
+            val lease = ProjectionTestLease()
+            val publication = run.publishProjection(db.projectionStore(barrier = projectionGrantBarrier(lease)))
             assertEquals(ProjectionPublicationStatus.PUBLISHED, publication.status)
             assertEquals(2L, publication.cacheEpoch)
             expectBaselineReject("old epoch-1 pull token") { run.checkPullCheckpoint(firstCheckpoint) }
@@ -748,16 +742,16 @@ class SnapshotBaselineTest : GymDatabaseTest() {
             db.claimCaptureStart(captureStore, CLAIM_ACCOUNT_A, BASE_LOCAL_NEW)
             assertEquals(1, db.syncDao().getOutboxForAccount(CLAIM_ACCOUNT_A).size)
         }
-        assertEquals(2L, database.r05cReadCache(CLAIM_ACCOUNT_A)!!.cacheEpoch)
+        assertEquals(2L, database.projectionReadCache(CLAIM_ACCOUNT_A)!!.cacheEpoch)
 
         // Older epoch callers fail closed: stale run admission and stale direct publication.
         expectBaselineReject("old-epoch run") {
             database.baseWithLoop(owner, baseApi(page), BASE_EPOCH) { _, _ -> }
         }
         expectBaselineReject("old-epoch direct publication") {
-            database.r05cStore(barrier = r05cGrantBarrier(R05cTestLease())).publish(BASE_EPOCH)
+            database.projectionStore(barrier = projectionGrantBarrier(ProjectionTestLease())).publish(BASE_EPOCH)
         }
-        assertEquals(2L, database.r05cReadCache(CLAIM_ACCOUNT_A)!!.cacheEpoch)
+        assertEquals(2L, database.projectionReadCache(CLAIM_ACCOUNT_A)!!.cacheEpoch)
         assertEquals(BASE_BASELINE_1, database.syncDao().getSyncState(CLAIM_ACCOUNT_A)?.cursor)
     }
 
@@ -785,7 +779,7 @@ class SnapshotBaselineTest : GymDatabaseTest() {
         val api = baseApi(page)
         try {
             database.baseWithLoop(owner, api, 1L) { run, _ ->
-                run.publishProjection(database.r05cStore(barrier = r05cGrantBarrier(failingLease)))
+                run.publishProjection(database.projectionStore(barrier = projectionGrantBarrier(failingLease)))
             }
             fail("close failure must propagate, never read as success")
         } catch (cancelled: CancellationException) {
@@ -794,17 +788,17 @@ class SnapshotBaselineTest : GymDatabaseTest() {
             assertTrue("close failure must surface [${expected.message}]", expected.message!!.contains("base-test postcommit"))
         }
         assertEquals(1, failingLease.closeCount)
-        val committed = database.r05cReadCache(CLAIM_ACCOUNT_A)!!
+        val committed = database.projectionReadCache(CLAIM_ACCOUNT_A)!!
         assertEquals(2L, committed.cacheEpoch)
         assertEquals(2L, committed.materializedEpoch)
         assertFalse(committed.projectionDirty)
-        assertEquals(1, database.r05cQuery("SELECT * FROM exercises WHERE id = ?", arrayOf(BASE_CUSTOM_1)).size)
+        assertEquals(1, database.projectionQuery("SELECT * FROM exercises WHERE id = ?", arrayOf(BASE_CUSTOM_1)).size)
 
         // A fresh durable-epoch run observes the commit without any HTTP:
         // clean retry is UNCHANGED with no new signal.
-        val retryLease = R05cTestLease()
+        val retryLease = ProjectionTestLease()
         val retry = database.baseWithLoop(owner, api, 2L) { run, _ ->
-            run.publishProjection(database.r05cStore(barrier = r05cGrantBarrier(retryLease)))
+            run.publishProjection(database.projectionStore(barrier = projectionGrantBarrier(retryLease)))
         }
         assertEquals(ProjectionPublicationStatus.UNCHANGED, retry.status)
         assertEquals(2L, retry.cacheEpoch)

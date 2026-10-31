@@ -37,7 +37,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R06a independent replay/validation acceptance: frozen-head replay across
+ * replay/validation acceptance: frozen-head replay across
  * runs/reopen/new owners, exact checkClaim fencing per tampered field,
  * defensive request ownership, later-edit preservation, trigger rollback,
  * caller-fault provenance and cancellation/transient recovery. Real Room, no

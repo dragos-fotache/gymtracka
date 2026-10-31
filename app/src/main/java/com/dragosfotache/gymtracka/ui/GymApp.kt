@@ -3,7 +3,6 @@ package com.dragosfotache.gymtracka.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -12,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsRun
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -25,7 +25,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.dragosfotache.gymtracka.ui.account.AccountStartupApp
 import com.dragosfotache.gymtracka.ui.activeworkout.ActiveWorkoutPill
@@ -38,6 +40,8 @@ import com.dragosfotache.gymtracka.ui.exercises.CreateExerciseScreen
 import com.dragosfotache.gymtracka.ui.exercises.RoutineExercisePickerScreen
 import com.dragosfotache.gymtracka.ui.routines.RoutineEditorScreen
 import com.dragosfotache.gymtracka.ui.routines.RoutineDetailScreen
+import com.dragosfotache.gymtracka.ui.settings.ServerConnectionState
+import com.dragosfotache.gymtracka.ui.settings.SettingsScreen
 import com.dragosfotache.gymtracka.ui.util.formatElapsedTime
 import com.dragosfotache.gymtracka.ui.workouts.WorkoutHistoryDetailScreen
 import com.dragosfotache.gymtracka.ui.workouts.WorkoutHistoryScreen
@@ -63,19 +67,22 @@ internal fun GymApp(appState: GymAppState) {
 @Composable
 internal fun GymAppContent(
     appState: GymAppState,
-    accountTab: (@Composable RowScope.() -> Unit)? = null,
-    accountDialog: (@Composable () -> Unit)? = null,
+    settingsAccountContent: (@Composable () -> Unit)? = null,
+    serverConnectionState: ServerConnectionState? = null,
 ) {
+    // Keep the established default height while giving enlarged labels room to wrap.
+    val navigationBarHeight = 88.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
             if (
                 appState.destination == Destination.Exercises ||
                 appState.destination == Destination.Workout ||
-                appState.destination == Destination.History
+                appState.destination == Destination.History ||
+                appState.destination == Destination.Settings
             ) {
                 Box {
-                    NavigationBar(modifier = Modifier.height(88.dp)) {
+                    NavigationBar(modifier = Modifier.height(navigationBarHeight)) {
                         NavigationBarItem(
                             selected = appState.destination == Destination.Exercises,
                             onClick = appState::showExercises,
@@ -86,7 +93,7 @@ internal fun GymAppContent(
                                     contentDescription = null,
                                 )
                             },
-                            label = { Text("Exercises") },
+                            label = { NavigationLabel("Exercises") },
                         )
                         NavigationBarItem(
                             selected = appState.destination == Destination.Workout,
@@ -98,7 +105,7 @@ internal fun GymAppContent(
                                     contentDescription = null,
                                 )
                             },
-                            label = { Text("Workout") },
+                            label = { NavigationLabel("Workout") },
                         )
                         NavigationBarItem(
                             selected = appState.destination == Destination.History,
@@ -110,9 +117,15 @@ internal fun GymAppContent(
                                     contentDescription = null,
                                 )
                             },
-                            label = { Text("History") },
+                            label = { NavigationLabel("History") },
                         )
-                        accountTab?.let { tab -> tab() }
+                        NavigationBarItem(
+                            selected = appState.destination == Destination.Settings,
+                            onClick = appState::showSettings,
+                            modifier = Modifier.offset(y = 4.dp).testTag("nav-settings"),
+                            icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                            label = { NavigationLabel("Settings") },
+                        )
                     }
                     appState.activeWorkout?.let { workout ->
                         ActiveWorkoutPill(
@@ -122,7 +135,7 @@ internal fun GymAppContent(
                             },
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
-                                .offset(y = (-88).dp),
+                                .offset(y = -navigationBarHeight),
                             onClick = appState::resumeWorkout,
                             onDiscard = appState::requestDiscardWorkout,
                         )
@@ -179,6 +192,11 @@ internal fun GymAppContent(
                 modifier = Modifier.padding(innerPadding),
                 onWorkoutSelected = appState::showWorkoutHistory,
                 onPerformAgain = appState::requestPerformAgain,
+            )
+            Destination.Settings -> SettingsScreen(
+                modifier = Modifier.padding(innerPadding),
+                accountContent = settingsAccountContent,
+                serverConnectionState = serverConnectionState,
             )
             Destination.Routine -> appState.editingRoutineId?.let { routineId ->
                 RoutineEditorScreen(
@@ -266,7 +284,15 @@ internal fun GymAppContent(
     }
 
     GymAppDialogs(appState)
-    accountDialog?.invoke()
+}
+
+@Composable
+private fun NavigationLabel(text: String) {
+    Text(
+        text,
+        modifier = Modifier.padding(horizontal = 4.dp),
+        textAlign = TextAlign.Center,
+    )
 }
 
 @Composable

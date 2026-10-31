@@ -10,25 +10,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 
-/**
- * R09b independent QA fixtures only. No production declarations.
- *
- * All values derive from docs/remaining-work/R09b-task.md supplied concrete
- * API/harness facts plus QA-owned R04a/R04b/R04c fixtures (RefreshTestFixtures,
- * SessionRecoveryTestFixtures, VaultTestFixtures, FakeSessionVault,
- * InMemoryVaultFileStorage, IdentityVaultCipher, realVault). No production
- * source, diff, generated source, decompiled classes or schema JSON inspected.
- *
- * Spec-fixed constructors used only:
- * ServiceOrigin.parse, ServiceSessionBinding(origin, accountId, generation),
- * RecoveryIdentity(binding, operationId), RecoveryRoomSnapshot(revision,
- * sessionGeneration, cachedAccountId, phase, identity, baselineComplete),
- * ServiceSession(account, accessToken, accessExpiresAtMillis, refreshToken,
- * refreshExpiresAtMillis), VaultSnapshot(revision, record),
- * VaultSessionRecord(binding, operationId, phase, session, pendingRefresh),
- * VaultPendingRefresh(operationId, attempt),
- * ServiceRefreshAttempt.fromJson(key, body).
- */
+
 internal object SessionPreparationTestFixtures {
     const val ACCOUNT_ID = RefreshTestFixtures.ACCOUNT_ID
     const val OTHER_ACCOUNT_ID = RefreshTestFixtures.OTHER_ACCOUNT_ID

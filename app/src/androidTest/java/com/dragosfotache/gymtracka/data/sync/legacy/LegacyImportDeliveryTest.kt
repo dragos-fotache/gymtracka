@@ -21,16 +21,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R13b independent QA: private import delivery settlement foundations.
- *
- * Derived ONLY from docs/archive/remaining-work/R13b-task.md (storage/progress/
- * acceptance/settlement contract) and allowed test-only R13a capture shapes
- * (journal/entry/outbox columns, wrapper envelope contract, barrier/lease
- * patterns, closed-failure oracles). No production declarations/diffs,
- * Worker work or decompiled classes inspected. All seeds and oracles are
- * independent raw-SQL literals with this slice's own UUIDs. Equality is
- * exact byte/field equality parsed from contract shapes, never substring
- * matching and never production-encoder output.
+ * Real Room checks for private import delivery settlement, exact original requests, canonical
+ * acceptance receipts, retained suffix work and consent-bound progress.
  */
 @RunWith(AndroidJUnit4::class)
 class LegacyImportDeliveryTest {
@@ -39,7 +31,7 @@ class LegacyImportDeliveryTest {
     private lateinit var authority: RoomSessionAuthority
 
     private companion object {
-        const val ORIGIN = "https://sync-r13b.example.test"
+        const val ORIGIN = "https://sync-import.example.test"
         const val ACCOUNT = "c13b1001-1111-4111-8111-111111111111"
         const val OPERATION = "d13b1001-1111-4111-8111-111111111111"
 

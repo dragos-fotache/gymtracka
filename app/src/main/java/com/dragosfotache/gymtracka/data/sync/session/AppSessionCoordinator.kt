@@ -61,29 +61,21 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * R09h app-facing activation and offline recovery boundary. Composes Room12
- * authority, R09b/g preparation/recovery, R09c bootstrap, R09d completion and
- * R04 startup/refresh into one explicitly constructed boundary. Matching
- * established accounts reopen offline without credential freshness/login;
- * safe reconnect reuses bounded push-before-pull; reauth/transient stops
- * preserve cached edits and exact uncertain requests.
+ * Application-facing activation and offline recovery. Composes Room authority, preparation,
+ * retained-account recovery, bootstrap, completion and startup/refresh. Matching established
+ * accounts reopen offline; recoverable delivery stops preserve cached edits and exact uncertain
+ * requests.
  *
- * Construction starts PrivacyLocked and does no I/O. Caller owns ONE
- * coordinator/run owner per physical DB/vault; constructor is inert. Required
- * transition/publication inputs have no permissive defaults. No production
- * startup/UI factory constructs this boundary in this slice. Displays are
- * fixed/redacted and expose no grants, credentials, request bytes or causes.
+ * Construction starts PrivacyLocked and performs no I/O. The account startup factory supplies
+ * shared database/vault ownership and required real transition/publication barriers. Displays are
+ * fixed and redact grants, credentials, request bytes and raw causes.
  *
- * Normative refusal policy: [recover] returns closed Private classifications.
- * [acceptGrant] and [completeActivation] return Private on successful
- * preparation or typed incomplete engine progress, and Active only on
- * authorized completion; refused input/dependency/seam failures throw
- * [AppSessionException]. An exact expected-snapshot mismatch, process
- * invalidation or dead handle throws [AppSessionStaleException]. Caller
- * cancellation is always rethrown. Early refusal and failed acquisition
- * preserve the current healthy Active state/handle; once reservation has
- * started, errors leave the affected operation private/locked until explicit
- * recovery. Exceptions never imply durable rollback.
+ * [recover] returns closed Private classifications. [acceptGrant] and [completeActivation] report
+ * private preparation/progress and admit Active only after authorized completion. Refused inputs
+ * and dependency failures throw [AppSessionException]; exact snapshot mismatch, invalidation or
+ * dead handles throw [AppSessionStaleException]. Caller cancellation is rethrown. Early refusal
+ * preserves a healthy handle; once reservation starts, failures leave the affected operation
+ * private until explicit recovery. Exceptions do not establish durable rollback.
  */
 internal class AppSessionCoordinator(
     private val database: GymDatabase,
@@ -252,7 +244,7 @@ internal class AppSessionCoordinator(
     }
 
     /**
-     * R13b centralized admission evidence gate. Returns true when no
+     * centralized admission evidence gate. Returns true when no
      * migration exists or retained evidence fully revalidates (ACTIVE
      * rooms additionally require definitive settlement); false on any
      * missing/corrupt/partial evidence. Callers maintain the
@@ -355,8 +347,11 @@ internal class AppSessionCoordinator(
      * drain or reservation. Carries the captured facade fence into the
      * shared critical section without recapturing it, so an invalidation
      * between Google/exchange and handoff fails even when the durable Room
-     * snapshot is unchanged. Delegates existing R09 preparation exactly
-     * once; every guard/lease/error path below is shared with [acceptGrant].
+     * snapshot is unchanged. A repeated private same-account sign-in uses a
+     * fresh recovery reservation, retaining uncertain predecessor evidence;
+     * it never compares the new grant with exact saved-session credentials.
+     * Direct [acceptGrant] still resumes only the exact saved private grant.
+     * Every guard/lease/error path below is shared with [acceptGrant].
      * Real consumer refusals propagate unchanged.
      */
     override suspend fun acceptForegroundGrant(
@@ -388,11 +383,19 @@ internal class AppSessionCoordinator(
         if (request.intent == ForegroundSignInIntent.PRIVATE_IMPORT_REAUTHENTICATION) {
             return reauthenticateWithFence(request.expected, targetOperation, session, binding.fence)
         }
-        return acceptGrantWithFence(request.expected, targetOperation, session, binding.fence)
+        return acceptGrantWithFence(
+            request.expected,
+            targetOperation,
+            session,
+            binding.fence,
+            freshPrivateSession = request.intent == ForegroundSignInIntent.SAME_ACCOUNT_REAUTHENTICATION &&
+                (request.expected.phase == RecoveryRoomPhase.PREPARING ||
+                    request.expected.phase == RecoveryRoomPhase.TRANSITIONING),
+        )
     }
 
     /**
-     * R13b opt-in private-import progress observation. Strictly validates
+     * opt-in private-import progress observation. Strictly validates
      * retained original source/entries/progress/current lineage under
      * configured process authority; null means no migration, never a
      * fabricated empty migration. Performs no HTTP, UUID generation,
@@ -463,7 +466,7 @@ internal class AppSessionCoordinator(
     }
 
     /**
-     * R13b explicit private-import reauthentication. Requires opt-in, a
+     * explicit private-import reauthentication. Requires opt-in, a
      * valid retained captured/settled import, same configured origin and
      * service UUID, the exact current private PREPARING expectation and a
      * NEW operation distinct from current. Composes existing same-account
@@ -525,7 +528,7 @@ internal class AppSessionCoordinator(
     }
 
     /**
-     * R13b private-import reauthentication critical section over the exact
+     * private-import reauthentication critical section over the exact
      * supplied fence. Shares the operation mutex and captured process fence
      * discipline with [acceptGrantWithFence]: every guard, lease and error
      * path runs under the same serialized exclusion.
@@ -789,6 +792,7 @@ internal class AppSessionCoordinator(
         targetOperation: String,
         session: ServiceSession,
         observedFence: Any,
+        freshPrivateSession: Boolean = false,
     ): AppSessionState {
         return operationMutex.withLock {
             ensureCurrent(observedFence)
@@ -813,7 +817,7 @@ internal class AppSessionCoordinator(
             // Pre-acquisition compatibility: foreign grants, origin drift and
             // reused/new operations refuse here, before any drain or
             // invalidation, so a healthy Active handle is preserved untouched.
-            validateGrantCompatibility(expected, targetOperation, session, configured)
+            validateGrantCompatibility(expected, targetOperation, session, configured, freshPrivateSession)
             ensureCurrent(observedFence)
             // Retained signed-out provenance uses the existing pure read-only
             // authority check before any drain or supersession.
@@ -909,7 +913,7 @@ internal class AppSessionCoordinator(
                 outcome = try {
                     legacyCaptureOutcomeIfOptIn(
                         expected, targetOperation, session, configured, lease, observedFence,
-                    ) ?: reserveGrant(expected, targetOperation, session, observedFence)
+                    ) ?: reserveGrant(expected, targetOperation, session, observedFence, freshPrivateSession)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: AppSessionStaleException) {
@@ -997,7 +1001,7 @@ internal class AppSessionCoordinator(
     }
 
     /**
-     * R13b pre-delivery consent seam. Validates migration again; when an
+     * pre-delivery consent seam. Validates migration again; when an
      * original active import lacks durable consent, invokes the required
      * consent seam under exact facade/process/current authority BEFORE any
      * prepared delivery. False (or refusal/cancellation/stale) returns
@@ -1092,7 +1096,7 @@ internal class AppSessionCoordinator(
     }
 
     /**
-     * R13b post-tail settlement validation. Requires complete matching
+     * post-tail settlement validation. Requires complete matching
      * receipts when a migration exists (SETTLED advisory progress);
      * returns true when no migration or fully settled, false for partial
      * settlement. Corrupt evidence throws closed UNAVAILABLE.
@@ -1144,6 +1148,7 @@ internal class AppSessionCoordinator(
         stageId: String,
         maxSnapshotPages: Int = 100,
         restartRetainedStage: Boolean = false,
+        connectionRestored: Boolean = false,
     ): AppSessionState {
         currentCoroutineContext().ensureActive()
         try {
@@ -1188,6 +1193,7 @@ internal class AppSessionCoordinator(
             val bootstrap = try {
                 engine.bootstrap(
                     stageId, maxSnapshotPages, restartRetainedStage = restartRetainedStage,
+                    connectionRestored = connectionRestored,
                 )
             } catch (e: CancellationException) {
                 currentCoroutineContext().ensureActive()
@@ -1210,7 +1216,11 @@ internal class AppSessionCoordinator(
                 tail.hasOutstandingLocalWork == false
             if (!tailClean) {
                 return@withLock publishIfCurrent(
-                    AppSessionState.Private(AppSessionReason.PREPARATION_REQUIRED, advisoryRoom()),
+                    AppSessionState.Private(
+                        AppSessionReason.PREPARATION_REQUIRED,
+                        advisoryRoom(),
+                        retryAtMillis = (tail?.push?.stop as? PushDeliveryStop.Deferred)?.retryAfterMillis,
+                    ),
                     observedFence,
                 )
             }
@@ -1400,7 +1410,7 @@ internal class AppSessionCoordinator(
     }
 
     /**
-     * R12c bounded recovery read: observes the selected account's current cache epoch
+     * bounded recovery read: observes the selected account's current cache epoch
      * for the exact current handle. RecoveryRoomSnapshot carries no cache epoch and
      * materialized-only observation cannot recover dirty progress after a
      * committed-but-cancelled/lost baseline/publication result; this read supplies that
@@ -1539,7 +1549,7 @@ internal class AppSessionCoordinator(
     }
 
     /**
-     * R13c cold read-only selected-account metadata observation for presentation.
+     * cold read-only selected-account metadata observation for presentation.
      * No HTTP/UUID/clock/cleanup/admission. Each initial/invalidation reread and
      * return/emission requires exact current live handle/process and transactional
      * Room authority/baseline checks. Observes sync_outbox, sync_state and
@@ -1548,7 +1558,8 @@ internal class AppSessionCoordinator(
      * frozen/rejected; retained error is rejected or stored error presence, never
      * raw code/message. Last-success comes only from selected sync_state;
      * negative/inconsistent data closes to fixed UNAVAILABLE, never normalization.
-     * Uses scalar DAO observations over full payloads. Checks caller cancellation
+     * Scalar metadata reads plus strict validation of rejected recovery candidates only.
+     * Checks caller cancellation
      * and synchronous exact currentness before emission; old status never binds
      * to a new handle. Foreign metadata remains private. Presentation only.
      */
@@ -1728,7 +1739,13 @@ internal class AppSessionCoordinator(
                 }
                 currentCoroutineContext().ensureActive()
                 facadeCheck()
-                AccountSyncStatus(pending, lastRaw, retained)
+                AccountSyncStatus(
+                    pending,
+                    lastRaw,
+                    retained,
+                    database.syncDao().getRejectedOutboxForAccount(binding.accountId)
+                        .any(::isDefinitiveOrdinaryRejection),
+                )
             }
             currentCoroutineContext().ensureActive()
             facadeCheck()
@@ -1789,7 +1806,7 @@ internal class AppSessionCoordinator(
     }
 
     /**
-     * R13d explicit ordinary-recovery preparation over the exact current handle. Returns an
+     * explicit ordinary-recovery preparation over the exact current handle. Returns an
      * opaque process-local confirmation when a validated definitive ordinary rejected head
      * with a validated pending/rejected remainder is safely confirmable, or null when there
      * is nothing to confirm or recovery would be unsafe. Never freezes or sends a previously
@@ -1806,7 +1823,11 @@ internal class AppSessionCoordinator(
      * spans the user's decision. Errors are existing closed categories; caller cancellation
      * is always rethrown.
      */
-    suspend fun prepareOrdinaryRecovery(session: AppAccountSession): AccountRecoveryConfirmation? {
+    suspend fun prepareOrdinaryRecovery(session: AppAccountSession): AccountRecoveryConfirmation? =
+        (prepareOrdinaryRecoveryOutcome(session) as? OrdinaryRecoveryPreparation.Prepared)?.confirmation
+
+    /** Typed presentation outcome; all existing capture and confirmation fences remain authoritative. */
+    suspend fun prepareOrdinaryRecoveryOutcome(session: AppAccountSession): OrdinaryRecoveryPreparation {
         currentCoroutineContext().ensureActive()
         val observedFence = synchronized(stateLock) { currentFence }
         // Fresh epoch read outside the operation mutex (observeCacheEpoch owns it). Entry
@@ -1821,10 +1842,10 @@ internal class AppSessionCoordinator(
             throw e
         } catch (e: AppSessionException) {
             currentCoroutineContext().ensureActive()
-            return null
+            return OrdinaryRecoveryPreparation.Failed
         } catch (_: Exception) {
             currentCoroutineContext().ensureActive()
-            return null
+            return OrdinaryRecoveryPreparation.Failed
         }
         return operationMutex.withLock {
             ensureCurrent(observedFence)
@@ -1867,13 +1888,29 @@ internal class AppSessionCoordinator(
                 store.withRun(epoch) { run ->
                     val settled = settleFrozenHeadForRecovery(run, store, api, binding.accountId)
                     ensureCurrent(observedFence)
+                    val remaining = database.syncDao().getOutboxForAccount(binding.accountId)
+                    val rejected = remaining.filter { it.state == "rejected" }
+                    currentCoroutineContext().ensureActive()
+                    ensureCurrent(observedFence)
+                    facadeCheck()
                     if (!settled) {
-                        null
+                        OrdinaryRecoveryPreparation.Blocked
+                    } else if (rejected.isEmpty()) {
+                        if (remaining.any { it.state != "pending" || it.errorCode != null ||
+                                it.errorMessage != null || it.mutationType == "aggregate.import"
+                            }
+                        ) {
+                            OrdinaryRecoveryPreparation.Blocked
+                        } else {
+                            OrdinaryRecoveryPreparation.NothingEligible
+                        }
+                    } else if (rejected.none(::isDefinitiveOrdinaryRejection)) {
+                        OrdinaryRecoveryPreparation.Blocked
                     } else if (!preflightOrdinaryRecovery(observedFence, current, run, epoch)) {
                         // Advisory refusal: no validated definitive ordinary remainder, so the
                         // real editor/timer drain below never starts.
                         ensureCurrent(observedFence)
-                        null
+                        OrdinaryRecoveryPreparation.Blocked
                     } else {
                         withRecoveryLease(
                             observedFence,
@@ -1891,10 +1928,10 @@ internal class AppSessionCoordinator(
                             } catch (_: Exception) {
                                 currentCoroutineContext().ensureActive()
                                 ensureCurrent(observedFence)
-                                return@withRecoveryLease null
+                                return@withRecoveryLease OrdinaryRecoveryPreparation.Blocked
                             }
                             if (progress != null && progress.phase != LegacyImportProgressPhase.SETTLED) {
-                                return@withRecoveryLease null
+                                return@withRecoveryLease OrdinaryRecoveryPreparation.Blocked
                             }
                             val confirmation = captureOrdinaryRecoveryTx(
                                 observedFence,
@@ -1905,7 +1942,7 @@ internal class AppSessionCoordinator(
                                 progress,
                             )
                             if (confirmation == null) {
-                                return@withRecoveryLease null
+                                return@withRecoveryLease OrdinaryRecoveryPreparation.Blocked
                             }
                             lease.checkValid()
                             ensureCurrent(observedFence)
@@ -1920,7 +1957,7 @@ internal class AppSessionCoordinator(
                             currentCoroutineContext().ensureActive()
                             ensureCurrent(observedFence)
                             facadeCheck()
-                            confirmation
+                            OrdinaryRecoveryPreparation.Prepared(confirmation)
                         }
                     }
                 }
@@ -1933,6 +1970,10 @@ internal class AppSessionCoordinator(
             } catch (e: AppSessionException) {
                 currentCoroutineContext().ensureActive()
                 throw e
+            } catch (e: SyncApiException.ReauthenticationRequired) {
+                currentCoroutineContext().ensureActive()
+                updateDeliveryStatus(current, observedFence, AppSessionDeliveryStatus.REAUTHENTICATION_REQUIRED)
+                throw e
             } catch (e: SessionVaultException) {
                 currentCoroutineContext().ensureActive()
                 lockIfAlive(observedFence, current.aliveToken())
@@ -1941,7 +1982,7 @@ internal class AppSessionCoordinator(
                 currentCoroutineContext().ensureActive()
                 if (e.failure == SessionRefreshFailure.ACCESS_UNAVAILABLE) {
                     ensureCurrent(observedFence)
-                    return@withLock null
+                    return@withLock OrdinaryRecoveryPreparation.Failed
                 }
                 lockIfAlive(observedFence, current.aliveToken())
                 throw AppSessionStaleException()
@@ -1954,17 +1995,17 @@ internal class AppSessionCoordinator(
                 // permanent privacy lock; a fresh decision rereads the live epoch.
                 currentCoroutineContext().ensureActive()
                 ensureCurrent(observedFence)
-                return@withLock null
+                return@withLock OrdinaryRecoveryPreparation.Blocked
             } catch (_: Exception) {
                 currentCoroutineContext().ensureActive()
                 ensureCurrent(observedFence)
-                return@withLock null
+                return@withLock OrdinaryRecoveryPreparation.Failed
             }
         }
     }
 
     /**
-     * R13d confirmed ordinary rejection recovery. Discards only the captured exact ordinary
+     * confirmed ordinary rejection recovery. Discards only the captured exact ordinary
      * rows, resets the selected cursor to null while preserving recorded last-success, marks
      * the projection dirty, then reloads the complete cloud snapshot on the same admitted run
      * with existing snapshot/tail/publication machinery (never a second facade/run admission
@@ -2204,6 +2245,7 @@ internal class AppSessionCoordinator(
             is PushDeliveryStop.Empty -> true
             is PushDeliveryStop.LimitReached -> true
             is PushDeliveryStop.Blocked -> stop.reason == PushBlockReason.REJECTED
+            is PushDeliveryStop.ReauthenticationRequired -> throw SyncApiException.ReauthenticationRequired()
             else -> false
         }
     }
@@ -2270,6 +2312,24 @@ internal class AppSessionCoordinator(
         return result
     }
 
+    /** Read-only advisory evidence, never permission to discard or drain editors/timers. */
+    private fun isDefinitiveOrdinaryRejection(row: SyncOutboxEntity): Boolean {
+        if (row.retryCause != "unknown" || row.state != "rejected" || row.errorCode.isNullOrBlank() || row.attemptCount < 1 ||
+            row.sequence <= 0L || row.localGeneration <= 0L ||
+            row.payloadVersion != DURABLE_PAYLOAD_VERSION ||
+            (row.retryAfterMillis != null && row.retryAfterMillis < 0L)
+        ) {
+            return false
+        }
+        return try {
+            readDurableOutboxRow(row).request.envelope.kind != MutationKind.AGGREGATE_IMPORT
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     /**
      * Pure strict ordinary-remainder validation shared by preliminary eligibility and binding
      * capture. No I/O; callers supply rows read under their own fencing. Requires a nonempty
@@ -2281,7 +2341,7 @@ internal class AppSessionCoordinator(
         val head = rows.first()
         if (head.state != "rejected" || head.errorCode.isNullOrBlank()) return false
         for (row in rows) {
-            if (row.sequence <= 0L ||
+            if (row.retryCause != "unknown" || row.sequence <= 0L ||
                 row.localGeneration <= 0L ||
                 row.payloadVersion != DURABLE_PAYLOAD_VERSION ||
                 (row.retryAfterMillis != null && row.retryAfterMillis < 0L)
@@ -2640,7 +2700,7 @@ internal class AppSessionCoordinator(
         }
 
     /**
-     * R12c guarded ACTIVE reconciliation over the exact current handle. Holds ONE
+     * guarded ACTIVE reconciliation over the exact current handle. Holds ONE
      * admitted run through push/pull, any typed full-resync, an actual
      * post-baseline tail and guarded paired publication. Never calls the
      * separate reconnect entry and never reacquires the owner between phases.
@@ -2655,6 +2715,7 @@ internal class AppSessionCoordinator(
         maxSnapshotPages: Int = 100,
         snapshotPageLimit: Int = 200,
         restartStageId: String? = null,
+        connectionRestored: Boolean = false,
     ): AppReconciliationResult {
         currentCoroutineContext().ensureActive()
         if (expectedCacheEpoch < 0) {
@@ -2710,6 +2771,7 @@ internal class AppSessionCoordinator(
             val api = RecoveredSessionGymSyncApi(recovered, transport, facadeCheck)
             val result = try {
                 store.withRun(expectedCacheEpoch) { run ->
+                    if (connectionRestored) run.retryConnectionHeadAfterReconnect()
                     reconcileOnRun(
                         run = run,
                         store = store,
@@ -3213,15 +3275,17 @@ internal class AppSessionCoordinator(
 
     /**
      * Pre-acquisition grant compatibility: cached UUID, configured-origin
-     * binding and reserved-operation equality. Foreign grants, origin drift
-     * and fresh-operation restarts refuse with IDENTITY_MISMATCH before any
-     * drain or invalidation, preserving a healthy handle.
+     * binding and operation identity. Direct saved-session retries require
+     * the reserved operation; explicit foreground private recovery requires
+     * a new operation. Foreign grants, origin drift and incompatible
+     * operations refuse before any drain or invalidation.
      */
     private fun validateGrantCompatibility(
         expected: RecoveryRoomSnapshot,
         targetOperation: String,
         session: ServiceSession,
         configured: ServiceOrigin,
+        freshPrivateSession: Boolean,
     ) {
         val grantAccount = try {
             requireWorkoutUuid(session.account.accountId, "accountId")
@@ -3246,7 +3310,8 @@ internal class AppSessionCoordinator(
         ) {
             val reserved = identity?.operationId
                 ?: throw AppSessionStaleException()
-            if (reserved != targetOperation) {
+            val invalidOperation = if (freshPrivateSession) reserved == targetOperation else reserved != targetOperation
+            if (invalidOperation) {
                 throw AppSessionException(AppSessionReason.IDENTITY_MISMATCH)
             }
         }
@@ -3263,7 +3328,7 @@ internal class AppSessionCoordinator(
     }
 
     /**
-     * R13b opt-in private import capture inside the shared acceptGrant
+     * opt-in private import capture inside the shared acceptGrant
      * critical section. Returns null when inapplicable (no opt-in policy,
      * non-fresh shape, or genuinely empty local storage) so the caller
      * falls back to ordinary preparation. Uses the SAME held transition
@@ -3361,9 +3426,12 @@ internal class AppSessionCoordinator(
         operationId: String,
         session: ServiceSession,
         fence: Any,
+        freshPrivateSession: Boolean,
     ): PreparedSessionObservation {
         ensureCurrent(fence)
-        if (expected.phase == RecoveryRoomPhase.PREPARING || expected.phase == RecoveryRoomPhase.TRANSITIONING) {
+        if (!freshPrivateSession &&
+            (expected.phase == RecoveryRoomPhase.PREPARING || expected.phase == RecoveryRoomPhase.TRANSITIONING)
+        ) {
             return resumeExact(expected, session, fence)
         }
         if (expected.phase == RecoveryRoomPhase.SIGNED_OUT) {
@@ -3392,7 +3460,7 @@ internal class AppSessionCoordinator(
                 throw mapReauthFailure(e)
             }
         }
-        if (expected.phase == RecoveryRoomPhase.ACTIVE) {
+        if (expected.phase == RecoveryRoomPhase.ACTIVE || freshPrivateSession) {
             val retained = sameAccount
                 ?: throw AppSessionException(AppSessionReason.CONFIGURATION_UNAVAILABLE)
             return try {

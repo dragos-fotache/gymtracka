@@ -23,7 +23,7 @@ import org.json.JSONException
 import org.json.JSONObject
 
 /**
- * Raw source-freeze and typed validation helpers for R13a.
+ * Raw source-freeze and typed validation helpers for local capture.
  *
  * Source JSON structure (versioned local evidence, NOT a wire/request format):
  * ```
@@ -38,7 +38,7 @@ import org.json.JSONObject
  * `{"t":"float","v":"<raw double bits decimal>"}` |
  * `{"t":"text","v":"<exact>"}` | `{"t":"blob","v":"<base64>"}`.
  * Column order per table is fixed in [FROZEN_TABLES]; row order is stable
- * ORDER BY id/position as frozen. Version is validated on recovery; QA uses
+ * ORDER BY id/position as frozen. Version is validated on recovery; tests use
  * independent raw SQL preservation and raw-source substring/type checks.
  */
 internal object LegacyImportSource {

@@ -41,6 +41,7 @@ internal enum class Destination {
     EditCustomExercise,
     Workout,
     History,
+    Settings,
     Routine,
     RoutineDetail,
     AddRoutineExercises,
@@ -247,7 +248,7 @@ internal class GymAppState(
     }
 
     /**
-     * R12c guarded selected-model reload entry: claims a fresh load generation and
+     * guarded selected-model reload entry: claims a fresh load generation and
      * runs the guarded load. Used by tests and initial discovery.
      */
     suspend fun refreshProjection() {
@@ -523,7 +524,7 @@ internal class GymAppState(
     }
 
     /**
-     * R12c actual drain/claim transition barrier over this state's owned
+     * actual drain/claim transition barrier over this state's owned
      * finite-edit coordinator and running rest timer. Acquired while the old
      * handle is still valid; pauses/drains accepted edits, claims/drains the
      * running rest exactly once, then grants a held lease. Retained drain
@@ -535,7 +536,7 @@ internal class GymAppState(
         transitionBarrierWithChecks()
 
     /**
-     * R13b checked transition-barrier composition seam. Reuses the actual
+     * checked transition-barrier composition seam. Reuses the actual
      * drain/claim body with optional synchronous checks that run on the
      * existing app-state owner dispatcher: [beforeDrain] before pause/drain
      * and [afterDrain] after the terminal drains before lease dispatch.
@@ -671,6 +672,11 @@ internal class GymAppState(
     fun showHistory() {
         invalidateForNavigation()
         destination = Destination.History
+    }
+
+    fun showSettings() {
+        invalidateForNavigation()
+        destination = Destination.Settings
     }
 
     fun requestNewRoutine(): Job? {
@@ -1096,7 +1102,7 @@ internal class GymAppState(
      * newly captured write postpones projection via the publisher's outbox recheck.
      *
      * The acquire body runs on the app-state owner dispatcher without adopting its Job: the
-     * caller (e.g. a future engine on another coroutine) keeps its own Job and cancellation, so
+     * caller (e.g. an engine on another coroutine) keeps its own Job and cancellation, so
      * racing false-impact and expiry claims serialize on the same dispatcher that owns every
      * other timer claim and can never both observe an active timer. Lease checks and close stay
      * thread-safe for Room threads, with no UI access from Room.

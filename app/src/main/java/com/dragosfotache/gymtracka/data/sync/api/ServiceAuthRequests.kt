@@ -138,8 +138,7 @@ class GoogleExchangeAttempt private constructor(
 }
 
 /**
- * Immutable storage-neutral refresh attempt, input for future encrypted vault
- * work; R02d does not persist anything. The validated original [requestJson]
+ * Immutable storage-neutral refresh attempt, input to encrypted-vault refresh persistence. This request type performs no storage I/O. The validated original [requestJson]
  * is retained unchanged and adapters use that property as the complete UTF-8
  * body, never reserialized parsed fields. The idempotency key is header data,
  * never a JSON body field. [toString] is fixed redacted text; [requestJson]

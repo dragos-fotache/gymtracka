@@ -4,27 +4,23 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,11 +29,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import com.dragosfotache.gymtracka.BuildConfig
 import com.dragosfotache.gymtracka.data.gym.GymDatabase
 import com.dragosfotache.gymtracka.data.sync.api.GoogleIdentityException
 import com.dragosfotache.gymtracka.data.sync.api.GoogleIdentityFailureReason
 import com.dragosfotache.gymtracka.data.sync.api.OpaqueToken
+import com.dragosfotache.gymtracka.data.sync.http.HttpServerChecker
 import com.dragosfotache.gymtracka.data.sync.http.HttpServiceAuthApi
 import com.dragosfotache.gymtracka.data.sync.http.OkHttpServiceTransport
 import com.dragosfotache.gymtracka.data.sync.http.ServiceOrigin
@@ -46,6 +45,7 @@ import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportPolicy
 import com.dragosfotache.gymtracka.data.sync.session.AndroidSessionVault
 import com.dragosfotache.gymtracka.data.sync.session.AppAccountSession
 import com.dragosfotache.gymtracka.data.sync.session.AppSessionException
+import com.dragosfotache.gymtracka.data.sync.session.AppSessionDeliveryStatus
 import com.dragosfotache.gymtracka.data.sync.session.AppSessionState
 import com.dragosfotache.gymtracka.data.sync.session.AppSessionReason
 import com.dragosfotache.gymtracka.data.sync.legacy.LegacyImportProgress
@@ -59,8 +59,9 @@ import com.dragosfotache.gymtracka.ui.AccountGymAppState
 import com.dragosfotache.gymtracka.ui.Destination
 import com.dragosfotache.gymtracka.ui.GymApp
 import com.dragosfotache.gymtracka.ui.rememberAccountGymAppState
-import java.text.DateFormat
-import java.util.Date
+import com.dragosfotache.gymtracka.ui.settings.ServerConnectionState
+import com.dragosfotache.gymtracka.ui.settings.ServerConnectionStatus
+import com.dragosfotache.gymtracka.ui.settings.ServerConnectionSection
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -71,7 +72,7 @@ internal class AccountStartupException(val error: AccountStartupError) :
 }
 
 /**
- * R13c nonsecret startup configuration. Strict original-text parsing only.
+ * nonsecret startup configuration. Strict original-text parsing only.
  * Invalid origin maps null; invalid audience maps null. No trimming, discovery
  * or raw display. Valid origin with missing audience still recovers offline;
  * foreground sign-in alone is disabled.
@@ -108,10 +109,10 @@ internal class AccountStartupConfiguration private constructor(
 }
 
 /**
- * R13c facade delegation for startup operations. Checks the explicit-save custom
+ * facade delegation for startup operations. Checks the explicit-save custom
  * editor before any foreground work and throws fixed EDITOR_OPEN with no details.
  * Delegates only through the facade/coordinator; never catches a foreign grant to
- * force another intent. The delivered runtime barrier rechecks after any drain.
+ * force another intent. The runtime barrier rechecks after any drain.
  */
 internal class SessionAccountStartupOperations(
     private val accountState: AccountGymAppState,
@@ -148,6 +149,9 @@ internal class SessionAccountStartupOperations(
 
     override suspend fun observeLegacyImport() =
         accountState.sessionCoordinator.observeLegacyImport()
+
+    override suspend fun completeActivationAfterReconnect(expected: RecoveryRoomSnapshot, stageId: String): AppSessionState =
+        accountState.sessionCoordinator.completeActivation(expected, stageId, connectionRestored = true)
 
     override fun observeSyncStatus(session: AppAccountSession): Flow<com.dragosfotache.gymtracka.data.sync.session.AccountSyncStatus> =
         accountState.sessionCoordinator.observeSyncStatus(session)
@@ -222,6 +226,11 @@ internal fun AccountStartupApp() {
         ForegroundSignInCoordinator(origin, identityProvider, accountState.sessionCoordinator, authApi)
     }
     val scope = rememberCoroutineScope()
+    val serverChecker = remember(origin) { HttpServerChecker(origin) }
+    val serverConnectionState = remember(serverChecker, scope) { ServerConnectionState(serverChecker, scope) }
+    DisposableEffect(serverConnectionState) {
+        onDispose(serverConnectionState::dispose)
+    }
     val operations = remember(accountState, signInCoordinator) {
         SessionAccountStartupOperations(accountState, signInCoordinator)
     }
@@ -262,7 +271,7 @@ internal fun AccountStartupApp() {
             }
         }
     }
-    AccountStartupApp(accountState, startupState, consent, syncController)
+    AccountStartupApp(accountState, startupState, consent, syncController, serverConnectionState)
 }
 
 /**
@@ -276,6 +285,7 @@ internal fun AccountStartupApp(
     startupState: AccountStartupState,
     consent: AccountImportConsent,
     syncState: AccountSyncState? = null,
+    serverConnectionState: ServerConnectionState? = null,
 ) {
     DisposableEffect(startupState) {
         startupState.start()
@@ -328,6 +338,80 @@ internal fun AccountStartupApp(
     }
     val authority = accountState.sessionCoordinator.state.collectAsState().value
     val ui by startupState.uiState.collectAsState()
+    val syncUi = syncState?.uiState?.collectAsState()?.value
+    val retryOwner = when (authority) {
+        is AppSessionState.Private -> authority.room
+        is AppSessionState.Active -> authority.session
+        else -> null
+    }
+    val retryAtMillis = when (authority) {
+        is AppSessionState.Private -> authority.retryAtMillis
+        is AppSessionState.Active -> syncUi?.retryAtMillis
+        else -> null
+    }
+    val retryEnabled = !ui.busy && when (authority) {
+        is AppSessionState.Private -> ui.error == AccountStartupError.PREPARATION_PAUSED &&
+            authority.room?.phase == RecoveryRoomPhase.PREPARING
+        is AppSessionState.Active -> syncUi?.busy == false && syncUi.error == null && syncUi.recovery == null &&
+            authority.deliveryStatus != AppSessionDeliveryStatus.REAUTHENTICATION_REQUIRED
+        else -> false
+    }
+    val retrySeconds = accountRetrySeconds(
+        retryOwner,
+        retryAtMillis,
+        retryEnabled,
+        accountState::wallTimeMillis,
+    ) {
+        // A countdown is advisory. The operation still rereads authority and the durable head.
+        when (val live = accountState.sessionCoordinator.state.value) {
+            is AppSessionState.Private -> if (live.room == retryOwner && live.retryAtMillis == retryAtMillis &&
+                startupState.uiState.value.error == AccountStartupError.PREPARATION_PAUSED
+            ) {
+                startupState.continuePreparation()
+            }
+            is AppSessionState.Active -> if (live.session === retryOwner &&
+                syncState?.uiState?.value?.retryAtMillis == retryAtMillis
+            ) {
+                syncState?.syncNow()
+            }
+            else -> Unit
+        }
+    }
+    val reconnections = serverConnectionState?.reconnections?.collectAsState()?.value ?: 0L
+    val recoveryLifecycle = LocalLifecycleOwner.current.lifecycle
+    val recoveryLifecycleState = recoveryLifecycle.currentStateAsState().value
+    var seenReconnections by remember(serverConnectionState) { mutableStateOf(reconnections) }
+    var reconnectOwner by remember(accountState, serverConnectionState) { mutableStateOf<Any?>(null) }
+    LaunchedEffect(reconnections, retryOwner, ui.busy, recoveryLifecycleState) {
+        if (reconnections > seenReconnections) {
+            seenReconnections = reconnections
+            reconnectOwner = retryOwner
+        }
+        if (reconnectOwner != retryOwner) reconnectOwner = null
+        if (ui.busy || reconnectOwner == null || !recoveryLifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            return@LaunchedEffect
+        }
+        val owner = reconnectOwner
+        reconnectOwner = null
+        // Recheck the live owner; an old probe never grants access or follows a replacement account.
+        when (val live = accountState.sessionCoordinator.state.value) {
+            is AppSessionState.Active -> if (live.session === owner) syncState?.connectionRestored(live.session)
+            is AppSessionState.Private -> if (live.room == owner && live.room?.phase == RecoveryRoomPhase.PREPARING &&
+                startupState.uiState.value.error == AccountStartupError.PREPARATION_PAUSED
+            ) {
+                startupState.continuePreparation(connectionRestored = true)
+            }
+            else -> Unit
+        }
+    }
+    LaunchedEffect(syncUi?.successfulSyncs) {
+        if ((syncUi?.successfulSyncs ?: 0L) > 0L) startupState.onSyncSucceeded()
+    }
+    LaunchedEffect(syncState, serverConnectionState, syncUi?.connectionCheckRequests) {
+        if ((syncUi?.connectionCheckRequests ?: 0L) > 0L) {
+            serverConnectionState?.refreshAfterSyncFailure()
+        }
+    }
     val binding = accountState.visibleBinding()
     val selected = if (authority is AppSessionState.Active &&
         binding != null &&
@@ -338,36 +422,25 @@ internal fun AccountStartupApp(
         null
     }
     val pendingDecision by consent.pending.collectAsState()
-    var showStatus by remember { mutableStateOf(false) }
-
     if (selected != null) {
-        val tab: @Composable RowScope.() -> Unit = {
-            NavigationBarItem(
-                selected = false,
-                onClick = { showStatus = true },
-                modifier = Modifier.testTag("account-open"),
-                icon = { Icon(Icons.Filled.AccountCircle, contentDescription = "Account") },
-                label = { Text("Account") },
-            )
-        }
         GymApp(
             accountState = accountState,
-            accountTab = tab,
-            accountDialog = {
-                if (showStatus) {
-                    AccountStatusDialog(
-                        uiState = ui,
-                        signInAvailable = startupState.signInAvailable,
-                        deliveryStatus = (authority as AppSessionState.Active).deliveryStatus,
-                        onDismiss = { showStatus = false },
-                        onReauthenticate = { startupState.signIn() },
-                        onCancel = { startupState.cancel() },
-                        syncState = syncState,
-                    )
-                }
-                ImportWarningDialog(pending = pendingDecision, consent = consent)
+            serverConnectionState = serverConnectionState,
+            settingsAccountContent = {
+                AccountSettingsContent(
+                    uiState = ui,
+                    connectionStatus = serverConnectionState?.status?.collectAsState()?.value
+                        ?: ServerConnectionStatus.NOT_CHECKED,
+                    signInAvailable = startupState.signInAvailable,
+                    deliveryStatus = (authority as AppSessionState.Active).deliveryStatus,
+                    onReauthenticate = { startupState.signIn() },
+                    onCancel = { startupState.cancel() },
+                    syncState = syncState,
+                    retrySeconds = retrySeconds,
+                )
             },
         )
+        ImportWarningDialog(pending = pendingDecision, consent = consent)
         return
     }
 
@@ -381,6 +454,8 @@ internal fun AccountStartupApp(
         onSignIn = { startupState.signIn() },
         onContinue = { startupState.continuePreparation() },
         onCancel = { startupState.cancel() },
+        retrySeconds = retrySeconds,
+        serverConnectionState = serverConnectionState,
     )
     ImportWarningDialog(pending = pendingDecision, consent = consent)
 }
@@ -418,15 +493,18 @@ private fun StartupGate(
     onSignIn: () -> Unit,
     onContinue: () -> Unit,
     onCancel: () -> Unit,
+    retrySeconds: Long?,
+    serverConnectionState: ServerConnectionState?,
 ) {
     val room = (authority as? AppSessionState.Private)?.room
     val reason = (authority as? AppSessionState.Private)?.reason
     val isInitialSignIn = authority is AppSessionState.Private &&
         (reason == AppSessionReason.SIGN_IN_REQUIRED ||
             (room != null && room.phase == RecoveryRoomPhase.SIGNED_OUT))
-    // Continue restarts nothing and applies only to exact retained preparation.
+    // Finish signing in resumes the saved activation without acquiring a new grant.
     val canContinue = authority is AppSessionState.Private &&
         room != null && room.phase == RecoveryRoomPhase.PREPARING
+    val waitingForRetry = retrySeconds != null
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -435,6 +513,7 @@ private fun StartupGate(
         contentAlignment = Alignment.Center,
     ) {
         Column(
+            modifier = Modifier.verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -476,22 +555,37 @@ private fun StartupGate(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Text("Preparing account", style = MaterialTheme.typography.titleMedium)
-                        Text("Your account is being prepared. Your data stays private until activation completes.")
+                        Text(
+                            if (waitingForRetry) "Signed in" else "Preparing account",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            if (waitingForRetry) "Waiting to sync your saved changes. You do not need to sign in again."
+                            else "Your account is being prepared. Your data stays private until activation completes.",
+                        )
                     }
                     if (canContinue) {
                         TextButton(
                             onClick = onContinue,
-                            enabled = !uiState.busy,
+                            enabled = !uiState.busy && !waitingForRetry,
                             modifier = Modifier.testTag("account-continue-preparation"),
                         ) {
-                            Text("Continue")
+                            Text("Finish signing in")
                         }
+                        Text(
+                            if (waitingForRetry) {
+                                accountRetryText(checkNotNull(retrySeconds))
+                            } else if (signInAvailable) {
+                                "Resume your saved sign-in, or sign in again to get a new session for the same account."
+                            } else {
+                                "Resume your saved sign-in."
+                            },
+                        )
                     }
                     if (signInAvailable) {
                         TextButton(
                             onClick = onSignIn,
-                            enabled = !uiState.busy,
+                            enabled = !uiState.busy && !waitingForRetry,
                             modifier = Modifier.testTag("account-sign-in"),
                         ) {
                             Text("Sign in")
@@ -519,7 +613,7 @@ private fun StartupGate(
             if (uiState.busy) {
                 CircularProgressIndicator()
             }
-            uiState.error?.let { error ->
+            uiState.error?.takeUnless { waitingForRetry }?.let { error ->
                 Text(
                     text = fixedStartupError(error),
                     modifier = Modifier.testTag("account-error"),
@@ -528,6 +622,9 @@ private fun StartupGate(
             }
             uiState.importProgress?.let { progress ->
                 ImportProgressText(progress)
+            }
+            if (waitingForRetry && serverConnectionState != null) {
+                ServerConnectionSection(serverConnectionState)
             }
             if (pendingDecision != null) {
                 Text("An import confirmation is waiting.")
@@ -589,118 +686,12 @@ private fun ImportWarningDialog(
     )
 }
 
-@Composable
-private fun AccountStatusDialog(
-    uiState: AccountStartupUiState,
-    signInAvailable: Boolean,
-    deliveryStatus: com.dragosfotache.gymtracka.data.sync.session.AppSessionDeliveryStatus,
-    onDismiss: () -> Unit,
-    onReauthenticate: () -> Unit,
-    onCancel: () -> Unit,
-    syncState: AccountSyncState? = null,
-) {
-    val syncBusy = syncState?.uiState?.collectAsState()?.value?.busy ?: false
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        modifier = Modifier.testTag("account-status"),
-        title = { Text("Account") },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                val status = uiState.syncStatus
-                if (status == null) {
-                    Text(
-                        "Pending: unavailable",
-                        modifier = Modifier.testTag("account-pending"),
-                    )
-                    Text(
-                        "Last success: unavailable",
-                        modifier = Modifier.testTag("account-last-success"),
-                    )
-                } else {
-                    Text(
-                        "Pending: ${status.pendingCount}",
-                        modifier = Modifier.testTag("account-pending"),
-                    )
-                    Text(
-                        "Last success: ${formatLastSuccess(status.lastSuccessMillis)}",
-                        modifier = Modifier.testTag("account-last-success"),
-                    )
-                    if (status.hasRetainedError) {
-                        Text("Attention needed.")
-                    }
-                }
-                when (deliveryStatus) {
-                    com.dragosfotache.gymtracka.data.sync.session.AppSessionDeliveryStatus.IDLE -> Unit
-                    com.dragosfotache.gymtracka.data.sync.session.AppSessionDeliveryStatus.RETRY_REQUIRED ->
-                        Text("Delivery paused. Offline editing remains available.")
-                    com.dragosfotache.gymtracka.data.sync.session.AppSessionDeliveryStatus.REAUTHENTICATION_REQUIRED ->
-                        Text("Sign in again for delivery. Offline editing remains available.")
-                }
-                if (!signInAvailable) {
-                    Text("Foreground sign-in is unavailable on this install.")
-                }
-                uiState.error?.let { error ->
-                    Text(fixedActiveError(error), color = MaterialTheme.colorScheme.error)
-                }
-                if (uiState.busy) {
-                    CircularProgressIndicator()
-                }
-                if (syncState != null) {
-                    AccountSyncSection(syncState)
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = onReauthenticate,
-                enabled = signInAvailable && !uiState.busy && !syncBusy,
-                modifier = Modifier.testTag("account-reauthenticate"),
-            ) {
-                Text("Reauthenticate")
-            }
-        },
-        dismissButton = {
-            if (uiState.busy) {
-                TextButton(
-                    onClick = onCancel,
-                    modifier = Modifier.testTag("account-cancel"),
-                ) { Text("Cancel") }
-            } else {
-                TextButton(onClick = onDismiss) { Text("Close") }
-            }
-        },
-    )
-}
-
 private fun fixedStartupError(error: AccountStartupError): String =
     when (error) {
         AccountStartupError.UNAVAILABLE -> "Unavailable. Your data stays private."
         AccountStartupError.SIGN_IN_FAILED -> "Sign-in failed. Your data stays private."
-        AccountStartupError.PREPARATION_PAUSED -> "Preparation paused. Continue when ready."
+        AccountStartupError.PREPARATION_PAUSED -> "Sign-in paused. Finish signing in when ready."
         AccountStartupError.IDENTITY_MISMATCH -> "Account mismatch. Your data stays private."
         AccountStartupError.EDITOR_OPEN -> "Finish Save or Discard in the open editor, or cancel this account action."
         AccountStartupError.CANCELLED -> "Cancelled."
     }
-
-/** Truthful presentation while offline features stay visible. Never claims privacy. */
-private fun fixedActiveError(error: AccountStartupError): String =
-    when (error) {
-        AccountStartupError.UNAVAILABLE -> "Sync status is unavailable. Your visible data is unchanged."
-        AccountStartupError.SIGN_IN_FAILED -> "Sign-in failed. Your visible data is unchanged."
-        AccountStartupError.PREPARATION_PAUSED -> "Preparation paused."
-        AccountStartupError.IDENTITY_MISMATCH -> "Account mismatch. Your visible data is unchanged."
-        AccountStartupError.EDITOR_OPEN -> "Finish Save or Discard in the open editor, or cancel this account action."
-        AccountStartupError.CANCELLED -> "Cancelled."
-    }
-
-private fun formatLastSuccess(millis: Long?): String {
-    if (millis == null) return "never"
-    return try {
-        DateFormat.getDateTimeInstance().format(Date(millis))
-    } catch (_: Exception) {
-        "unavailable"
-    }
-}

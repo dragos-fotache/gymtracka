@@ -296,7 +296,7 @@ private suspend fun awaitHeaders(call: Call): Response =
                     if (e is ProtocolException) {
                         continuation.resumeWithException(SyncApiException.MalformedResponse())
                     } else {
-                        continuation.resumeWithException(SyncApiException.Transient())
+                        continuation.resumeWithException(SyncApiException.Transient(connectionFailure = true))
                     }
                 }
 

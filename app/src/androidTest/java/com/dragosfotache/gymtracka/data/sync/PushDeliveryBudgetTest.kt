@@ -18,7 +18,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R06d driver boundary: strict work budget and argument validation.
+ * driver boundary: strict work budget and argument validation.
  * Invalid arguments fail before any clock/store/API work; Empty sends
  * nothing; the limit never probes a successor.
  */

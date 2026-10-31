@@ -16,14 +16,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R09c independent QA: retained-stage and durable-baseline recovery.
- *
- * Derived ONLY from docs/remaining-work/R09c-task.md bootstrap/recovery/stop
- * contracts and its "QA harness facts" section plus QA-owned harness facts
- * (see PreparedSessionEngineTestSupport header). No production declarations,
- * diffs, Worker work, generated sources, decompiled classes or schema JSON
- * inspected. Retained stages are always real nonterminal staged pages (never
- * adopted terminals); recovery proves durable rows, never result claims.
+ * retained-stage and durable-baseline recovery.
  */
 @RunWith(AndroidJUnit4::class)
 class PreparedSessionEngineRecoveryTest {
@@ -83,19 +76,19 @@ class PreparedSessionEngineRecoveryTest {
             val vault = harness.newVault()
             harness.reservePreparedPair(database, vault)
             // Corrupt retained stage: garbage phase, lying counts, foreign token.
-            // Seeded through the vetted R09a column contract, never production code.
+            // Seeded through the vetted Room authority column contract, never production code.
             database.openHelper.writableDatabase.execSQL(
                 "INSERT INTO sync_snapshot_stages (stage_id, account_id, session_generation, cache_epoch," +
                     " page_limit, source_state_present, source_cursor, source_last_success_millis," +
                     " source_baseline_complete, baseline_cursor, next_page_token, phase," +
                     " page_count, record_count)" +
-                    " VALUES (?, ?, 999, 0, 200, 0, NULL, NULL, 0, NULL, 'r09c-foreign-token', 'r09c-garbage', 3, 7)",
+                    " VALUES (?, ?, 999, 0, 200, 0, NULL, NULL, 0, NULL, 'bootstrap-foreign-token', 'bootstrap-garbage', 3, 7)",
                 arrayOf<Any?>(F.STAGE_CORRUPT, F.ACCOUNT),
             )
             database.openHelper.writableDatabase.execSQL(
                 "INSERT INTO sync_snapshot_records (stage_id, aggregate_type, aggregate_id," +
                     " server_revision, canonical_json, page_number, record_position)" +
-                    " VALUES (?, 'workout', 'r09c-garbage-root', 1, '{\"id\":\"garbage\"}', 0, 0)",
+                    " VALUES (?, 'workout', 'bootstrap-garbage-root', 1, '{\"id\":\"garbage\"}', 0, 0)",
                 arrayOf<Any?>(F.STAGE_CORRUPT),
             )
             val corruptBefore = harness.stageFullRow(database, F.STAGE_CORRUPT)
@@ -433,7 +426,7 @@ class PreparedSessionEngineRecoveryTest {
 
     @Test
     fun fileReopenPreservesPairAndRecoversRetainedStage() = runTest {
-        val dbName = "r09c-recover.db"
+        val dbName = "bootstrap-recover.db"
         var journalBefore: List<String?> = emptyList()
         var headerBefore: PreparedEngineHarness.StageHeader? = null
         var childrenBefore = -1L
@@ -508,7 +501,7 @@ class PreparedSessionEngineRecoveryTest {
             transport.serve = { index, _ ->
                 if (index <= total) {
                     val id = bulkId(index)
-                    val token = "r09c-bulk-$index"
+                    val token = "bootstrap-bulk-$index"
                     val body = if (index < total) {
                         """{"records":[${F.routineUpsertJson(id, "Bulk draft $index", 1)}],""" +
                             """"baselineCursor":"${F.BASELINE}","nextPageToken":"$token","hasMore":true}"""
@@ -533,7 +526,7 @@ class PreparedSessionEngineRecoveryTest {
             for (k in 1 until total) {
                 F.assertSnapshotContinuation(
                     transport.capturedRequests[k],
-                    "r09c-bulk-$k",
+                    "bootstrap-bulk-$k",
                 )
             }
             F.assertPull(transport.capturedRequests[total], F.BASELINE)

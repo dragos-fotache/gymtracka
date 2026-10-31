@@ -33,12 +33,8 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R07c independent ownership/fence acceptance for the shared driver.
- *
- * Real Room, no DAO/run mocks, no duplicated engine. Every expectation is a
- * literal authored from docs/archive/remaining-work/R07c-task.md; representative
- * tamper classes share one recovery path (no late last-success or cleanup)
- * rather than duplicating every R07a/b fence matrix row.
+ * Real Room checks for shared-driver ownership and session/epoch/checkpoint fences across push,
+ * pull and valid-tail bookkeeping.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SyncDeliveryFenceTest : GymDatabaseTest() {

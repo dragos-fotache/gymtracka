@@ -19,18 +19,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R13b independent QA: real legacy-import transition barrier admission.
- *
- * Derived ONLY from docs/archive/remaining-work/R13b-task.md (real GymAppState
- * adapter, pending-autosave drain, exact-once whole-second rest claim,
- * explicit-save refusal before/after drain, failed/canceled drain
- * releasing admission, no autosave/discard, lease ownership) and allowed
- * test-only admission harnesses (AppFiniteEditGateTest autosave/refusal
- * observables, R12cTransitionBarrierTest drain/claim/cancel contract,
- * FiniteEditCoordinatorTest pending-drain semantics, R12cRuntimeTimer
- * claim-once behavior). No production declarations/diffs/diagnostics,
- * Worker work or decompiled classes inspected. Virtual clock only;
- * no sleeps. Observables are durable Room rows and stable destinations.
+ * Checks the real import transition barrier: accepted-autosave drain, once-only whole-second rest,
+ * explicit-save refusal before/after drain, cancellation and lease ownership. Observations use
+ * durable Room rows and stable destinations.
  */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @RunWith(AndroidJUnit4::class)
@@ -75,7 +66,7 @@ class LegacyImportAdmissionTest : GymDatabaseTest() {
         }
 
     private suspend fun seedCompletedSet(): Triple<String, String, String> {
-        val customId = repository.createCustomExercise("R13b Timer Press", null, emptySet(), null, null, "")
+        val customId = repository.createCustomExercise("import Timer Press", null, emptySet(), null, null, "")
         val workout = repository.startEmptyWorkout(1_700_000_000_000L)
         repository.addExercisesToWorkout(workout.id, listOf(customId))
         val entry = checkNotNull(repository.workoutDetails(workout.id)).exercises.single()
@@ -92,7 +83,7 @@ class LegacyImportAdmissionTest : GymDatabaseTest() {
             val gate = CompletableDeferred<Unit>()
             var drained = false
             val pending = state.edits.launchEdit(
-                key = "r13b-autosave",
+                key = "import-autosave",
                 onAccepted = {},
             ) {
                 gate.await()
@@ -112,14 +103,14 @@ class LegacyImportAdmissionTest : GymDatabaseTest() {
                     "Drained Name",
                     checkNotNull(repository.workoutDetails(seedWorkout.id)).workout.name,
                 )
-                val refused = state.edits.launchEdit(key = "r13b-late", onAccepted = {}) {}
+                val refused = state.edits.launchEdit(key = "import-late", onAccepted = {}) {}
                 runCurrent()
                 assertNull("new callbacks refused while held", refused)
             } finally {
                 lease.close()
             }
             runCurrent()
-            val after = state.edits.launchEdit(key = "r13b-after", onAccepted = {}) {}
+            val after = state.edits.launchEdit(key = "import-after", onAccepted = {}) {}
             assertNotNull("admission released after close", after)
         }
 
@@ -157,19 +148,19 @@ class LegacyImportAdmissionTest : GymDatabaseTest() {
             val state = liveState()
             val failing: AppSessionTransitionBarrier =
                 state.legacyImportTransitionBarrier(
-                    processCheck = { throw IllegalStateException("r13b-process-invalid") },
+                    processCheck = { throw IllegalStateException("import-process-invalid") },
                 )
             try {
                 failing.acquire(RepositorySession.SIGNED_OUT)
                 runCurrent()
                 fail("invalid process must block acquisition")
             } catch (e: IllegalStateException) {
-                assertEquals("r13b-process-invalid", e.message)
+                assertEquals("import-process-invalid", e.message)
             }
             // Admission released: a valid acquire succeeds and editing survives.
             val lease = barrier(state).acquire(RepositorySession.SIGNED_OUT)
             lease.close()
-            val edit = state.edits.launchEdit(key = "r13b-healthy", onAccepted = {}) {}
+            val edit = state.edits.launchEdit(key = "import-healthy", onAccepted = {}) {}
             assertNotNull(edit)
         }
 
@@ -179,7 +170,7 @@ class LegacyImportAdmissionTest : GymDatabaseTest() {
             val state = liveState()
             val gate = CompletableDeferred<Unit>()
             var workRan = false
-            val pending = state.edits.launchEdit(key = "r13b-gated", onAccepted = {}) {
+            val pending = state.edits.launchEdit(key = "import-gated", onAccepted = {}) {
                 gate.await()
                 workRan = true
             }
@@ -187,7 +178,7 @@ class LegacyImportAdmissionTest : GymDatabaseTest() {
             val acquire = async { barrier(state).acquire(RepositorySession.SIGNED_OUT) }
             runCurrent()
             assertTrue(acquire.isActive)
-            acquire.cancel(CancellationException("r13b-qa-cancel"))
+            acquire.cancel(CancellationException("import-test-cancel"))
             runCurrent()
             try {
                 acquire.await()
@@ -225,7 +216,7 @@ class LegacyImportAdmissionTest : GymDatabaseTest() {
     fun openEditEditor_refusesUnchangedWithoutAutosaveOrDiscard() =
         runTest {
             val state = liveState()
-            val customId = repository.createCustomExercise("R13b Draft", null, emptySet(), null, null, "")
+            val customId = repository.createCustomExercise("import Draft", null, emptySet(), null, null, "")
             val before = database.openHelper.readableDatabase.query(
                 "SELECT COUNT(*) FROM exercises WHERE is_user_created != 0",
             ).use { cursor ->

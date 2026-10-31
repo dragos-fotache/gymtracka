@@ -19,21 +19,9 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R09g independent QA: inert same-account recovery coordinator (JVM).
- *
- * Derived ONLY from docs/archive/remaining-work/R09g-task.md normative prepare/resume/
- * recover contracts plus QA-owned fixtures/doubles (SameAccountRecoveryTestFixtures,
- * FakeSameAccountAuthority, FakeSessionVault, Refresh/Vault fixtures,
- * SessionReauthenticationTestFixtures.ProbeCancellationException,
- * HttpServiceAuthApi + FakeServiceHttpTransport strict-replay helper).
- * No production declarations, diffs, Worker work, generated sources or
- * decompiled classes inspected. Literal independent oracles throughout;
- * deterministic gates only, no sleeps, no DAO mocks.
- *
- * Ordering facts: prepare performs TWO Room revisions (reserve + finalize):
- * ACTIVE 11 -> TRANSITIONING 12 -> PREPARING 13; SIGNED_OUT 10 -> 11 -> 12.
- * Archives append ONLY for uncertain (pending-bearing) sources; settled
- * replacement carries prior archives forward without appending.
+ * Deterministic JVM checks for same-account preparation, resume and recovery. Preparation reserves
+ * then finalizes two Room revisions; only uncertain pending-bearing sources append superseded
+ * evidence, while settled replacement carries it forward.
  */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class SameAccountRecoveryCoordinatorTest {
@@ -208,7 +196,7 @@ class SameAccountRecoveryCoordinatorTest {
     fun strictLegacyReplayStaysMalformedThenFreshGrantSupersedesOnSameStores() = runTest {
         // SAME stores/owners throughout: the uncertain source, vault,
         // authority and shared owners are constructed first. Actual strict
-        // replay runs through the QA-owned R09f path — shared refresh
+        // replay runs through the test pending-refresh reconciliation path — shared refresh
         // coordinator plus the real HttpServiceAuthApi over scripted
         // transport — against an ACTIVE baseline-complete snapshot.
         val expected = F.activeSnapshot(revision = 11L, generation = 7L, baselineComplete = true)
@@ -224,8 +212,8 @@ class SameAccountRecoveryCoordinatorTest {
             origin = F.origin(),
             vault = vault,
             authApi = authApi,
-            clockMillis = { throw AssertionError("R09g replay must not read the clock") },
-            uuidProvider = { throw AssertionError("R09g replay must not mint UUIDs") },
+            clockMillis = { throw AssertionError("retained-recovery replay must not read the clock") },
+            uuidProvider = { throw AssertionError("retained-recovery replay must not mint UUIDs") },
             mutex = credentialMutex,
         )
         val reauth = SessionReauthenticationTestFixtures.coordinator(
@@ -554,7 +542,7 @@ class SameAccountRecoveryCoordinatorTest {
         assertEquals(0, sd.vault.commits)
 
         // Local-only roots map Room LOCAL_DATA_REQUIRES_DECISION to the
-        // same-named reauthentication category (R09e closed mapping).
+        // same-named reauthentication category (reauthentication closed mapping).
         val sl = setup(authoritySnapshot = retained, vaultRecord = null, vaultRevision = 0L)
         sl.authority.hasLocalRoots = true
         F.assertRecoveryFailure(SessionReauthenticationFailure.LOCAL_DATA_REQUIRES_DECISION) {
@@ -724,7 +712,7 @@ class SameAccountRecoveryCoordinatorTest {
             entered.complete(Unit)
             release.await()
         }
-        val probe = SessionReauthenticationTestFixtures.ProbeCancellationException("cancel-r09g")
+        val probe = SessionReauthenticationTestFixtures.ProbeCancellationException("cancel-retained-recovery")
         val done = CompletableDeferred<Throwable>()
         supervisorScope {
             val job = async(start = CoroutineStart.UNDISPATCHED) {
@@ -774,7 +762,7 @@ class SameAccountRecoveryCoordinatorTest {
                     runCurrent()
                     assertFalse(job.isCompleted)
                     // Non-copying probe: exact identity survives stack recovery.
-                    val probe = SessionReauthenticationTestFixtures.ProbeCancellationException("queued-cancel-r09g")
+                    val probe = SessionReauthenticationTestFixtures.ProbeCancellationException("queued-cancel-retained-recovery")
                     job.cancel(probe)
                     assertSame(probe, done.await())
                     job.join()

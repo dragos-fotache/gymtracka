@@ -1,7 +1,7 @@
 package com.dragosfotache.gymtracka.data.gym
 
 /**
- * Narrow projection-observation contract for R12b feature refresh.
+ * Narrow projection-observation contract for projection refresh feature refresh.
  *
  * The cold stream emits the current selected-scope `materialized_epoch` initially
  * (0 when absent) then distinct selected-scope epochs only, after committed Room

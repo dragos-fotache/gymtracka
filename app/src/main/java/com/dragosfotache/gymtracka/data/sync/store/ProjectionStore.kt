@@ -11,11 +11,9 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
 /**
- * Inert account-scoped canonical publication boundary over the accepted R05a/b
- * foundations. Production remains signed-out/local-only; no engine, network,
- * claim/ack, snapshot, vault, UI, timer, scheduler or backend work runs here.
- * The barrier owns pause/drain coordination; this store implements the interface
- * boundary only. Tests supply controllable leases.
+ * Exact account/session/cache-epoch request for canonical projection publication.
+ * The account runtime supplies the real edit/timer pause-and-drain barrier;
+ * publication validates the lease and durable authority before committing.
  */
 data class ProjectionPublicationRequest(
     val accountId: String,
@@ -140,7 +138,7 @@ class ProjectionStore(
     }
 
     /**
-     * R12c ACTIVE-only canonical timer-impact decision. Read-only and
+     * ACTIVE-only canonical timer-impact decision. Read-only and
      * transactionally session/epoch/process fenced. Returns true when the
      * visible timer remains valid under the canonical graph; false when remote
      * finish/delete/replacement, removed entry/set or uncompleted set ends it.

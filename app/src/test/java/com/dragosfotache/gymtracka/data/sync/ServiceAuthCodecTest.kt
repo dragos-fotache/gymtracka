@@ -21,7 +21,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R02d codec boundary tests. Independent fixtures only; production encoders are
+ * codec boundary tests. Independent fixtures only; production encoders are
  * never used to build expected bodies. Failure text may name represented fields;
  * raw secrets (distinct sentinel values) must never be echoed.
  */

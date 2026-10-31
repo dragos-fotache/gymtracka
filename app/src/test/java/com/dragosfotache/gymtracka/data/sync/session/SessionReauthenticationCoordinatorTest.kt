@@ -21,22 +21,9 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R09e independent QA: inert settled occupied-credential reauthentication.
- *
- * Derived ONLY from docs/archive/remaining-work/R09e-task.md normative API/ordering/
- * crash/recovery contracts plus QA-owned fixtures/doubles
- * (SessionReauthenticationTestFixtures, ScriptedReauthenticationAuthority,
- * FakeSessionVault, Refresh/SessionRecovery fixtures). No production
- * declarations, diffs, Worker work, generated sources or decompiled classes
- * inspected. Coordinator-supplied facts used as contracts (read shape, ctor
- * order, inert construction, bound-lease predicate shape, PushRunOwner
- * internal mutex). Literal independent oracles throughout; deterministic
- * gates only (deferred/barrier/fault queues, phase-observed hooks and
- * compareAndSet wrappers, no sleeps, no DAO mocks, no load/read-count seam
- * oracles).
- *
- * Each test proves a distinct new defect; representative refusal cases are
- * grouped without an exhaustive matrix.
+ * Deterministic checks for settled occupied-credential reauthentication, exact
+ * reservation/CAS/finalization ordering, interrupted transitions, cancellation and preserved
+ * intent.
  */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class SessionReauthenticationCoordinatorTest {
@@ -573,7 +560,7 @@ class SessionReauthenticationCoordinatorTest {
                 assertEquals(0, s.vault.loads)
                 assertEquals(0, s.vault.commits)
                 // Non-copying probe: exact identity survives stack recovery.
-                val probe = SessionReauthenticationTestFixtures.ProbeCancellationException("queued-run-owner-cancel-r09e")
+                val probe = SessionReauthenticationTestFixtures.ProbeCancellationException("queued-run-owner-cancel-reauthentication")
                 job.cancel(probe)
                 assertSame(probe, done.await())
                 job.join()
@@ -614,7 +601,7 @@ class SessionReauthenticationCoordinatorTest {
                 assertEquals(0, s.authority.begins)
                 assertEquals(0, s.vault.commits)
                 // Non-copying probe: exact identity survives stack recovery.
-                val probe = SessionReauthenticationTestFixtures.ProbeCancellationException("queued-credential-cancel-r09e")
+                val probe = SessionReauthenticationTestFixtures.ProbeCancellationException("queued-credential-cancel-reauthentication")
                 job.cancel(probe)
                 assertSame(probe, done.await())
                 job.join()
@@ -746,7 +733,7 @@ class SessionReauthenticationCoordinatorTest {
     @Test
     fun callerCancellationEscapesIdenticallyWithoutVaultWrite() = runTest {
         val s = setup()
-        val injected = CancellationException("pre-cas-cancel-r09e")
+        val injected = CancellationException("pre-cas-cancel-reauthentication")
         s.authority.beginGate = { throw injected }
         try {
             s.coordinator.reauthenticate(F.activeSnapshot(), F.OP_NEW, F.newGrant())
@@ -781,7 +768,7 @@ class SessionReauthenticationCoordinatorTest {
             // never awaited). The secondApiCalled gate proves the API was attempted; cancellation
             // takes precedence over structural validation, and the dead call
             // must not retire the valid earlier invocation.
-            val probe = CancellationException("already-canceled-r09e")
+            val probe = CancellationException("already-canceled-reauthentication")
             val secondApiCalled = CompletableDeferred<Unit>()
             val secondOutcome = CompletableDeferred<Throwable>()
             async(start = CoroutineStart.UNDISPATCHED) {
@@ -976,7 +963,7 @@ class SessionReauthenticationCoordinatorTest {
                 assertTrue(e.suppressed.isEmpty())
             }
         }
-        // The valid PREPARING observation used by this slice stays advisory and
+        // The valid PREPARING observation used by this component stays advisory and
         // redacted; recovery Blocked displays stay fixed.
         val observation = PreparedSessionObservation(room = F.preparingSnapshot(), vaultRevision = 6L)
         F.assertRedacted(observation.toString(), F.defaultSecrets("access-new", "refresh-new"))

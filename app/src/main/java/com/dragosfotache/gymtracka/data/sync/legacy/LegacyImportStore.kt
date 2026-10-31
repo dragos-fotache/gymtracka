@@ -28,7 +28,7 @@ import kotlinx.coroutines.ensureActive
 import org.json.JSONObject
 
 /**
- * Inert Room capture/recovery boundary for the R13a legacy import.
+ * Inert Room capture/recovery boundary for the local capture legacy import.
  * Explicit caller-owned private work; no public UI/DAO integration.
  * Cancellation has precedence; closed failures carry only their category;
  * arbitrary callback/storage runtime errors map to closed UNAVAILABLE.
@@ -120,7 +120,7 @@ internal class LegacyImportStore(
     }
 
     /**
-     * R13b target-discovering advisory progress read. Returns null when no
+     * target-discovering advisory progress read. Returns null when no
      * migration exists; throws closed CORRUPT_EVIDENCE on missing/corrupt
      * evidence. Performs no HTTP, UUID generation, credential changes or
      * cleanup. Must run outside a caller transaction.
@@ -212,7 +212,7 @@ internal class LegacyImportStore(
     }
 
     /**
-     * R13b durable active-replacement consent. Records the exact original
+     * durable active-replacement consent. Records the exact original
      * active mutation consent under the unchanged binding; rereads evidence
      * after commit. Consent survives reopening for the same original
      * request. Must run outside a caller transaction.
@@ -249,7 +249,7 @@ internal class LegacyImportStore(
     }
 
     /**
-     * R13b consent-need probe. Returns the exact original active-import
+     * consent-need probe. Returns the exact original active-import
      * replacement request when the retained migration carries an active
      * import without durable matching consent; null when no migration,
      * blocked, no active import or already consented. Throws closed
@@ -316,7 +316,7 @@ internal class LegacyImportStore(
     }
 
     /**
-     * R13b retained migration target read. Returns the journal target
+     * retained migration target read. Returns the journal target
      * (captured or blocked) or null when no journal exists. Throws closed
      * CORRUPT_EVIDENCE on malformed journal evidence. Reads only.
      */
@@ -360,7 +360,7 @@ internal class LegacyImportStore(
     }
 
     /**
-     * R13b reauth evidence read. Returns the strictly validated retained
+     * reauth evidence read. Returns the strictly validated retained
      * captured/settled evidence with current lineage for private-import
      * reauthentication. Throws on absent/blocked/corrupt evidence.
      */
@@ -1254,7 +1254,7 @@ internal class LegacyImportStore(
     }
 
     /**
-     * R13b progress-aware captured recovery. Validates the strict
+     * progress-aware captured recovery. Validates the strict
      * settlement view (progress anchor, consecutive accepted prefix,
      * outbox correspondence, frozen source/entries/receipts) and returns
      * evidence with the freshly verified current lineage tuple and

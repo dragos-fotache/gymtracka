@@ -563,7 +563,7 @@ class ProtocolEnvelopeTest {
 
     @Test
     fun snapshotWhitespaceToken_nonemptyPreservedExactlyAndEmptyRejected() {
-        // Owner resolution (R08a): minimal nonblank→nonempty correction.
+        // Owner resolution (snapshot staging): minimal nonblank→nonempty correction.
         // Whitespace-only NONEMPTY opaque tokens are valid and preserved
         // exactly; absent/empty continuations stay rejected. Representative
         // raw decode/encode exact-string coverage only; the existing

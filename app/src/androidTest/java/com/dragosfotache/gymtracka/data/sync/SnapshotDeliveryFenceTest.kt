@@ -41,19 +41,9 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R08b independent snapshot-delivery fence acceptance: session/epoch/source
- * fences during transport (data, empty, malformed, failure, expiry),
- * deterministic cancellation, whole-page deep ownership before the
- * suspending post-response fence, commit-fault retirement, post-write
- * cancellation, file reopen recovery, shared-owner serialization and
- * foreign/closed/enclosing rejection.
- *
- * Real Room, no mocked DAOs/stores/admission, no sleeps. Every expectation is
- * a literal authored from docs/archive/remaining-work/R08b-task.md and the
- * coordinator's source-independent API/harness facts; no production source
- * was inspected. Reuses the R08a retirement matrix through driver
- * integration representatives rather than duplicating migrations/primitive
- * coverage.
+ * Real Room checks for snapshot transport fences, whole-page ownership before suspension,
+ * capability retirement, cancellation, file reopen recovery, owner serialization and
+ * foreign/closed/enclosing refusal.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SnapshotDeliveryFenceTest : GymDatabaseTest() {

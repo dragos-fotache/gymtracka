@@ -22,8 +22,6 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R04b QA-owned decorator tests only. No production declarations.
- *
  * Covers the UNUSED SessionRefreshingGymSyncApi: one refresh-and-unchanged-
  * retry over the serialized coordinator path, plus the actual
  * HttpServiceAuthApi through the scripted transport (client fixture, NOT a

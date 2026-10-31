@@ -30,26 +30,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 
-/**
- * R09c independent QA support only. No production declarations inspected.
- *
- * Derived ONLY from docs/remaining-work/R09c-task.md concrete constructor /
- * bootstrap / result / failure contracts and its "QA harness facts" section
- * (deterministic clock, zero-push-HTTP empty sequence, exact snapshot/pull
- * method/path/query/header shapes, nonempty record/batch literals, result
- * field contracts) plus QA-owned harness facts (R09b in-memory/file builders,
- * RoomSessionAuthority read/beginPreparation/fencePrivate,
- * AndroidSessionVault.createForTesting namespace rules, test-owned cleanup,
- * singleton journal/device raw-SQL patterns; R04b ServiceAuthApi refresh-only
- * shape and ServiceHttpTransport.withResponse frame routing with
- * ServiceHttpResponse(call, response) + closeAfterConsumer; R06a
- * PushRunOwner()/RepositorySession/PushStore.withRun shapes;
- * ServiceHttpRequest query/backing-list shape from http harness QA). No
- * production source, diffs, Worker work, generated sources, decompiled
- * classes or schema JSON inspected. All literals are independently authored
- * for this slice; wire bodies are hand-written strings, never production
- * encoder output.
- */
+
 
 internal object PreparedEngineFixtures {
     const val ORIGIN_ROOT = "https://sync.example.test"
@@ -59,11 +40,11 @@ internal object PreparedEngineFixtures {
     const val OP = "c3c3c3c3-c3c3-43c3-83c3-c3c3c3c3c3c3"
     const val OTHER_OP = "d4d4d4d4-d4d4-44d4-84d4-d4d4d4d4d4d4"
     const val REFRESH_KEY = "e5e5e5e5-e5e5-45e5-85e5-e5e5e5e5e5e5"
-    const val ACCESS = "r09c-access-001"
-    const val ACCESS_ROTATED = "r09c-access-002"
-    const val REFRESH = "r09c-refresh-001"
+    const val ACCESS = "bootstrap-access-001"
+    const val ACCESS_ROTATED = "bootstrap-access-002"
+    const val REFRESH = "bootstrap-refresh-001"
 
-    /** Deterministic clock keeping the QA grant (expiry 1_700_000_000_000) live. */
+    /** Deterministic clock keeping the tests grant (expiry 1_700_000_000_000) live. */
     const val FIXED_CLOCK = 1_699_999_900_000L
 
     const val STAGE_NEW = "f1f1f1f1-1111-4111-8111-111111111111"
@@ -78,20 +59,20 @@ internal object PreparedEngineFixtures {
     const val OUTBOX_FROZEN_MUT = "e1000006-6666-4666-8666-666666666666"
     const val OUTBOX_WORKOUT = "e1000003-3333-4333-8333-333333333333"
 
-    const val BASELINE = "r09c-baseline"
-    const val PAGE_2_TOKEN = "r09c-page-2"
-    const val TAIL = "r09c-tail"
+    const val BASELINE = "bootstrap-baseline"
+    const val PAGE_2_TOKEN = "bootstrap-page-2"
+    const val TAIL = "bootstrap-tail"
     const val BATCH_1 = "c1000001-3333-4333-8333-333333333333"
 
     const val ROUTE_A = "a1000001-1111-4111-8111-111111111111"
     const val ROUTE_B = "a1000002-2222-4222-8222-222222222222"
 
     const val EMPTY_SNAPSHOT_BODY =
-        """{"records":[],"baselineCursor":"r09c-baseline","nextPageToken":null,"hasMore":false}"""
+        """{"records":[],"baselineCursor":"bootstrap-baseline","nextPageToken":null,"hasMore":false}"""
     const val EMPTY_PULL_BODY =
-        """{"batches":[],"nextCursor":"r09c-baseline","hasMore":false}"""
+        """{"batches":[],"nextCursor":"bootstrap-baseline","hasMore":false}"""
 
-    const val PENDING_BODY = """{"refreshToken":"r09c-refresh-001"}"""
+    const val PENDING_BODY = """{"refreshToken":"bootstrap-refresh-001"}"""
 
     fun origin(root: String = ORIGIN_ROOT): ServiceOrigin = ServiceOrigin.parse(root)
 
@@ -175,10 +156,10 @@ internal object PreparedEngineFixtures {
 
     /**
      * Transmittable durable wrapper for a seeded head mutation. Shape mirrors
-     * the accepted R04b wrapper fixture (payloadVersion first, escaped inner
+     * the accepted refresh wrapper fixture (payloadVersion first, escaped inner
      * request, affected-roots array); the inner request is a hand-written
      * workout.start (OpenAPI StartWorkoutInput) matching the seeded row kind.
-     * All IDs/names/times are this slice's own literals, never production
+     * All IDs/names/times are test literals, never production
      * encoder output.
      */
     const val OUTBOX_STARTED_AT = "2026-10-06T00:00:00.000Z"
@@ -187,7 +168,7 @@ internal object PreparedEngineFixtures {
         "{\"mutationId\":\"$mutationId\",\"type\":\"workout.start\"," +
             "\"aggregateType\":\"workout\",\"aggregateId\":\"$rootId\"," +
             "\"localGeneration\":$generation," +
-            "\"payload\":{\"id\":\"$rootId\",\"name\":\"R09c\"," +
+            "\"payload\":{\"id\":\"$rootId\",\"name\":\"bootstrap\"," +
             "\"startedAt\":\"$OUTBOX_STARTED_AT\"}}"
 
     fun durablePayloadJson(mutationId: String, rootId: String, generation: Long): String {
@@ -265,7 +246,7 @@ internal class DeterministicUuids(private var next: Long = 1L) : () -> String {
     }
 }
 
-/** Refresh-only scripted ServiceAuthApi. Mirrors the accepted R04b QA fake shape. */
+/** Refresh-only scripted ServiceAuthApi. Mirrors the accepted refresh tests fake shape. */
 internal class PreparedEngineAuthApi : ServiceAuthApi {
     var refreshCalls = 0
         private set
@@ -284,13 +265,13 @@ internal class PreparedEngineAuthApi : ServiceAuthApi {
     override suspend fun challenge(
         purpose: com.dragosfotache.gymtracka.data.sync.api.GoogleChallengePurpose,
     ): com.dragosfotache.gymtracka.data.sync.api.ServiceChallenge {
-        throw UnsupportedOperationException("R09c uses refresh only")
+        throw UnsupportedOperationException("bootstrap uses refresh only")
     }
 
     override suspend fun exchange(
         attempt: com.dragosfotache.gymtracka.data.sync.api.GoogleExchangeAttempt,
     ): ServiceSession {
-        throw UnsupportedOperationException("R09c uses refresh only")
+        throw UnsupportedOperationException("bootstrap uses refresh only")
     }
 
     override suspend fun refresh(attempt: ServiceRefreshAttempt): ServiceSession {
@@ -303,7 +284,7 @@ internal class PreparedEngineAuthApi : ServiceAuthApi {
     }
 
     override suspend fun logout(refreshToken: OpaqueToken) {
-        throw UnsupportedOperationException("R09c uses refresh only")
+        throw UnsupportedOperationException("bootstrap uses refresh only")
     }
 }
 
@@ -365,10 +346,10 @@ internal class PreparedEngineTransport : ServiceHttpTransport {
     }
 }
 
-/** Test-owned namespace/vault/database helpers. Mirrors accepted R09b QA patterns. */
+/** Test-owned namespace/vault/database helpers. Mirrors accepted preparation tests patterns. */
 internal class PreparedEngineHarness(private val suffix: String) {
     val context: Context = ApplicationProvider.getApplicationContext<Context>()
-    private val namespace = "gymtracka-test-r09c-$suffix"
+    private val namespace = "gymtracka-test-bootstrap-$suffix"
     private val usedDatabases = mutableListOf<String>()
 
     fun clean() {
@@ -406,7 +387,7 @@ internal class PreparedEngineHarness(private val suffix: String) {
     fun reopenVault(): SessionVault = AndroidSessionVault.createForTesting(context, namespace)
 
     /**
-     * Actual R09a reservation + R09b matching prepared vault on a fresh pair.
+     * Actual Room authority reservation + preparation matching prepared vault on a fresh pair.
      * Returns the prepared observation for engine admission tests.
      */
     suspend fun reservePreparedPair(
@@ -442,7 +423,7 @@ internal class PreparedEngineHarness(private val suffix: String) {
         }
     }
 
-    /** Raw durable oracles. Column names follow the vetted R09b/R06a seeding contracts. */
+    /** Raw durable oracles. Column names follow the vetted preparation/claim seeding contracts. */
 
     fun countRows(database: GymDatabase, table: String): Long {
         database.openHelper.readableDatabase.query("SELECT COUNT(*) FROM \"$table\"").use { cursor ->
@@ -550,7 +531,7 @@ internal class PreparedEngineHarness(private val suffix: String) {
         }
     }
 
-    /** Seeds one outbox row; column list follows the vetted R09b seeding contract. */
+    /** Seeds one outbox row; column list follows the vetted preparation seeding contract. */
     fun seedOutboxRow(
         database: GymDatabase,
         sequence: Long,

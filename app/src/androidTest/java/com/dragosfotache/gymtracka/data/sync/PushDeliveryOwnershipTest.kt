@@ -21,7 +21,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R06d driver boundary: two callers sharing one run owner never overlap
+ * driver boundary: two callers sharing one run owner never overlap
  * transport; a canceled queued caller creates no extra admission; ownership
  * releases on every stop path so a later caller resumes.
  */

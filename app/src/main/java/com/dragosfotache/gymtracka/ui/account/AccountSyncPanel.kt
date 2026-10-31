@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -23,12 +24,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.dragosfotache.gymtracka.data.sync.session.AccountRecoveryConfirmation
-import com.dragosfotache.gymtracka.data.sync.session.AppReconciliationStop
 
 /**
- * R13d foreground/edit/manual sync controls. Reads only the advisory controller snapshot;
+ * foreground/edit/manual sync controls. Reads only the advisory controller snapshot;
  * destructive actions stay disabled while owned work runs. Recovery warnings use explicit
- * request-relative tracking: Review captures the observed token and arms before invoking
+ * request-relative tracking: Resolve captures the observed token and arms before invoking
  * prepare, and only a nonnull token different from that baseline is adopted, with the arm
  * consumed. Stage and recovery confirm callbacks act only on the exact displayed value and
  * refuse when the local selection changed. Authority or token turnover clears stale local
@@ -38,11 +38,16 @@ import com.dragosfotache.gymtracka.data.sync.session.AppReconciliationStop
  * accessibility patterns.
  */
 @Composable
-internal fun AccountSyncSection(syncState: AccountSyncState) {
+internal fun AccountSyncSection(
+    syncState: AccountSyncState,
+    networkActionsEnabled: Boolean = true,
+    rejectedWorkAvailable: Boolean = false,
+    message: String? = null,
+) {
     val syncUi by syncState.uiState.collectAsState()
     var pendingStageId by remember { mutableStateOf<String?>(null) }
     var pendingToken by remember { mutableStateOf<AccountRecoveryConfirmation?>(null) }
-    // Request-relative recovery tracking: the token observed when Review is pressed plus
+    // Request-relative recovery tracking: the token observed when Resolve is pressed plus
     // an arming flag set before prepare is invoked. The effect adopts only a nonnull token
     // different from that request baseline, so a repeated prepare round-trip can neither
     // wipe an already-displayed token nor auto-adopt an unrelated later one.
@@ -55,12 +60,15 @@ internal fun AccountSyncSection(syncState: AccountSyncState) {
             pendingStageId = null
         }
     }
-    LaunchedEffect(observedToken, recoveryArmed, recoveryBaseline) {
+    LaunchedEffect(observedToken, recoveryArmed, recoveryBaseline, syncUi.busy) {
         if (recoveryArmed) {
             // A null/unchanged token while preparation is pending is not a completed
             // decision. Only this request's fresh token can open its warning.
             if (observedToken != null && observedToken !== recoveryBaseline) {
                 pendingToken = observedToken
+                recoveryArmed = false
+                recoveryBaseline = null
+            } else if (!syncUi.busy) {
                 recoveryArmed = false
                 recoveryBaseline = null
             }
@@ -84,6 +92,7 @@ internal fun AccountSyncSection(syncState: AccountSyncState) {
             } else {
                 TextButton(
                     onClick = { syncState.syncNow() },
+                    enabled = networkActionsEnabled,
                     modifier = Modifier.testTag("account-sync-now"),
                 ) {
                     Icon(Icons.Filled.Sync, contentDescription = "Sync now")
@@ -91,23 +100,17 @@ internal fun AccountSyncSection(syncState: AccountSyncState) {
                 }
             }
         }
-        syncUi.stop?.let { stop ->
-            Text(
-                text = fixedSyncStop(stop),
-                modifier = Modifier.testTag("account-sync-stop"),
-            )
-        }
-        syncUi.error?.let { error ->
-            Text(
-                text = fixedSyncError(error),
-                modifier = Modifier.testTag("account-sync-error"),
-                color = MaterialTheme.colorScheme.error,
-            )
+        if (syncUi.busy) CircularProgressIndicator(modifier = Modifier.testTag("account-sync-progress"))
+        message?.let {
+            Text(it, modifier = Modifier.testTag("account-sync-status"))
         }
         if (observedStageId != null) {
+            if (message == null) {
+                Text("A retained cloud download needs to restart before synchronization can continue.")
+            }
             TextButton(
                 onClick = { pendingStageId = observedStageId },
-                enabled = !syncUi.busy,
+                enabled = networkActionsEnabled && !syncUi.busy,
                 modifier = Modifier.testTag("account-restart-stage"),
             ) {
                 Icon(Icons.Filled.Refresh, contentDescription = "Restart staged download")
@@ -121,12 +124,14 @@ internal fun AccountSyncSection(syncState: AccountSyncState) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(
                         onClick = {
-                            if (pendingStageId == displayedStage) {
+                            if (pendingStageId == displayedStage &&
+                                syncState.uiState.value.retainedStageId == displayedStage
+                            ) {
                                 syncState.restartStage(displayedStage)
                                 pendingStageId = null
                             }
                         },
-                        enabled = !syncUi.busy && pendingStageId == syncUi.retainedStageId,
+                        enabled = networkActionsEnabled && !syncUi.busy && pendingStageId == syncUi.retainedStageId,
                         modifier = Modifier.testTag("account-restart-confirm"),
                     ) {
                         Text("Restart")
@@ -140,36 +145,42 @@ internal fun AccountSyncSection(syncState: AccountSyncState) {
         // Displayed-token discipline: warning and callbacks act only on the exact locally
         // captured token; a changed selection refuses instead of confirming a later one.
         val displayedToken = pendingToken
-        if (displayedToken == null) {
+        syncUi.recoveryStatus?.let {
+            Text(recoveryStatusText(it), modifier = Modifier.testTag("account-recovery-status"))
+        }
+        if (displayedToken == null && rejectedWorkAvailable) {
+            Text("The server rejected changes. Resolve them to resume sync; your local changes are kept until you confirm.")
             TextButton(
                 onClick = {
                     recoveryBaseline = observedToken
                     recoveryArmed = true
                     syncState.prepareRecovery()
                 },
-                enabled = !syncUi.busy,
+                enabled = networkActionsEnabled && !syncUi.busy,
                 modifier = Modifier.testTag("account-recovery-prepare"),
             ) {
-                Text("Review unsent changes")
+                Text("Resolve rejected changes")
             }
-        } else {
+        } else if (displayedToken != null) {
             Text(
                 text = "Only these ${displayedToken.pendingCount} unsynchronized ordinary changes will be " +
                     "discarded and the complete cloud snapshot reloaded. Already accepted server " +
                     "writes cannot be undone.",
                 modifier = Modifier.testTag("account-recovery-warning"),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(
                     onClick = {
-                        if (pendingToken === displayedToken) {
+                        if (pendingToken === displayedToken &&
+                            syncState.uiState.value.recovery === displayedToken
+                        ) {
                             syncState.confirmRecovery(displayedToken)
                             pendingToken = null
                             recoveryArmed = false
                             recoveryBaseline = null
                         }
                     },
-                    enabled = !syncUi.busy,
+                    enabled = networkActionsEnabled && !syncUi.busy,
                     colors = ButtonDefaults.textButtonColors(
                         contentColor = MaterialTheme.colorScheme.error,
                     ),
@@ -193,22 +204,3 @@ internal fun AccountSyncSection(syncState: AccountSyncState) {
         }
     }
 }
-
-private fun fixedSyncStop(stop: AppReconciliationStop): String =
-    when (stop) {
-        AppReconciliationStop.TAIL -> "Sync complete."
-        AppReconciliationStop.PROTECTED -> "New changes arrived during sync and were kept."
-        AppReconciliationStop.PUSH_STOPPED -> "Sync paused during upload. You can retry manually."
-        AppReconciliationStop.PULL_STOPPED -> "Sync paused during download. You can retry manually."
-        AppReconciliationStop.SNAPSHOT_STOPPED -> "Snapshot download paused. You can retry manually."
-        AppReconciliationStop.SNAPSHOT_RESTART_REQUIRED -> "Snapshot expired. Restart the staged download."
-        AppReconciliationStop.RETAINED_STAGE -> "A staged download is waiting. Restart it to continue."
-    }
-
-private fun fixedSyncError(error: AccountSyncError): String =
-    when (error) {
-        AccountSyncError.UNAVAILABLE -> "Sync unavailable. Your visible data is unchanged."
-        AccountSyncError.REAUTHENTICATION_REQUIRED ->
-            "Sign in again for delivery. Offline editing remains available."
-        AccountSyncError.STALE_CONFIRMATION -> "That action is no longer current. Try again."
-    }

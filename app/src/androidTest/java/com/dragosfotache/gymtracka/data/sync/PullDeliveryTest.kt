@@ -25,14 +25,8 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R07b independent pull-delivery acceptance: multi-page ordering/chaining,
- * tails/budgets/bounds, whole-page malformed rejection, failure
- * classification, same-page commit survival and redacted displays.
- *
- * Real Room, no DAO/PushRun mocks, no duplicate engine implementation. Every
- * expectation is a literal authored from docs/archive/remaining-work/R07b-task.md;
- * no production encoder output is used as an oracle and no production source
- * was inspected.
+ * Real Room and scripted transport checks for page order/chaining, tails, budgets, bounds,
+ * malformed-page rejection, failure classification, earlier-commit survival and redaction.
  */
 class PullDeliveryTest : GymDatabaseTest() {
 
@@ -41,7 +35,7 @@ class PullDeliveryTest : GymDatabaseTest() {
         // Whitespace initial cursor must be preserved exactly end to end.
         database.pullSeedBaseline(cursor = PULL_WHITESPACE_CURSOR)
         database.claimSeedWorkout(PULL_FOREIGN_WORKOUT, PULL_ACCOUNT_B, "Foreign")
-        database.r05bSeedCanonicalRow(
+        database.canonicalSeedCanonicalRow(
             PULL_ACCOUNT_B, "workout", PULL_FOREIGN_WORKOUT, 2L,
             "upsert", "{\"revision\":2}", 0L, 7L,
         )
@@ -51,9 +45,9 @@ class PullDeliveryTest : GymDatabaseTest() {
         )
         // Old active root: canonical established, domain newer intent pending.
         database.claimSeedWorkout(PULL_WORKOUT_B, PULL_ACCOUNT_A, "Local Newer", generation = 4L)
-        database.r05bSeedCanonicalRow(
+        database.canonicalSeedCanonicalRow(
             PULL_ACCOUNT_A, "workout", PULL_WORKOUT_B, 4L,
-            "upsert", r05bWorkoutRecord(id = PULL_WORKOUT_B, name = "Local Newer", revision = 4L).toString(), 0L, PULL_EPOCH,
+            "upsert", canonicalWorkoutRecord(id = PULL_WORKOUT_B, name = "Local Newer", revision = 4L).toString(), 0L, PULL_EPOCH,
         )
         val captureStore = database.claimCaptureStore(claimSession(), mutableListOf(CLAIM_MUTATION_1))
         database.claimCaptureStart(captureStore, PULL_ACCOUNT_A, PULL_WORKOUT_B, "Local Newer")
@@ -277,7 +271,7 @@ class PullDeliveryTest : GymDatabaseTest() {
         }
         assertEquals(PullRecoveryReason.MISSING_BASELINE_OR_CURSOR, (absentRow.stop as PullDeliveryStop.RecoveryRequired).reason)
         assertEquals(0, absentRowApi.calls.size)
-        // Null cursor requires R08, never null-cursor bootstrap.
+        // Null cursor requires snapshots, never null-cursor bootstrap.
         database.pullSeedBaseline(cursor = null)
         val nullCursorApi = PullDeliveryScriptApi(database, mutableListOf())
         val nullCursor = database.claimPushStore().withRun(PULL_EPOCH) { run ->

@@ -20,15 +20,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R09e independent QA: real-Room reauthentication authority transitions.
- *
- * Derived ONLY from docs/archive/remaining-work/R09e-task.md Room transitions plus
- * QA-owned literal raw-SQL/trigger/preservation patterns (R09a/b Room
- * authority tests, preservation seeds, post-write trigger rollback,
- * count-zero IGNORE). No production declarations, diffs, Worker work,
- * generated sources, decompiled classes or schema JSON inspected.
- * Deterministic only, no sleeps, no DAO mocks. Real in-memory Room;
- * coordinator/vault behavior lives in SessionReauthenticationRoomVaultTest.
+ * Real Room checks for same-account reauthentication authority reservation/finalization, stale
+ * generation refusal and retained graph/intent preservation.
  */
 @RunWith(AndroidJUnit4::class)
 class SessionReauthenticationRoomTest {
@@ -114,7 +107,7 @@ class SessionReauthenticationRoomTest {
         val inner = "{\"mutationId\":\"$mutationId\",\"type\":\"workout.start\"," +
             "\"aggregateType\":\"workout\",\"aggregateId\":\"$rootId\"," +
             "\"localGeneration\":$generation," +
-            "\"payload\":{\"id\":\"$rootId\",\"name\":\"R09e\"}}"
+            "\"payload\":{\"id\":\"$rootId\",\"name\":\"reauthentication\"}}"
         val escaped = inner.replace("\\", "\\\\").replace("\"", "\\\"")
         return "{\"payloadVersion\":1,\"requestJson\":\"$escaped\"," +
             "\"affectedRoots\":[{\"aggregateType\":\"workout\",\"aggregateId\":\"$rootId\"," +
@@ -638,7 +631,7 @@ class SessionReauthenticationRoomTest {
             // guard matches only the provisional 'preparing' write, so the
             // inner rewrite cannot refire.
             db.execSQL(
-                "CREATE TRIGGER r09e_rewrite_device AFTER UPDATE ON sync_device_state" +
+                "CREATE TRIGGER reauthentication_rewrite_device AFTER UPDATE ON sync_device_state" +
                     " WHEN NEW.cache_state = 'preparing'" +
                     " BEGIN UPDATE sync_device_state SET cache_state = 'local_only' WHERE id = 1; END",
             )
@@ -647,7 +640,7 @@ class SessionReauthenticationRoomTest {
                     authority.beginReauthentication(before, originA(), OP_NEW)
                 }
             } finally {
-                db.execSQL("DROP TRIGGER IF EXISTS r09e_rewrite_device")
+                db.execSQL("DROP TRIGGER IF EXISTS reauthentication_rewrite_device")
             }
             assertEquals(before, authority.read())
             assertEquals(
@@ -672,7 +665,7 @@ class SessionReauthenticationRoomTest {
             // Room transaction rolls back. Only this trigger differs from the
             // passing reservation path, so its refusal proves the hook engaged.
             db.execSQL(
-                "CREATE TRIGGER r09e_ignore_preparing BEFORE UPDATE ON sync_device_state" +
+                "CREATE TRIGGER reauthentication_ignore_preparing BEFORE UPDATE ON sync_device_state" +
                     " WHEN NEW.cache_state = 'preparing'" +
                     " BEGIN SELECT RAISE(IGNORE); END",
             )
@@ -681,7 +674,7 @@ class SessionReauthenticationRoomTest {
                     authority.beginReauthentication(before, originA(), OP_NEW)
                 }
             } finally {
-                db.execSQL("DROP TRIGGER IF EXISTS r09e_ignore_preparing")
+                db.execSQL("DROP TRIGGER IF EXISTS reauthentication_ignore_preparing")
             }
             assertEquals(before, authority.read())
             assertEquals(
@@ -707,7 +700,7 @@ class SessionReauthenticationRoomTest {
             // observation is well-formed yet never the expected tuple. The
             // exact post-write recheck must fail CORRUPT_AUTHORITY closed.
             db.execSQL(
-                "CREATE TRIGGER r09e_rewrite_finish AFTER UPDATE ON sync_session_authority" +
+                "CREATE TRIGGER reauthentication_rewrite_finish AFTER UPDATE ON sync_session_authority" +
                     " WHEN NEW.phase = 'preparing' AND OLD.phase = 'transitioning'" +
                     " BEGIN UPDATE sync_session_authority SET operation_id = '$OP_OTHER' WHERE id = 1; END",
             )
@@ -716,7 +709,7 @@ class SessionReauthenticationRoomTest {
                     authority.finishReauthentication(transitioning)
                 }
             } finally {
-                db.execSQL("DROP TRIGGER IF EXISTS r09e_rewrite_finish")
+                db.execSQL("DROP TRIGGER IF EXISTS reauthentication_rewrite_finish")
             }
             // Journal still the TRANSITIONING reservation; device unchanged.
             assertEquals(

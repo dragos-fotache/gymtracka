@@ -39,26 +39,19 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R11b independent QA: guarded foreground grant handoff over actual Room,
+ * Guarded foreground grant handoff over actual Room,
  * Keystore vault and the real finite-edit transition barrier (androidTest).
  *
- * Derived ONLY from docs/remaining-work/R11b-task.md (normative new-API contract,
- * intent/process/durable guards, ordering/retry/lifetime, obligation 5 and the
- * binding Additional exact constructor/wiring facts) plus coordinator-supplied
- * API/harness facts and QA-owned independent literals. No production
- * declarations/source/diffs, Worker work, generated/decompiled production
- * artifacts or production LSP inspected.
- *
- * All account/operation/key/token literals below are this slice's own synthetic
+ * All account/operation/key/token literals below are test synthetic
  * values; wire bodies are hand-written strings, never production encoder output.
  * Real facade requests come only from captureForegroundSignInRequest with four
  * named-request semantics; naked four-argument construction is used solely to
  * prove the real facade refuses it. Deterministic gates only, no sleeps.
  *
- * Covers R11b obligation 5 (first EMPTY preparation, same-account recovery with
+ * Covers foreground exchange obligation 5 (first EMPTY preparation, same-account recovery with
  * uncertain predecessor evidence, foreign/owner/naked/stale/invalidated refusals,
  * cancelled/retired exchange preservation, representative simultaneous attempts).
- * Existing full R09 race matrices are reused, not repeated. JVM ordering/expiry/
+ * Existing full session authority race matrices are reused, not repeated. JVM ordering/expiry/
  * budget/busy/cancel/retire/late-seam obligations live in
  * ForegroundSignInCoordinatorTest.
  */
@@ -66,13 +59,13 @@ import org.junit.runner.RunWith
 class ForegroundSignInHandoffTest {
 
     private companion object {
-        const val ORIGIN_ROOT = "https://sync-r11b.example.test"
-        const val OTHER_ORIGIN_ROOT = "https://other-r11b.example.test"
+        const val ORIGIN_ROOT = "https://sync-sign-in.example.test"
+        const val OTHER_ORIGIN_ROOT = "https://other-sign-in.example.test"
         const val ACCOUNT = "b11b0011-1111-4111-8111-111111111111"
         const val OTHER_ACCOUNT = "b11b0012-2222-4222-8222-222222222222"
         const val CHALLENGE_ID = "a11b0011-1111-4111-8111-111111111111"
-        const val NONCE = "r11b-handoff-nonce-001"
-        const val TOKEN = "r11b-handoff-token-001"
+        const val NONCE = "sign-in-handoff-nonce-001"
+        const val TOKEN = "sign-in-handoff-token-001"
         const val EXCHANGE_KEY = "c11b0011-1111-4111-8111-111111111111"
         const val PENDING_KEY = "c11b0012-2222-4222-8222-222222222222"
         const val OP_FRESH = "d11b0011-1111-4111-8111-111111111111"
@@ -81,10 +74,10 @@ class ForegroundSignInHandoffTest {
         const val OP_RIVAL = "d11b0014-4444-4444-8444-444444444444"
         const val FIXED_CLOCK = 1_699_999_900_000L
         const val GRANT_EXPIRY = 1_700_000_000_000L
-        const val PENDING_BODY = """{"refreshToken":"r11b-handoff-refresh-001"}"""
+        const val PENDING_BODY = """{"refreshToken":"sign-in-handoff-refresh-001"}"""
     }
 
-    private val harness = AppSessionHarness("r11b")
+    private val harness = AppSessionHarness("sign-in")
     private val dbs = mutableListOf<GymDatabase>()
     private val edits = mutableListOf<FiniteEditCoordinator>()
     private val scopes = mutableListOf<CoroutineScope>()
@@ -111,8 +104,8 @@ class ForegroundSignInHandoffTest {
 
     private fun grant(
         accountId: String = ACCOUNT,
-        access: String = "r11b-handoff-access-001",
-        refresh: String = "r11b-handoff-refresh-001",
+        access: String = "sign-in-handoff-access-001",
+        refresh: String = "sign-in-handoff-refresh-001",
     ): ServiceSession = ServiceSession(
         ServiceAccountRef(accountId, null),
         OpaqueToken(access),
@@ -163,12 +156,12 @@ class ForegroundSignInHandoffTest {
 
         override suspend fun refresh(attempt: ServiceRefreshAttempt): ServiceSession {
             refreshCalls += 1
-            throw AssertionError("R11b must never call refresh")
+            throw AssertionError("sign-in must never call refresh")
         }
 
         override suspend fun logout(refreshToken: OpaqueToken) {
             logoutCalls += 1
-            throw AssertionError("R11b must never call logout")
+            throw AssertionError("sign-in must never call logout")
         }
     }
 
@@ -299,7 +292,7 @@ class ForegroundSignInHandoffTest {
             assertEquals("1", journal[0])
             assertEquals("1", journal[1])
             assertEquals("preparing", journal[2])
-            assertEquals("https://sync-r11b.example.test:443", journal[3])
+            assertEquals("https://sync-sign-in.example.test:443", journal[3])
             assertEquals(ACCOUNT, journal[4])
             assertEquals(OP_FRESH, journal[5])
             // Exact vault evidence: revision 1 PREPARED with the whole fresh grant.
@@ -326,14 +319,14 @@ class ForegroundSignInHandoffTest {
     fun sameAccountRecoveryPreservesDomainOutboxAndUncertainEvidence() = runDeviceTest {
         val s = stack()
         val handle = s.activateExisting()
-        handle.repository.createCustomExercise("R11b Keep Me", null, emptySet(), null, null, "")
+        handle.repository.createCustomExercise("sign-in Keep Me", null, emptySet(), null, null, "")
         val frozenBefore = harness.frozenIdentity(harness.outboxSnapshot(s.database, ACCOUNT))
         assertEquals(1, frozenBefore.size)
         // Uncertain encrypted predecessor evidence on the ACTIVE record. The pending
         // refresh token must equal the predecessor stored refresh, byte for byte.
         val loaded = s.vault.load()
         val current = checkNotNull(loaded.record)
-        assertEquals("r11b-handoff-refresh-001", current.session.refreshToken.value)
+        assertEquals("sign-in-handoff-refresh-001", current.session.refreshToken.value)
         val pendingAttempt = ServiceRefreshAttempt.fromJson(PENDING_KEY, PENDING_BODY)
         assertEquals(PENDING_KEY, pendingAttempt.idempotencyKey)
         assertEquals(PENDING_BODY, pendingAttempt.requestJson)
@@ -357,7 +350,7 @@ class ForegroundSignInHandoffTest {
         )
         val identity = FakeIdentity()
         val auth = FakeForegroundAuth()
-        val freshGrant = grant(access = "r11b-handoff-access-002", refresh = "r11b-handoff-refresh-002")
+        val freshGrant = grant(access = "sign-in-handoff-access-002", refresh = "sign-in-handoff-refresh-002")
         auth.exchangeScript += { _ -> freshGrant }
         val orchestrator = foreground(identity, s.facade, auth, clock = s.clock)
         try {
@@ -365,7 +358,7 @@ class ForegroundSignInHandoffTest {
             assertTrue("recovery must stay Private, was $state", state is AppSessionState.Private)
             // Pending queue and domain survive with identical frozen identity.
             assertEquals(frozenBefore, harness.frozenIdentity(harness.outboxSnapshot(s.database, ACCOUNT)))
-            assertEquals(listOf("R11b Keep Me"), harness.customNames(s.database, ACCOUNT))
+            assertEquals(listOf("sign-in Keep Me"), harness.customNames(s.database, ACCOUNT))
             // Uncertain predecessor evidence retained and fenced, never dropped.
             val retained = checkNotNull(s.vault.load().record?.supersededSessions)
             assertTrue("superseded evidence must be retained, was $retained", retained.entries.isNotEmpty())
@@ -373,7 +366,7 @@ class ForegroundSignInHandoffTest {
             assertEquals(PENDING_BODY, archived.record.pendingRefresh?.attempt?.requestJson)
             assertEquals(PENDING_KEY, archived.record.pendingRefresh?.attempt?.idempotencyKey)
             assertEquals(
-                "r11b-handoff-refresh-001",
+                "sign-in-handoff-refresh-001",
                 archived.record.pendingRefresh?.attempt?.refreshToken?.value,
             )
             // Fresh grant installs only as PREPARED credentials, never an app handle.
@@ -400,10 +393,141 @@ class ForegroundSignInHandoffTest {
     // ---- Obligation 5: foreign/owner/naked/stale/invalidated refusals ----
 
     @Test
+    fun repeatedSignInFromPreparingPreservesQueuedEditsAndUncertainCredentials() = runDeviceTest {
+        repeatedPrivateSignIn(transitioning = false)
+    }
+
+    @Test
+    fun repeatedSignInFromTransitioningPreservesQueuedEditsAndOlderUncertainCredentials() = runDeviceTest {
+        repeatedPrivateSignIn(transitioning = true)
+    }
+
+    private suspend fun repeatedPrivateSignIn(transitioning: Boolean) {
+        val s = stack()
+        val handle = s.activateExisting()
+        handle.repository.createCustomExercise("Interrupted sign-in kept", null, emptySet(), null, null, "")
+        val outbox = harness.outboxSnapshot(s.database, ACCOUNT)
+        if (transitioning) {
+            // Crash gap: Room reserved a new identity; the old vault remains intact.
+            RoomSessionAuthority(s.database).beginSameAccountRecovery(
+                readAuthority(s.database), origin(), ACCOUNT, OP_FRESH,
+            )
+        } else {
+            s.facade.acceptGrant(readAuthority(s.database), OP_FRESH, grant())
+        }
+        val loaded = s.vault.load()
+        val record = checkNotNull(loaded.record)
+        val uncertain = record.copy(pendingRefresh = VaultPendingRefresh(
+            record.operationId, ServiceRefreshAttempt.fromJson(PENDING_KEY, PENDING_BODY),
+        ))
+        val source = s.vault.compareAndSet(loaded.revision, uncertain)
+        s.facade.recover()
+        val expected = readAuthority(s.database)
+        assertEquals(if (transitioning) RecoveryRoomPhase.TRANSITIONING else RecoveryRoomPhase.PREPARING, expected.phase)
+        val request = s.facade.captureForegroundSignInRequest(
+            ForegroundSignInIntent.SAME_ACCOUNT_REAUTHENTICATION, expected, OP_NEW,
+        )
+        val identity = FakeIdentity()
+        val auth = FakeForegroundAuth()
+        val fresh = grant(access = "new-private-access", refresh = "new-private-refresh")
+        auth.exchangeScript += { throw com.dragosfotache.gymtracka.data.sync.api.SyncApiException.Transient() }
+        auth.exchangeScript += { fresh }
+        val orchestrator = foreground(identity, s.facade, auth, clock = s.clock)
+        val transportCount = s.transport.capturedRequests.size
+        val publications = s.publication.acquires
+        try {
+            assertTrue(orchestrator.signIn(request) is AppSessionState.Private)
+            val after = readAuthority(s.database)
+            assertEquals(RecoveryRoomPhase.PREPARING, after.phase)
+            assertEquals(expected.sessionGeneration + 1L, after.sessionGeneration)
+            assertEquals(OP_NEW, after.identity?.operationId)
+            val stored = checkNotNull(s.vault.load().record)
+            assertEquals(fresh, stored.session)
+            assertEquals(VaultSessionPhase.PREPARED, stored.phase)
+            assertNull(stored.pendingRefresh)
+            val archived = stored.supersededSessions.entries.single()
+            assertEquals(source.revision, archived.sourceRevision)
+            assertEquals(uncertain.binding, archived.record.binding)
+            assertEquals(uncertain.operationId, archived.record.operationId)
+            assertEquals(uncertain.phase, archived.record.phase)
+            assertEquals(uncertain.session, archived.record.session)
+            assertEquals(uncertain.operationId, archived.record.pendingRefresh?.operationId)
+            assertTrue(archived.record.supersededSessions.entries.isEmpty())
+            assertEquals(PENDING_BODY, archived.record.pendingRefresh?.attempt?.requestJson)
+            assertEquals(PENDING_KEY, archived.record.pendingRefresh?.attempt?.idempotencyKey)
+            assertEquals(outbox, harness.outboxSnapshot(s.database, ACCOUNT))
+            assertEquals(listOf("Interrupted sign-in kept"), harness.customNames(s.database, ACCOUNT))
+            assertEquals(2, auth.attempts.size)
+            assertSame(auth.attempts[0], auth.attempts[1])
+            assertEquals(1, identity.nonces.size)
+            assertEquals(0, identity.clears)
+            assertEquals(0, auth.refreshCalls)
+            assertEquals(transportCount, s.transport.capturedRequests.size)
+            assertEquals(publications, s.publication.acquires)
+            assertTrue(s.facade.state.value is AppSessionState.Private)
+        } finally {
+            orchestrator.close()
+        }
+    }
+
+    @Test
+    fun privateFreshSignInRefusesWrongAccountOriginAndRetiredRequestWithoutChangingEvidence() = runDeviceTest {
+        val s = stack()
+        s.facade.acceptGrant(readAuthority(s.database), OP_SETUP, grant())
+        val expected = readAuthority(s.database)
+        val before = s.vault.load()
+        val request = s.facade.captureForegroundSignInRequest(
+            ForegroundSignInIntent.SAME_ACCOUNT_REAUTHENTICATION, expected, OP_NEW,
+        )
+        try {
+            s.facade.acceptForegroundGrant(request, grant(accountId = OTHER_ACCOUNT))
+            fail("foreign account must refuse")
+        } catch (e: AppSessionException) {
+            AppSessionFixtures.assertRefusal(e, AppSessionReason.IDENTITY_MISMATCH)
+        }
+        val foreign = stack(database = s.database, root = OTHER_ORIGIN_ROOT, vault = s.vault)
+        try {
+            foreign.facade.captureForegroundSignInRequest(
+                ForegroundSignInIntent.SAME_ACCOUNT_REAUTHENTICATION, expected, OP_NEW,
+            )
+            fail("foreign origin must refuse")
+        } catch (e: AppSessionException) {
+            AppSessionFixtures.assertRefusal(e, AppSessionReason.IDENTITY_MISMATCH)
+        }
+        s.facade.invalidate()
+        try {
+            s.facade.acceptForegroundGrant(request, grant(access = "fresh", refresh = "fresh"))
+            fail("retired request must refuse")
+        } catch (_: AppSessionStaleException) {
+        }
+        assertEquals(expected, readAuthority(s.database))
+        assertEquals(before, s.vault.load())
+        assertTrue(s.transport.capturedRequests.isEmpty())
+    }
+
+    @Test
+    fun savedGrantResumeStillRequiresExactCredentialsAndKeepsReservation() = runDeviceTest {
+        val s = stack()
+        s.facade.acceptGrant(readAuthority(s.database), OP_SETUP, grant())
+        val expected = readAuthority(s.database)
+        val before = s.vault.load()
+        assertTrue(s.facade.acceptGrant(expected, OP_SETUP, grant()) is AppSessionState.Private)
+        try {
+            s.facade.acceptGrant(expected, OP_SETUP, grant(access = "fresh", refresh = "fresh"))
+            fail("exact saved resume cannot install a different session")
+        } catch (e: AppSessionException) {
+            AppSessionFixtures.assertRefusal(e, AppSessionReason.IDENTITY_MISMATCH)
+        }
+        assertEquals(expected, readAuthority(s.database))
+        assertEquals(before, s.vault.load())
+        assertTrue(s.transport.capturedRequests.isEmpty())
+    }
+
+    @Test
     fun foreignAccountGrantRefusesUnchanged() = runDeviceTest {
         val s = stack()
         val handle = s.activateExisting()
-        handle.repository.createCustomExercise("R11b Mine", null, emptySet(), null, null, "")
+        handle.repository.createCustomExercise("sign-in Mine", null, emptySet(), null, null, "")
         val journalBefore = harness.journalRow(s.database)
         val vaultBefore = s.vault.load()
         val frozenBefore = harness.frozenIdentity(harness.outboxSnapshot(s.database, ACCOUNT))
@@ -428,7 +552,7 @@ class ForegroundSignInHandoffTest {
             assertEquals(journalBefore, harness.journalRow(s.database))
             assertEquals(vaultBefore, s.vault.load())
             assertEquals(frozenBefore, harness.frozenIdentity(harness.outboxSnapshot(s.database, ACCOUNT)))
-            assertEquals(listOf("R11b Mine"), harness.customNames(s.database, ACCOUNT))
+            assertEquals(listOf("sign-in Mine"), harness.customNames(s.database, ACCOUNT))
         } finally {
             orchestrator.close()
         }
@@ -538,12 +662,12 @@ class ForegroundSignInHandoffTest {
             s.facade.acceptGrant(
                 readAuthority(s.database),
                 OP_RIVAL,
-                grant(access = "r11b-handoff-access-rival", refresh = "r11b-handoff-refresh-rival"),
+                grant(access = "sign-in-handoff-access-rival", refresh = "sign-in-handoff-refresh-rival"),
             )
             val journalAfterNewer = harness.journalRow(s.database)
             val identity = FakeIdentity()
             val auth = FakeForegroundAuth()
-            auth.exchangeScript += { _ -> grant(access = "r11b-handoff-access-delayed") }
+            auth.exchangeScript += { _ -> grant(access = "sign-in-handoff-access-delayed") }
             val orchestrator = foreground(identity, s.facade, auth, clock = s.clock)
             try {
                 try {
@@ -647,7 +771,7 @@ class ForegroundSignInHandoffTest {
                         }
                     }
                     entered.await()
-                    val probe = CancellationException("r11b-handoff-cancel")
+                    val probe = CancellationException("sign-in-handoff-cancel")
                     job.cancel(probe)
                     release.complete(Unit)
                     assertSame(probe, done.await())
@@ -740,7 +864,7 @@ class ForegroundSignInHandoffTest {
             secondEntered.complete(Unit)
             secondRelease.await()
         }
-        secondAuth.exchangeScript += { _ -> grant(access = "r11b-handoff-access-rival") }
+        secondAuth.exchangeScript += { _ -> grant(access = "sign-in-handoff-access-rival") }
         val firstOrchestrator = foreground(FakeIdentity(), s.facade, firstAuth, clock = s.clock)
         val secondOrchestrator = foreground(
             FakeIdentity(),
@@ -777,13 +901,13 @@ class ForegroundSignInHandoffTest {
             val stored = checkNotNull(s.vault.load().record)
             assertEquals(1L, s.vault.load().revision)
             assertEquals(OP_FRESH, stored.operationId)
-            assertEquals("r11b-handoff-access-001", stored.session.accessToken.value)
+            assertEquals("sign-in-handoff-access-001", stored.session.accessToken.value)
             val journal = harness.journalRow(s.database)
             assertEquals(6, journal.size)
             assertEquals("1", journal[0])
             assertEquals("1", journal[1])
             assertEquals("preparing", journal[2])
-            assertEquals("https://sync-r11b.example.test:443", journal[3])
+            assertEquals("https://sync-sign-in.example.test:443", journal[3])
             assertEquals(ACCOUNT, journal[4])
             assertEquals(OP_FRESH, journal[5])
         } finally {

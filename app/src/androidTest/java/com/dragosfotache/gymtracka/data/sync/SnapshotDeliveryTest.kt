@@ -41,17 +41,9 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R08b independent snapshot-delivery acceptance: push-first gating, exact
- * token/limit chaining, whole multi-family fidelity, budgets with same-run
- * continuation beyond 100 total pages, preeffect bounds, typed
- * failure/expiry identity, production HTTP adapter composition and redacted
- * displays.
- *
- * Real Room, no mocked DAOs/stores/admission, no sleeps. Every expectation is
- * a literal authored from docs/archive/remaining-work/R08b-task.md and the
- * coordinator's source-independent API/harness facts; no production encoder
- * output is used as an oracle and no production source was inspected.
- * Existing R08a/R06/R07 primitive matrices are reused, not duplicated.
+ * Real Room checks for push-first snapshot admission, exact token/limit chaining, complete multi-
+ * family values, bounded same-run continuation beyond 100 pages, typed failure/expiry and HTTP
+ * adapter composition.
  */
 class SnapshotDeliveryTest : GymDatabaseTest() {
 
@@ -512,7 +504,7 @@ class SnapshotDeliveryTest : GymDatabaseTest() {
         val api = SnapshotDeliveryScriptApi(database, mutableListOf(), mutableListOf())
         val store = database.claimPushStore(claimSession(), claimOwner())
         val loop = SnapshotDeliveryLoop(store, api) { DELIVERY_NOW_MILLIS }
-        // Accepted seam contract: a selected durable stage surfaces
+        // Storage contract: a selected durable stage surfaces
         // PushHeadResult.Blocked(SNAPSHOT_STAGE, null) before head selection,
         // so the driver returns push-only Blocked with null download.
         val started = store.withRun(DELIVERY_EPOCH) { run ->

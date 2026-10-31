@@ -15,16 +15,11 @@ import com.dragosfotache.gymtracka.data.sync.store.PushClaim
 import com.dragosfotache.gymtracka.data.sync.store.PushHeadResult
 
 /**
- * R06b independent QA fixtures. Hand-written from docs/archive/remaining-work/R06b-task.md
- * and the coordinator's API/harness facts only.
- *
- * Every expected value below is a literal authored here; no production encoder
- * output is used as an oracle. Durable seeding reuses the existing R06a
- * [claimSeedDevice]/capture helpers rather than cloning them; only
- * outcome-specific result/batch builders and fixed message literals are new.
+ * Literal outcome/batch fixtures and fixed safe-message expectations reuse durable claim/capture
+ * helpers.
  */
 
-// Fixed persistence literals from the R06b specification (not production oracles).
+// Fixed persistence literals from the push outcomes specification (not production oracles).
 internal const val OUTCOME_REJECTED_MESSAGE = "Push mutation was rejected; recovery required."
 internal const val OUTCOME_MALFORMED_MESSAGE = "Push response was invalid; recovery required."
 internal const val OUTCOME_TOO_LARGE_MESSAGE = "Push request was too large; recovery required."

@@ -34,6 +34,8 @@ data class SyncOutboxEntity(
     @ColumnInfo(name = "retry_after_millis") val retryAfterMillis: Long? = null,
     @ColumnInfo(name = "error_code") val errorCode: String? = null,
     @ColumnInfo(name = "error_message") val errorMessage: String? = null,
+    /** Only proven connection failures may have their local delay reset after reconnection. */
+    @ColumnInfo(name = "retry_cause", defaultValue = "'unknown'") val retryCause: String = "unknown",
 )
 
 /** Per-account sync cursor. The account key is non-null; there are no pseudo accounts. */
@@ -45,11 +47,10 @@ data class SyncStateEntity(
 )
 
 /**
- * Singleton device row identifying the active account. Future switches/identity changes
- * advance sessionGeneration; future canonical writes compare the current device row
- * inside their transaction. cachedAccountId is storage for the retained signed-out
- * cache and is independent of activeAccountId; no sign-out behavior is implemented
- * in this slice. Holds no credentials or tokens.
+ * Singleton device row for active/cached account identity and session generation. Identity
+ * transitions advance the generation; canonical transactions compare the current row before
+ * committing. Cached identity remains separate from active identity. This row contains no
+ * credentials and does not itself implement sign-out.
  */
 @Entity(tableName = "sync_device_state")
 data class SyncDeviceStateEntity(

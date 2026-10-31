@@ -8,7 +8,7 @@ import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationLease
 /**
  * Service-confirmed import target for the inert legacy storage seam.
  * The target conveys already service-confirmed identity; it is NOT a
- * visibility or network grant. R13b must derive it from accepted
+ * visibility or network grant. private import must derive it from accepted
  * fresh-service evidence under existing process/vault fences.
  */
 internal data class LegacyImportTarget(
@@ -28,7 +28,7 @@ internal data class LegacyImportTarget(
     override fun toString(): String = "LegacyImportTarget(redacted)"
 }
 
-/** Future production admission/drain barrier for explicit caller-owned private work. */
+/** Admission/drain barrier for explicit caller-owned private work. */
 internal fun interface LegacyImportCaptureBarrier {
     suspend fun acquire(expected: RecoveryRoomSnapshot): ProjectionPublicationLease
 }

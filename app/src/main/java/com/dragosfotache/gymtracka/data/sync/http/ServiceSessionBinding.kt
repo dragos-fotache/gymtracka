@@ -46,7 +46,7 @@ internal class BoundServiceAccessToken(
 /**
  * Bound provider of the opaque service bearer credential. Called exactly once per
  * explicit sync invocation with the immutable expected binding. Stores no
- * credentials and applies no expiry or rotation policy; future vault work owns that.
+ * credentials and applies no expiry or rotation policy; the vault and refresh coordinator own that.
  */
 internal fun interface BoundServiceAccessTokenProvider {
     suspend fun accessToken(binding: ServiceSessionBinding): BoundServiceAccessToken

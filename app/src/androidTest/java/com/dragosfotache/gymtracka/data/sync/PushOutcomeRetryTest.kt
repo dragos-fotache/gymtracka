@@ -16,12 +16,92 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R06b independent retry acceptance: transient scheduling with deterministic
+ * retry acceptance: transient scheduling with deterministic
  * backoff/hints/caps, due-time blocking, exact-byte replay with admission
  * progression, overflow exhaustion and disk reopen. Real Room, no mocked
  * DAOs, no sleeps. Pure arithmetic lives in the JVM [PushRetryPolicyTest].
  */
 class PushOutcomeRetryTest : GymDatabaseTest() {
+
+    @Test
+    fun reconnectResetsOnlyConnectionBackoff_preservingExactRequestAndAdmissionHistory() = runTest {
+        database.outcomeSeedFenced()
+        val original = database.outcomeCaptureHead()
+        database.claimPushStore().withRun(0L) { run ->
+            val claim = (run.claimHead(OUTCOME_NOW_MILLIS) as PushHeadResult.Claimed).claim
+            run.handleFailure(claim, SyncApiException.Transient(connectionFailure = true), OUTCOME_NOW_MILLIS)
+        }
+        val held = database.outcomeRow()
+        assertEquals("connection", held.retryCause)
+        database.claimPushStore().withRun(0L) { run ->
+            assertTrue(run.claimHead(OUTCOME_NOW_MILLIS) is PushHeadResult.Deferred)
+        }
+        database.claimPushStore().withRun(0L) { run ->
+            run.retryConnectionHeadAfterReconnect()
+            val retry = (run.claimHead(OUTCOME_NOW_MILLIS) as PushHeadResult.Claimed).claim
+            assertEquals(original.payloadJson, retry.row.payloadJson)
+            assertEquals(original.mutationId, retry.row.mutationId)
+            assertEquals(2, retry.row.attemptCount)
+            assertNull(retry.row.retryAfterMillis)
+            assertEquals("unknown", retry.row.retryCause)
+            // A new connection failure is not reset by the already-consumed event.
+            run.handleFailure(retry, SyncApiException.Transient(connectionFailure = true), OUTCOME_NOW_MILLIS)
+            assertTrue(run.claimHead(OUTCOME_NOW_MILLIS) is PushHeadResult.Deferred)
+        }
+    }
+
+    @Test
+    fun reconnectNeverShortensServiceHintsOrUnknownLegacyDelays() = runTest {
+        database.outcomeSeedFenced()
+        database.outcomeCaptureHead()
+        for (failure in listOf(SyncApiException.Transient(), SyncApiException.Transient(300_000L), SyncApiException.Transient(300_000L, connectionFailure = true))) {
+            val now = database.outcomeRow().retryAfterMillis ?: OUTCOME_NOW_MILLIS
+            database.claimPushStore().withRun(0L) { run ->
+                val claim = (run.claimHead(now) as PushHeadResult.Claimed).claim
+                run.handleFailure(claim, failure, now)
+            }
+            val held = database.outcomeRow()
+            assertEquals("unknown", held.retryCause)
+            database.claimPushStore().withRun(0L) { run ->
+                run.retryConnectionHeadAfterReconnect()
+                assertTrue(run.claimHead(now) is PushHeadResult.Deferred)
+            }
+            assertEquals(held, database.outcomeRow())
+        }
+    }
+
+    @Test
+    fun connectionRetryCause_survivesFileReopen_andAllowsExactImmediateReplay() = runTest {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val name = claimUniqueDbName("connection-retry-reopen")
+        val first = claimFileDatabase(context, name)
+        val held = try {
+            first.outcomeSeedFenced()
+            first.outcomeCaptureHead()
+            first.claimPushStore().withRun(0L) { run ->
+                val claim = (run.claimHead(OUTCOME_NOW_MILLIS) as PushHeadResult.Claimed).claim
+                run.handleFailure(claim, SyncApiException.Transient(connectionFailure = true), OUTCOME_NOW_MILLIS)
+            }
+            first.outcomeRow()
+        } finally {
+            first.close()
+        }
+        val reopened = claimFileDatabase(context, name)
+        try {
+            assertEquals(held, reopened.outcomeRow())
+            reopened.claimPushStore().withRun(0L) { run ->
+                run.retryConnectionHeadAfterReconnect()
+                val retry = (run.claimHead(OUTCOME_NOW_MILLIS) as PushHeadResult.Claimed).claim
+                assertEquals(held.payloadJson, retry.row.payloadJson)
+                assertEquals(held.mutationId, retry.row.mutationId)
+                assertEquals(held.attemptCount + 1, retry.row.attemptCount)
+                assertNull(retry.row.retryAfterMillis)
+            }
+        } finally {
+            reopened.close()
+            context.deleteDatabase(name)
+        }
+    }
 
     @Test
     fun transientNullHint_schedulesBackoffAndBlocksUntilDue() = runTest {
@@ -249,6 +329,7 @@ class PushOutcomeRetryTest : GymDatabaseTest() {
             assertEquals("frozen", head.state)
             assertEquals(OUTCOME_NOW_MILLIS + 5_000L, head.retryAfterMillis)
             reopened.claimPushStore().withRun(0L) { run ->
+                run.retryConnectionHeadAfterReconnect()
                 val deferred = run.claimHead(OUTCOME_NOW_MILLIS) as PushHeadResult.Deferred
                 assertEquals(OUTCOME_NOW_MILLIS + 5_000L, deferred.retryAfterMillis)
                 val replayed = (run.claimHead(OUTCOME_NOW_MILLIS + 5_000L) as PushHeadResult.Claimed).claim

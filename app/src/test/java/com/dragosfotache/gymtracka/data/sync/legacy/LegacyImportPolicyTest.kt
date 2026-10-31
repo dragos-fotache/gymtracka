@@ -7,7 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * R13b independent QA (offline): fixed/redacted display invariants for the
+ * (offline): fixed/redacted display invariants for the
  * new legacy-import consent/policy/progress/target types.
  *
  * Display-only contract: every display is non-blank, deterministic for equal
@@ -18,7 +18,7 @@ import org.junit.Test
 class LegacyImportPolicyTest {
 
     private companion object {
-        const val ORIGIN = "https://sync-r13b.example.test"
+        const val ORIGIN = "https://sync-import.example.test"
         const val ACCOUNT = "c13b4001-1111-4111-8111-111111111111"
         const val OPERATION = "d13b4001-1111-4111-8111-111111111111"
         const val MUTATION = "70000004-d13b-4d13-8d13-d13bd13bd13b"

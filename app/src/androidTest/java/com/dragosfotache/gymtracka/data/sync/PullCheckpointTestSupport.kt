@@ -15,16 +15,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * R07a independent QA fixtures. Hand-written from docs/archive/remaining-work/R07a-task.md,
- * the coordinator's QA API/harness facts and allowed existing client test
- * sources only.
- *
- * Every expected value below is a literal authored here; no production encoder
- * output is used as an oracle. Durable seeding reuses the existing vetted R06a
- * claim/capture helpers and R06c acknowledgment observation helpers; only
- * pull-seam-specific builders and cursor literals are new. No production
- * declaration, implementation, generated production code, diff or Worker
- * output was inspected.
+ * Literal canonical/checkpoint fixtures and durable seed helpers. Expected values are independent
+ * of production encoder output; stored request bytes are compared directly.
  */
 
 // Distinct pull-seam literals (not production oracles).
@@ -174,7 +166,7 @@ internal fun pullWireWorkoutRecord(
         .put("exercises", exercises)
         .put("totalVolumeKg", 0.0)
 
-/** Hand-authored workout set entry; shapes mirror allowed R05b fixtures, literals are new. */
+/** Hand-authored workout set entry; shapes mirror allowed canonical batches fixtures, literals are new. */
 internal fun pullWireSet(
     id: String = "33333333-3333-3333-3333-333333333333",
     position: Int = 0,

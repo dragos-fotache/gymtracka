@@ -5,7 +5,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * Independent durable session-authority journal for R09a private preparation/fencing.
+ * Independent durable session-authority journal for Room authority private preparation/fencing.
  * One singleton row (id 1) with no foreign keys, indexes or domain credentials.
  * Holds only nonsecret identity/transition state: monotonic revision, session
  * generation fence, phase label, canonical service origin provenance, private

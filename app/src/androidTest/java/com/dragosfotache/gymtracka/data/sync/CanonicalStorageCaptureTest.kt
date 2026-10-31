@@ -34,11 +34,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R05a independent storage/capture acceptance. Real Room, no mocked DAOs.
- *
- * Expectations are authored from docs/remaining-work/R05a-task.md and the
- * supplied API facts only. Literal IDs/generations/SQL facts are asserted;
- * no production-generated wire bytes are used as oracles.
+ * storage/capture acceptance. Real Room, no mocked DAOs.
  */
 class CanonicalStorageCaptureTest : GymDatabaseTest() {
 
@@ -854,7 +850,7 @@ class CanonicalStorageCaptureTest : GymDatabaseTest() {
         database.syncDao().upsertDeviceState(device())
         seedWorkout()
         database.openHelper.writableDatabase.execSQL(
-            "CREATE TRIGGER block_r05a_outbox BEFORE INSERT ON sync_outbox " +
+            "CREATE TRIGGER block_capture_outbox BEFORE INSERT ON sync_outbox " +
                 "BEGIN SELECT RAISE(ABORT, 'blocked'); END",
         )
         try {
@@ -875,7 +871,7 @@ class CanonicalStorageCaptureTest : GymDatabaseTest() {
             assertNull(database.syncCanonicalDao().getAccountCache(ACCOUNT))
             assertEquals(0, database.syncDao().getOutboxForAccount(ACCOUNT).size)
         } finally {
-            database.openHelper.writableDatabase.execSQL("DROP TRIGGER block_r05a_outbox")
+            database.openHelper.writableDatabase.execSQL("DROP TRIGGER block_capture_outbox")
         }
     }
 
@@ -937,7 +933,7 @@ class CanonicalStorageCaptureTest : GymDatabaseTest() {
         seedWorkout(name = "Main")
         seedWorkout(id = WORKOUT_B, name = "Extra")
         database.openHelper.writableDatabase.execSQL(
-            "CREATE TRIGGER block_r05a_extra_ledger BEFORE INSERT ON sync_canonical_roots " +
+            "CREATE TRIGGER block_capture_extra_ledger BEFORE INSERT ON sync_canonical_roots " +
                 "WHEN NEW.aggregate_id = '$WORKOUT_B' " +
                 "BEGIN SELECT RAISE(ABORT, 'blocked'); END",
         )
@@ -965,7 +961,7 @@ class CanonicalStorageCaptureTest : GymDatabaseTest() {
             assertNull(database.syncCanonicalDao().getAccountCache(ACCOUNT))
             assertEquals(0, database.syncDao().getOutboxForAccount(ACCOUNT).size)
         } finally {
-            database.openHelper.writableDatabase.execSQL("DROP TRIGGER block_r05a_extra_ledger")
+            database.openHelper.writableDatabase.execSQL("DROP TRIGGER block_capture_extra_ledger")
         }
     }
 
@@ -1068,7 +1064,7 @@ class CanonicalStorageCaptureTest : GymDatabaseTest() {
     @Test
     fun fileBacked_closeReopenKeepsWatermarkAndOutboxIdentity() = runTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val name = "r05a-canonical-file-backed.db"
+        val name = "capture-canonical-file-backed.db"
         context.deleteDatabase(name)
         var beforePayload = ""
         var beforeState = ""

@@ -29,7 +29,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R06d driver boundary: account/session/epoch changes during gated HTTP make
+ * driver boundary: account/session/epoch changes during gated HTTP make
  * late accepted/typed results write nothing; a deterministic
  * transaction-executor admission barrier after claim commit proves the
  * pre-send fence blocks API admission.

@@ -26,15 +26,9 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R07c independent tail-primitive acceptance: transactional valid-tail and
- * last-success bookkeeping through real Room.
- *
- * Contract assumed from docs/archive/remaining-work/R07c-task.md (coordinator owns
- * the declaration): `PushRun.recordPullTail(checkpoint, nowMillis)` shares
- * the checkpoint handling Mutex, retires the input token even on
- * rollback/uncertain commit, and returns `PullTailCommitResult`. No production
- * source inspected; every expectation is a literal authored here. Reuses
- * vetted R07a pull-seam helpers; does not duplicate their matrices.
+ * Real Room checks for transactional valid-tail and last-success bookkeeping. Input checkpoints
+ * retire before writes, including rollback or uncertain return; expected rows and times are
+ * literal values.
  */
 class PullTailCommitTest : GymDatabaseTest() {
 

@@ -23,7 +23,7 @@ import java.io.IOException
 import kotlinx.coroutines.runBlocking
 
 /**
- * R03a QA: origin / request / timeout / retry-hint tables.
+ * origin / request / timeout / retry-hint tables.
  * Pure validation from the normative spec; no network I/O.
  */
 class ServiceOriginRequestTest {

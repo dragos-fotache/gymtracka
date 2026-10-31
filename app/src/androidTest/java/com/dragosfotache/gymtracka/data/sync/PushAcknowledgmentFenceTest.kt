@@ -31,7 +31,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R06c independent fence acceptance: stale/exact-row/session/epoch checks,
+ * fence acceptance: stale/exact-row/session/epoch checks,
  * foreign/closed/enclosing capability use, concurrent settlement, post-write
  * cancellation, trigger-induced rollback including watermark tampering, and
  * conservative token consumption. Real Room, no mocked DAOs, no sleeps.
@@ -191,7 +191,7 @@ class PushAcknowledgmentFenceTest : GymDatabaseTest() {
             }
         }
 
-        // Enclosing Room transaction rejects entry, following the R06a precedent
+        // Enclosing Room transaction rejects entry, following the claim precedent
         // of accepting either owned-entry exception shape. Clear the fixtures
         // consumed above: reseeding over the surviving physical row would
         // collide on its primary key.

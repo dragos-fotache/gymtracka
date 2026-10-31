@@ -18,7 +18,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
 /**
- * R09h facade-bound [GymSyncApi] over one admitted [RecoveredSession] and its
+ * facade-bound [GymSyncApi] over one admitted [RecoveredSession] and its
  * shared refresh machinery. No second unbound ACTIVE lease is minted.
  *
  * Push wrappers are frozen/deep-owned through the shared approved

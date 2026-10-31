@@ -20,13 +20,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R04a independent QA: version-1 binary record codec.
- *
- * Expectations derived from the R04a-task independent fixture grammar only.
- * Cross-checks production VaultRecordCodec against the independent builder in
- * VaultTestFixtures; malformed inputs must fail closed, never repair or fall back.
- * All persisted-decode negatives are built by splicing otherwise-valid encodings, so no
- * invalid model constructor ever preempts the decode path under test.
+ * version-1 binary record codec.
  */
 class VaultRecordCodecTest {
 
@@ -797,7 +791,7 @@ class VaultRecordCodecTest {
     @Test
     fun unsupportedVersionIsDistinctAndNondestructive() {
         val snapshot = VaultTestFixtures.snapshot()
-        // R09g reserves version 2 for archive-bearing records; true unknown
+        // reserves version 2 for archive-bearing records; true unknown
         // versions stay distinct (3, 0, MAX) with no assertion weakening.
         val v3 = VaultTestFixtures.encodeWithVersion(snapshot, 3)
         val v0 = VaultTestFixtures.encodeWithVersion(snapshot, 0)

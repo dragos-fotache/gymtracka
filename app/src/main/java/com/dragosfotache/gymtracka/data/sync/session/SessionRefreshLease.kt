@@ -12,13 +12,13 @@ import kotlinx.coroutines.ensureActive
  * Explicit internal authorization seam for one authorized activation: the
  * bound origin/account/generation plus the durable activation operation and
  * journal phase that a refresh selection must match exactly. One shared lease
- * per authorized activation is used by future foreground/background callers;
+ * per authorized activation is used by authorized callers;
  * a lease alone never proves vault phase authorizes network or UI.
  *
  * States are process-local only: usable, foreground-reauth-required, and
  * permanently invalidated. Invalidation dominates every other state, is
  * idempotent and synchronous, and never waits for network, vault, or mutex.
- * It performs no durable cleanup; later R09 owns tombstoning. Display is
+ * It performs no durable cleanup; session lifecycle code owns durable cleanup. Display is
  * fixed and redacted.
  */
 internal class SessionRefreshLease(
@@ -68,7 +68,7 @@ internal class SessionRefreshLease(
     internal fun isInvalidated(): Boolean = state.get() == INVALIDATED
 
     /**
-     * Process-local Room authorization recheck for the R04c startup seam.
+     * Process-local Room authorization recheck for the startup recovery startup seam.
      * Verifies caller activity, permanent invalidation, invokes the bound
      * predicate, then rechecks activity and invalidation on return and on
      * error. Independent of the reauth latch so late safe failures keep

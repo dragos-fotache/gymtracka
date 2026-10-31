@@ -7,7 +7,7 @@ import androidx.room.Query
 import androidx.room.Update
 
 /**
- * Focused publication primitives for R05c canonical projection. Reads cover the
+ * Focused publication primitives for Projection canonical projection. Reads cover the
  * whole current domain for family-scoped collision checks; writes replace only
  * the selected account graph with explicit deletes/inserts/updates, never root
  * `INSERT OR REPLACE`. All calls must run inside the caller's fenced Room

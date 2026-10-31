@@ -52,9 +52,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Independent QA oracles for R11a [AndroidGoogleIdentityProvider].
+ * Independent tests oracles for Google adapter [AndroidGoogleIdentityProvider].
  *
- * Written from the normative R11a specification only, without inspecting production source.
+ * Written from the normative Google adapter specification only, without inspecting production source.
  * All audience/nonce/token literals are synthetic and independent; no real provider is contacted.
  * A fake [GoogleCredentialClient] records actual SDK requests and returns actual SDK credentials.
  * Google bundle key strings match the public googleid 1.2.1 SDK artifact; no production keys are used.
@@ -64,9 +64,9 @@ import org.junit.runner.RunWith
 class AndroidGoogleIdentityProviderTest {
 
     companion object {
-        private const val AUDIENCE = "synthetic-r11a-web-client-7f3a2b.apps.googleusercontent.com"
-        private const val NONCE = "synthetic-r11a-nonce-001"
-        private const val TOKEN_TAG = "synthetic-r11a-sub-001"
+        private const val AUDIENCE = "synthetic-google-web-client-7f3a2b.apps.googleusercontent.com"
+        private const val NONCE = "synthetic-google-nonce-001"
+        private const val TOKEN_TAG = "synthetic-google-sub-001"
         private const val GUARD_TIMEOUT_MILLIS = 15_000L
         private const val VIRTUAL_BOUND_MILLIS = 5_000L
         private const val VIRTUAL_LONG_BOUND_MILLIS = 60_000L
@@ -157,13 +157,13 @@ class AndroidGoogleIdentityProviderTest {
                 Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
             )
         val header = b64("""{"alg":"none","typ":"JWT"}""")
-        val payload = b64("""{"sub":"$tag","aud":"synthetic-r11a"}""")
+        val payload = b64("""{"sub":"$tag","aud":"synthetic-google"}""")
         return "$header.$payload.synthetic-signature-$tag"
     }
 
     private fun successResponse(token: String): GetCredentialResponse {
         val built = GoogleIdTokenCredential.Builder()
-            .setId("synthetic-r11a-id")
+            .setId("synthetic-google-id")
             .setIdToken(token)
             .build()
         return GetCredentialResponse(
@@ -174,7 +174,7 @@ class AndroidGoogleIdentityProviderTest {
     /** Bundle carrying the real Google SDK keys, for blank/malformed token-path oracles. */
     private fun sdkKeyedBundle(idToken: String): Bundle =
         Bundle().apply {
-            putString(SDK_BUNDLE_KEY_ID, "synthetic-r11a-id")
+            putString(SDK_BUNDLE_KEY_ID, "synthetic-google-id")
             putString(SDK_BUNDLE_KEY_ID_TOKEN, idToken)
         }
 
@@ -585,7 +585,7 @@ class AndroidGoogleIdentityProviderTest {
             val token = syntheticToken("after-cancel-token")
             fake.getBehavior = { _, _ -> successResponse(token) }
             val retry = withTimeout(GUARD_TIMEOUT_MILLIS) {
-                provider.credentialFor("synthetic-r11a-nonce-002")
+                provider.credentialFor("synthetic-google-nonce-002")
             }
             assertEquals("cancel releases the slot for a later nonce", token, retry.value)
             provider.close()
@@ -640,7 +640,7 @@ class AndroidGoogleIdentityProviderTest {
             expectCallerCancellation { deferred.await() }
             val token = syntheticToken("after-parent-timeout-token")
             fake.getBehavior = { _, _ -> successResponse(token) }
-            val retry = async(virtualMain) { provider.credentialFor("synthetic-r11a-nonce-002") }
+            val retry = async(virtualMain) { provider.credentialFor("synthetic-google-nonce-002") }
             advanceUntilIdle()
             assertEquals("parent timeout releases the slot", token, retry.await().value)
             provider.close()
@@ -763,7 +763,7 @@ class AndroidGoogleIdentityProviderTest {
             successFake.getBehavior = { _, _ -> successResponse(token) }
             val successProvider = buildProvider(scenario, AUDIENCE, successFake)
             val successCall = callerScope.async {
-                successProvider.credentialFor("synthetic-r11a-nonce-q1")
+                successProvider.credentialFor("synthetic-google-nonce-q1")
             }
             callerScheduler.runCurrent()
             testScheduler.advanceUntilIdle()
@@ -778,7 +778,7 @@ class AndroidGoogleIdentityProviderTest {
             faultFake.getBehavior = { _, _ -> throw NoCredentialException("synthetic queued absence") }
             val faultProvider = buildProvider(scenario, AUDIENCE, faultFake)
             val faultCall = callerScope.async {
-                faultProvider.credentialFor("synthetic-r11a-nonce-q2")
+                faultProvider.credentialFor("synthetic-google-nonce-q2")
             }
             callerScheduler.runCurrent()
             testScheduler.advanceUntilIdle()
@@ -828,10 +828,10 @@ class AndroidGoogleIdentityProviderTest {
 
             // get/get -> BUSY, then slot released for a later nonce.
             var gates = blockFirstGet()
-            val first = async { provider.credentialFor("synthetic-r11a-nonce-a") }
+            val first = async { provider.credentialFor("synthetic-google-nonce-a") }
             gates.first.await()
             expectFailure(GoogleIdentityFailureReason.BUSY, AUDIENCE, NONCE) {
-                provider.credentialFor("synthetic-r11a-nonce-b")
+                provider.credentialFor("synthetic-google-nonce-b")
             }
             assertEquals("never a second UI", 1, fake.getRequestCount())
             gates.second.complete(Unit)
@@ -839,7 +839,7 @@ class AndroidGoogleIdentityProviderTest {
 
             // get in flight -> clear BUSY.
             gates = blockFirstGet()
-            val during = async { provider.credentialFor("synthetic-r11a-nonce-c") }
+            val during = async { provider.credentialFor("synthetic-google-nonce-c") }
             gates.first.await()
             expectFailure(GoogleIdentityFailureReason.BUSY, AUDIENCE, NONCE) {
                 provider.clearCredentialState()
@@ -858,7 +858,7 @@ class AndroidGoogleIdentityProviderTest {
             val clearing = async { provider.clearCredentialState() }
             clearEntered.await()
             expectFailure(GoogleIdentityFailureReason.BUSY, AUDIENCE, NONCE) {
-                provider.credentialFor("synthetic-r11a-nonce-d")
+                provider.credentialFor("synthetic-google-nonce-d")
             }
             assertEquals("get never queued behind clear", 2, fake.getRequestCount())
             clearRelease.complete(Unit)
@@ -883,7 +883,7 @@ class AndroidGoogleIdentityProviderTest {
             val token = syntheticToken("slot-released-token")
             fake.getBehavior = { _, _ -> successResponse(token) }
             val retry = withTimeout(GUARD_TIMEOUT_MILLIS) {
-                provider.credentialFor("synthetic-r11a-nonce-e")
+                provider.credentialFor("synthetic-google-nonce-e")
             }
             assertEquals(token, retry.value)
             provider.close()
@@ -905,7 +905,7 @@ class AndroidGoogleIdentityProviderTest {
             provider.close()
             provider.close()
             expectFailure(GoogleIdentityFailureReason.RETIRED, AUDIENCE, NONCE) {
-                provider.credentialFor("synthetic-r11a-nonce-after-close")
+                provider.credentialFor("synthetic-google-nonce-after-close")
             }
             expectFailure(GoogleIdentityFailureReason.RETIRED, AUDIENCE) {
                 provider.clearCredentialState()
@@ -951,7 +951,7 @@ class AndroidGoogleIdentityProviderTest {
             withTimeout(GUARD_TIMEOUT_MILLIS) { lateDone.await() }
             expectCallerCancellation { deferred.await() }
             expectFailure(GoogleIdentityFailureReason.RETIRED, AUDIENCE, NONCE, lateToken) {
-                provider.credentialFor("synthetic-r11a-nonce-after-retire")
+                provider.credentialFor("synthetic-google-nonce-after-retire")
             }
             assertEquals("late success never published", 1, fake.getRequestCount())
         } finally {
@@ -1073,7 +1073,7 @@ class AndroidGoogleIdentityProviderTest {
             secondFake.getBehavior = { _, _ -> successResponse(token) }
             val newProvider = buildProvider(scenario, AUDIENCE, secondFake)
             val result = withTimeout(GUARD_TIMEOUT_MILLIS) {
-                newProvider.credentialFor("synthetic-r11a-nonce-recreated")
+                newProvider.credentialFor("synthetic-google-nonce-recreated")
             }
             assertEquals("a new Activity needs a new adapter", token, result.value)
             oldProvider.close()

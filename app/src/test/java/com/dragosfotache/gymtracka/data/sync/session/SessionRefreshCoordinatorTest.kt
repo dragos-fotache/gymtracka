@@ -23,8 +23,6 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 
 /**
- * R04b QA-owned coordinator tests only. No production declarations.
- *
  * Deterministic JVM: TestScope/virtual time/gates, no sleeps. ONE shared
  * lease per activation. Cancellation identity is asserted INSIDE the
  * launched caller; late-error ordering is cancellation first, then

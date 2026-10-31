@@ -11,21 +11,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R13b independent QA: additive 13 -> 14 legacy-import progress/acceptance migration.
- *
- * Derived ONLY from docs/archive/remaining-work/R13b-task.md storage contract and
- * docs/archive/remaining-work/R13b-harness.md normative DDL/migration facts, plus
- * allowed test-only v13 journal/entry shapes observed in
- * LegacyImportCaptureTest / LegacyImportStorageMigrationTest raw-SQL oracles.
- * No production declarations/diffs, Worker work or decompiled classes
- * inspected. Every seeded value is an independent literal.
- *
- * v13 journal columns (observed): id, evidence_version, service_origin,
- * account_id, operation_id, source_revision, source_session_generation,
- * room_revision, room_session_generation, phase, source_json, import_count,
- * error_code. v13 entry columns (observed): ordinal, aggregate_type,
- * aggregate_id, mutation_id, sequence, local_generation, payload_version,
- * payload_json. DB phase strings are lowercase ('captured' observed).
+ * Checks additive 13 -> 14 import-progress/receipt migration with literal v13 journal and entry
+ * rows. Prior rows, request bytes and sequence allocation survive; lineage is initialized without
+ * fabricated consent or acceptance.
  */
 @RunWith(AndroidJUnit4::class)
 class LegacyImportProgressMigrationTest {
@@ -54,7 +42,7 @@ class LegacyImportProgressMigrationTest {
             true,
             *GymDatabase.MIGRATIONS,
         ).use { database ->
-            // Immutable R13a evidence bytes preserved exactly.
+            // Immutable local capture evidence bytes preserved exactly.
             assertEquals(beforeJournal, snapshotRows(database, JOURNAL_SQL, 13))
             assertEquals(beforeEntries, snapshotRows(database, ENTRIES_SQL, 8))
             // Progress anchor initialized from the captured journal's recorded
@@ -145,7 +133,7 @@ class LegacyImportProgressMigrationTest {
                 " source_revision, source_session_generation, room_revision, room_session_generation," +
                 " phase, source_json, import_count, error_code)" +
                 " VALUES (1, 1, '$CAPTURED_ORIGIN', '$CAPTURED_ACCOUNT', '$CAPTURED_OPERATION'," +
-                " 0, 0, 1, 1, 'captured', '{\"seed\":\"r13b-captured\"}', 2, NULL)",
+                " 0, 0, 1, 1, 'captured', '{\"seed\":\"import-captured\"}', 2, NULL)",
         )
         database.execSQL(
             "INSERT INTO sync_legacy_import_entries (ordinal, aggregate_type, aggregate_id, mutation_id," +
@@ -165,12 +153,12 @@ class LegacyImportProgressMigrationTest {
                 " source_revision, source_session_generation, room_revision, room_session_generation," +
                 " phase, source_json, import_count, error_code)" +
                 " VALUES (1, 1, '$CAPTURED_ORIGIN', '$CAPTURED_ACCOUNT', '$CAPTURED_OPERATION'," +
-                " 0, 0, 0, 0, 'blocked', '{\"seed\":\"r13b-blocked\"}', 0, 'invalid_source')",
+                " 0, 0, 0, 0, 'blocked', '{\"seed\":\"import-blocked\"}', 0, 'invalid_source')",
         )
     }
 
     private companion object {
-        const val CAPTURED_ORIGIN = "https://sync-r13b.example.test:443"
+        const val CAPTURED_ORIGIN = "https://sync-import.example.test:443"
         const val CAPTURED_ACCOUNT = "c13b0001-1111-4111-8111-111111111111"
         const val CAPTURED_OPERATION = "d13b0001-1111-4111-8111-111111111111"
         const val ENTRY_WORKOUT = "e13b0001-1111-4111-8111-111111111111"

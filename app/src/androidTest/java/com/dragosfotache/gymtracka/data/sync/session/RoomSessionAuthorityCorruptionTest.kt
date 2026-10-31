@@ -17,13 +17,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R09a independent QA: malformed raw storage fails closed with data preserved.
- *
- * Contract-only; raw SQL literals; no production inspection. Covers task
- * obligation 5: representative bad types/counters/phases/bindings/device rows
- * and selected-baseline shapes fail as CORRUPT_AUTHORITY, preserve exact bytes,
- * legacy active without journal never becomes authority, orphan state never
- * ACTIVE, seeded ACTIVE + incomplete cache stays baseline-false.
+ * Real Room checks for corrupt authority/device/cache evidence, strict SQLite scalar validation,
+ * and preservation without repair.
  */
 @RunWith(AndroidJUnit4::class)
 class RoomSessionAuthorityCorruptionTest {

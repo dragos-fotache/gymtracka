@@ -16,20 +16,7 @@ import org.junit.runner.RunWith
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * R09h independent QA: app-facing recovery and activation boundary, real Room.
- *
- * Derived ONLY from docs/remaining-work/R09h-task.md normative contracts
- * (construction inertness, unconfigured privacy, tightened refusal policy,
- * preparation evidence stays private, canonical bootstrap + mandatory
- * publication + fresh-reconcile activation, matching-ACTIVE offline reopen,
- * exact ACTIVE/PREPARED gap promotion) plus QA-owned harness facts (R09b/
- * R09c in-memory/file builders + AndroidSessionVault.createForTesting +
- * RoomSessionAuthority read shapes, R04b refresh-only auth shape,
- * hand-written snapshot/pull literals, raw-SQL journal/device/outbox/cache
- * oracles, createCustomExercise minimal-edit seam, coordinator-supplied
- * exerciseSummaries fenced-read seam). No production source, diffs, Worker
- * output, LSP or decompiled code inspected. Deterministic only, no sleeps;
- * async coordination awaits entered gates/jobs under test timeouts.
+ * app-facing recovery and activation boundary, real Room.
  *
  * Covers risk obligations 1 (constructor/unconfigured privacy without I/O),
  * 2 (real-Room preparation to ACTIVE with no premature handle) and 5
@@ -184,8 +171,8 @@ class AppSessionRecoveryTest {
         val handle = s.activate(grant = grant)
         handle.checkCurrent()
         // Fenced offline read proves handle authority over scoped data.
-        handle.repository.createCustomExercise("R09h Active Proof", null, emptySet(), null, null, "")
-        assertTrue(summaries(handle).contains("R09h Active Proof"))
+        handle.repository.createCustomExercise("session Active Proof", null, emptySet(), null, null, "")
+        assertTrue(summaries(handle).contains("session Active Proof"))
         // Durable oracles: journal ACTIVE, device ready, vault ACTIVE.
         val journal = harness.journalRow(s.database)
         assertEquals("active", journal[2])
@@ -228,7 +215,7 @@ class AppSessionRecoveryTest {
             s.transport.queueOk(AppSessionFixtures.EMPTY_SNAPSHOT_BODY)
             s.transport.queueOk(AppSessionFixtures.EMPTY_PULL_BODY)
             s.transport.queueOk(AppSessionFixtures.EMPTY_PULL_BODY)
-            s.publication.acquireFaults += RuntimeException("r09h-publication-fault")
+            s.publication.acquireFaults += RuntimeException("session-publication-fault")
             val preparing = s.coordinator.acceptGrant(
                 readAuthority(s.database), AppSessionFixtures.OP_FRESH, AppSessionFixtures.grant(),
             )
@@ -253,14 +240,14 @@ class AppSessionRecoveryTest {
 
     @Test
     fun physicalReopenOfMatchingActiveWithExpiredCredsAndQueuedEditsStaysOffline() = runTest(timeout = 90.seconds) {
-        val dbName = "r09h-reopen-recovery"
+        val dbName = "session-reopen-recovery"
         val firstDb = harness.createFileDb(dbName)
         dbs += firstDb
         val first = stack(database = firstDb)
         val handle = first.activate()
-        handle.repository.createCustomExercise("R09h Queued", null, emptySet(), null, null, "")
+        handle.repository.createCustomExercise("session Queued", null, emptySet(), null, null, "")
         assertEquals(1L, harness.outboxCount(firstDb, AppSessionFixtures.ACCOUNT))
-        assertTrue(summaries(handle).contains("R09h Queued"))
+        assertTrue(summaries(handle).contains("session Queued"))
         // Retire the old controller first, then close the physical DB.
         first.coordinator.invalidate()
         firstDb.close()
@@ -291,16 +278,16 @@ class AppSessionRecoveryTest {
         assertEquals("offline recovery must not mint UUIDs", 0, expiredUuids.calls)
         // Offline fenced read authority + new same-account edit without HTTP.
         active.session.checkCurrent()
-        assertTrue(summaries(active.session).contains("R09h Queued"))
-        active.session.repository.createCustomExercise("R09h Offline New", null, emptySet(), null, null, "")
+        assertTrue(summaries(active.session).contains("session Queued"))
+        active.session.repository.createCustomExercise("session Offline New", null, emptySet(), null, null, "")
         assertEquals(0, second.transport.capturedRequests.size)
         assertEquals(0, second.auth.refreshCalls)
         assertEquals(2L, harness.outboxCount(secondDb, AppSessionFixtures.ACCOUNT))
         val queued = harness.outboxSnapshot(secondDb, AppSessionFixtures.ACCOUNT)
         assertTrue(queued.all { it[2] == AppSessionFixtures.ACCOUNT })
         assertEquals(
-            listOf("R09h Offline New", "R09h Queued"),
-            summaries(active.session).filter { it.startsWith("R09h") },
+            listOf("session Offline New", "session Queued"),
+            summaries(active.session).filter { it.startsWith("session") },
         )
     }
 

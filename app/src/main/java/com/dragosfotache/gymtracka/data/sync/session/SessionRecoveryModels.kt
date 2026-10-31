@@ -7,7 +7,7 @@ import com.dragosfotache.gymtracka.data.sync.model.requireWorkoutUuid
  * Durable Room authorization observation phase for startup recovery.
  * Process-local evidence only: stored labels alone never authorize network
  * or account visibility. SIGNED_OUT means no authorized identity; PREPARING
- * and TRANSITIONING are recoverable only through the future R09 journal;
+ * and TRANSITIONING are recoverable only through the session-authority journal;
  * only ACTIVE with a complete baseline is eligible for offline visibility.
  */
 internal enum class RecoveryRoomPhase {
@@ -88,9 +88,7 @@ internal data class RecoveryRoomSnapshot(
 }
 
 /**
- * Durable Room authorization observation seam for startup recovery. A future
- * R09 Room adapter supplies explicit observations; no default adapter is
- * supplied here.
+ * Durable Room authorization observation seam for startup recovery. [RoomSessionAuthority] supplies explicit observations.
  */
 internal fun interface SessionRecoveryAuthority {
     suspend fun read(): RecoveryRoomSnapshot

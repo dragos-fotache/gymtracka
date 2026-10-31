@@ -7,7 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 
 /**
- * Narrow storage primitives for the R13a legacy-import journal and entries.
+ * Narrow storage primitives for the local capture legacy-import journal and entries.
  * Raw observation queries return open [Cursor] rows so the store can inspect
  * exact SQLite storage types without Room coercion; the caller closes them.
  * Association updates bind local-only roots to the service-confirmed target

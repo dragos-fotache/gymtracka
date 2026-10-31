@@ -39,34 +39,28 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R11b independent QA: bounded foreground exchange and guarded grant handoff (JVM).
+ * Bounded foreground exchange and guarded grant handoff (JVM).
  *
- * Derived ONLY from docs/remaining-work/R11b-task.md (normative new-API contract,
- * intent/process/durable guards, invocation ordering/retry/lifetime, safe failures)
- * plus coordinator-supplied API/harness facts and QA-owned independent literals.
- * No production declarations/source/diffs, Worker work, generated/decompiled
- * production artifacts or production LSP inspected.
- *
- * All credential-adjacent literals below are this slice's own synthetic values;
+ * All credential-adjacent literals below are test synthetic values;
  * expected exchange bodies are asserted via independent JSONObject parsing, never
  * the production encoder. Deterministic virtual time/gates only, no sleeps.
  *
- * Covers R11b obligations 1-4 (ordering/exact capture, expiry equality/uncertain
+ * Covers foreground exchange obligations 1-4 (ordering/exact capture, expiry equality/uncertain
  * replay, permanent/no-retry/validation closure, budget/busy/cancel/retire/late
  * seams). Focused Room/vault/real-barrier handoff lives in androidTest
- * ForegroundSignInHandoffTest; whole R09 matrices are reused, not repeated.
+ * ForegroundSignInHandoffTest; whole session authority matrices are reused, not repeated.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ForegroundSignInCoordinatorTest {
 
     private companion object {
-        const val ORIGIN_ROOT = "https://sync-r11b.example.test"
-        const val OTHER_ORIGIN_ROOT = "https://other-r11b.example.test"
+        const val ORIGIN_ROOT = "https://sync-sign-in.example.test"
+        const val OTHER_ORIGIN_ROOT = "https://other-sign-in.example.test"
         const val ACCOUNT = "b11b0001-1111-4111-8111-111111111111"
         const val OTHER_ACCOUNT = "b11b0002-2222-4222-8222-222222222222"
         const val CHALLENGE_ID = "a11b0001-1111-4111-8111-111111111111"
-        const val NONCE = "r11b-nonce-001"
-        const val TOKEN = "r11b-google-token-001"
+        const val NONCE = "sign-in-nonce-001"
+        const val TOKEN = "sign-in-google-token-001"
         const val EXCHANGE_KEY = "c11b0001-1111-4111-8111-111111111111"
         const val EXCHANGE_KEY_2 = "c11b0002-2222-4222-8222-222222222222"
         const val OP_INITIAL = "d11b0001-1111-4111-8111-111111111111"
@@ -81,8 +75,8 @@ class ForegroundSignInCoordinatorTest {
 
     private fun grant(
         accountId: String = ACCOUNT,
-        access: String = "r11b-access-001",
-        refresh: String = "r11b-refresh-001",
+        access: String = "sign-in-access-001",
+        refresh: String = "sign-in-refresh-001",
         accessExpires: Long = GRANT_EXPIRY,
     ): ServiceSession = ServiceSession(
         ServiceAccountRef(accountId, null),
@@ -186,12 +180,12 @@ class ForegroundSignInCoordinatorTest {
 
         override suspend fun refresh(attempt: ServiceRefreshAttempt): ServiceSession {
             refreshCalls += 1
-            throw AssertionError("R11b must never call refresh")
+            throw AssertionError("sign-in must never call refresh")
         }
 
         override suspend fun logout(refreshToken: OpaqueToken) {
             logoutCalls += 1
-            throw AssertionError("R11b must never call logout")
+            throw AssertionError("sign-in must never call logout")
         }
     }
 
@@ -313,7 +307,7 @@ class ForegroundSignInCoordinatorTest {
     private fun defaultSecrets(): List<String> = listOf(
         ACCOUNT, OTHER_ACCOUNT, CHALLENGE_ID, NONCE, TOKEN, EXCHANGE_KEY, EXCHANGE_KEY_2,
         OP_INITIAL, OP_REAUTH, OP_OTHER, ORIGIN_ROOT, OTHER_ORIGIN_ROOT,
-        "r11b-access-001", "r11b-refresh-001", "r11b-hostile-secret",
+        "sign-in-access-001", "sign-in-refresh-001", "sign-in-hostile-secret",
     )
 
     private suspend fun expectFailure(
@@ -648,7 +642,7 @@ class ForegroundSignInCoordinatorTest {
 
     @Test
     fun hostileDependencyFaultMapsToUnavailableWithoutLeakingSecrets() = runTest {
-        val hostile = "r11b-hostile-secret-leak-9f2c"
+        val hostile = "sign-in-hostile-secret-leak-9f2c"
         val identity = FakeIdentity()
         identity.script += { _ -> throw RuntimeException("boom $hostile nonce=$NONCE token=$TOKEN") }
         val handoff = FakeHandoff()
@@ -901,7 +895,7 @@ class ForegroundSignInCoordinatorTest {
             val c = coordinator(identity, handoff, auth)
             try {
                 supervisorScope {
-                    val probe = CancellationException("r11b-caller-cancel-$seam")
+                    val probe = CancellationException("sign-in-caller-cancel-$seam")
                     val done = CompletableDeferred<Throwable>()
                     val job = async(start = CoroutineStart.UNDISPATCHED) {
                         try {
@@ -1031,15 +1025,15 @@ class ForegroundSignInCoordinatorTest {
             assertEquals(2, auth.attempts.size)
             assertEquals(EXCHANGE_KEY, auth.attempts[0].idempotencyKey)
             assertEquals(EXCHANGE_KEY_2, auth.attempts[1].idempotencyKey)
-            assertEquals("r11b-access-001", handoff.sessions.single().accessToken.value)
+            assertEquals("sign-in-access-001", handoff.sessions.single().accessToken.value)
             // Release the old resistant exchange now: it must neither clear nor
             // consume the newer invocation.
-            auth.exchangeScript += { _ -> grant(access = "r11b-late-access") }
+            auth.exchangeScript += { _ -> grant(access = "sign-in-late-access") }
             lateRelease.complete(Unit)
             lateDone.await()
             runCurrent()
             assertEquals("detached late exchange never consumes handoff", 1, handoff.requests.size)
-            assertEquals("r11b-access-001", handoff.sessions.single().accessToken.value)
+            assertEquals("sign-in-access-001", handoff.sessions.single().accessToken.value)
             assertEquals("late result never clears provider state", 0, identity.clears)
         } finally {
             lateRelease.complete(Unit)
@@ -1082,7 +1076,7 @@ class ForegroundSignInCoordinatorTest {
                     assertTrue("caller outcome not completed", !job.isCompleted)
                     assertTrue("caller result not reported", !done.isCompleted)
                     assertEquals(1, handoff.requests.size)
-                    val probe = CancellationException("r11b-queued-dispatch-cancel")
+                    val probe = CancellationException("sign-in-queued-dispatch-cancel")
                     job.cancel(probe)
                     driver.drainUntil { done.isCompleted }
                     assertSame("queued dispatch cancellation dominates", probe, done.await())

@@ -4,13 +4,13 @@ import com.dragosfotache.gymtracka.data.sync.session.AppSessionTransitionBarrier
 import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationLease
 
 /**
- * R13b real legacy-import transition adapter over one live local app state.
+ * Real legacy-import transition adapter over one live local app state.
  * Composes the owner-dispatched checked seam: editor/process checks run on
  * the existing app-state owner dispatcher before pause/drain and after the
  * terminal drains before lease dispatch. An open explicit-save custom editor
  * refuses without autosaving, discarding or hiding its draft; the caller
- * resolves Save/Discard/Cancel through later UI and retries. Terminal
- * failure evidence is preserved. This slice adds no dialog. Never uses the
+ * resolves Save/Discard/Cancel through the editor UI and retries. Terminal
+ * failure evidence is preserved. Never uses the
  * dormant fallback to drain an existing live app.
  */
 internal fun GymAppState.legacyImportTransitionBarrier(

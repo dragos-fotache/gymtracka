@@ -17,7 +17,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * R06d driver boundary: while HTTP is gated, a newer same-root intent lands.
+ * driver boundary: while HTTP is gated, a newer same-root intent lands.
  * Acknowledging the old head preserves newer generation/domain bytes and
  * leaves the tail untouched within budget. No checkpoint advance.
  */

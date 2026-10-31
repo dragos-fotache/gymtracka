@@ -5,7 +5,7 @@ import java.util.UUID
 /**
  * Shape and domain invariants for workout aggregates. Used by the JSON codec and the
  * Room mappings alike. These are aggregate invariants only; server source-state and
- * authorization rules are validated by the later service layer, not here.
+ * authorization rules are validated by the service layer, not here.
  */
 
 internal fun requireWorkoutUuid(value: String, field: String): String {

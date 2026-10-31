@@ -23,7 +23,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R10a matrix 5: interrupted and expired recovery plus absence.
+ * RoomBackend matrix 5: interrupted and expired recovery plus absence.
  *
  * Where real retention controls are unavailable, an explicit cursor expiry is
  * scripted: the old visible graph and checkpoint remain complete and unchanged,
@@ -42,32 +42,32 @@ import org.junit.runner.RunWith
 class RoomBackendRecoveryAbsenceTest {
 
     companion object {
-        const val KNOWN_NAME = "R10a Known"
-        const val EXTRA_NAME = "R10a Extra Root"
+        const val KNOWN_NAME = "RoomBackend Known"
+        const val EXTRA_NAME = "RoomBackend Extra Root"
         const val FINISHED_AT_MILLIS = 1_790_259_560_000L
         const val STARTED_AT_MILLIS = 1_790_259_500_000L
     }
 
     @Test
     fun interruptedExpiredRecoveryAbsence() = runBlocking(Dispatchers.IO) {
-        val inputs = r10aRequireInputs()
-        val transport = r10aNewTransport(inputs)
+        val inputs = roomBackendRequireInputs()
+        val transport = roomBackendNewTransport(inputs)
         try {
-            val account = r10aMintAccount(transport, inputs.port)
+            val account = roomBackendMintAccount(transport, inputs.port)
             val context = InstrumentationRegistry.getInstrumentation().targetContext
-            var storeA = r10aOpenStore(context, "recover-a", account.accountId)
-            var storeB = r10aOpenStore(context, "recover-b", account.accountId)
+            var storeA = roomBackendOpenStore(context, "recover-a", account.accountId)
+            var storeB = roomBackendOpenStore(context, "recover-b", account.accountId)
             try {
-                val apiA = r10aNewApi(transport, account)
-                val apiB = r10aNewApi(transport, account)
-                r10aSnapshotConverge(storeA, account.accountId, apiA, R10aTestLease())
-                r10aSnapshotConverge(storeB, account.accountId, apiB, R10aTestLease())
+                val apiA = roomBackendNewApi(transport, account)
+                val apiB = roomBackendNewApi(transport, account)
+                roomBackendSnapshotConverge(storeA, account.accountId, apiA, RoomBackendTestLease())
+                roomBackendSnapshotConverge(storeB, account.accountId, apiB, RoomBackendTestLease())
 
                 // Settle known (finished BEFORE any second active exists), an
                 // extra active root and their custom on both stores.
                 val repoA = storeA.repository()
                 val customId = repoA.createCustomExercise(
-                    "R10a Recovery Press", null, emptySet(), null, null, "",
+                    "RoomBackend Recovery Press", null, emptySet(), null, null, "",
                 )
                 val known = repoA.startEmptyWorkout(STARTED_AT_MILLIS)
                 repoA.updateWorkoutName(known.id, KNOWN_NAME)
@@ -93,10 +93,10 @@ class RoomBackendRecoveryAbsenceTest {
                     ),
                 )
                 assertNotNull(
-                    r10aDeliverAndPublish(storeA, account.accountId, apiA, R10aTestLease()).second,
+                    roomBackendDeliverAndPublish(storeA, account.accountId, apiA, RoomBackendTestLease()).second,
                 )
                 assertNotNull(
-                    r10aDeliverAndPublish(storeB, account.accountId, apiB, R10aTestLease()).second,
+                    roomBackendDeliverAndPublish(storeB, account.accountId, apiB, RoomBackendTestLease()).second,
                 )
                 assertEquals(
                     KNOWN_NAME,
@@ -110,14 +110,14 @@ class RoomBackendRecoveryAbsenceTest {
                 // A deletes the known finished root while B stays offline; the delete commits.
                 repoA.deleteWorkout(known.id)
                 assertNotNull(
-                    r10aDeliverAndPublish(storeA, account.accountId, apiA, R10aTestLease()).second,
+                    roomBackendDeliverAndPublish(storeA, account.accountId, apiA, RoomBackendTestLease()).second,
                 )
 
                 // Scripted explicit cursor expiry: B's graph and checkpoint stay
                 // complete and unchanged, and expiry demands a snapshot.
-                val checkpointBefore = storeB.database.r10aReadSyncState(account.accountId)
+                val checkpointBefore = storeB.database.roomBackendReadSyncState(account.accountId)
                 assertNotNull(checkpointBefore)
-                val cacheBefore = checkNotNull(storeB.database.r10aReadCache(account.accountId))
+                val cacheBefore = checkNotNull(storeB.database.roomBackendReadCache(account.accountId))
                 val knownDetailsBefore = checkNotNull(storeB.repository().workoutDetails(known.id)) {
                     "B must hold the known graph before expiry"
                 }
@@ -128,11 +128,11 @@ class RoomBackendRecoveryAbsenceTest {
                     "B must hold the custom before expiry"
                 }
                 val knownRevisionSettled = checkNotNull(
-                    storeB.database.r10aReadCanonical(account.accountId, "workout", known.id),
+                    storeB.database.roomBackendReadCanonical(account.accountId, "workout", known.id),
                 ).serverRevision
                 val pushStoreB = PushStore(storeB.database, storeB.session, storeB.owner)
-                val expiry = pushStoreB.withRun(r10aDurableEpoch(storeB.database, account.accountId)) { run ->
-                    SyncDeliveryLoop(pushStoreB, R10aExpireOncePullApi(apiB)).deliver(run)
+                val expiry = pushStoreB.withRun(roomBackendDurableEpoch(storeB.database, account.accountId)) { run ->
+                    SyncDeliveryLoop(pushStoreB, RoomBackendExpireOncePullApi(apiB)).deliver(run)
                 }
                 assertEquals(PushDeliveryStop.Empty, expiry.push.stop)
                 assertEquals(
@@ -143,17 +143,17 @@ class RoomBackendRecoveryAbsenceTest {
                     KNOWN_NAME,
                     checkNotNull(storeB.repository().workoutDetails(known.id)).workout.name,
                 )
-                assertEquals(checkpointBefore, storeB.database.r10aReadSyncState(account.accountId))
-                assertEquals(cacheBefore, storeB.database.r10aReadCache(account.accountId))
+                assertEquals(checkpointBefore, storeB.database.roomBackendReadSyncState(account.accountId))
+                assertEquals(cacheBefore, storeB.database.roomBackendReadCache(account.accountId))
                 assertEquals(knownDetailsBefore, storeB.repository().workoutDetails(known.id))
                 assertEquals(extraDetailsBefore, storeB.repository().workoutDetails(extra.id))
                 assertEquals(customDetailsBefore, storeB.repository().exerciseDetails(customId))
 
                 // Begin a real snapshot with maxPages 1; the middle page fails
                 // deterministically and returns Failed without last-success.
-                val failing = R10aFailOnceSnapshotApi(apiB, SyncApiException.Transient(), failOnCall = 2)
+                val failing = RoomBackendFailOnceSnapshotApi(apiB, SyncApiException.Transient(), failOnCall = 2)
                 val snapshot = SnapshotDeliveryLoop(pushStoreB, failing)
-                pushStoreB.withRun(r10aDurableEpoch(storeB.database, account.accountId)) { run ->
+                pushStoreB.withRun(roomBackendDurableEpoch(storeB.database, account.accountId)) { run ->
                     val start = snapshot.start(run, UUID.randomUUID().toString(), maxPages = 1, pageLimit = 1)
                     assertEquals(PushDeliveryStop.Empty, start.push.stop)
                     val first = checkNotNull(start.download) { "B requires a present download" }
@@ -168,23 +168,23 @@ class RoomBackendRecoveryAbsenceTest {
                     KNOWN_NAME,
                     checkNotNull(storeB.repository().workoutDetails(known.id)).workout.name,
                 )
-                assertEquals(checkpointBefore, storeB.database.r10aReadSyncState(account.accountId))
-                assertEquals(cacheBefore, storeB.database.r10aReadCache(account.accountId))
+                assertEquals(checkpointBefore, storeB.database.roomBackendReadSyncState(account.accountId))
+                assertEquals(cacheBefore, storeB.database.roomBackendReadCache(account.accountId))
                 assertEquals(knownDetailsBefore, storeB.repository().workoutDetails(known.id))
                 assertEquals(extraDetailsBefore, storeB.repository().workoutDetails(extra.id))
                 assertEquals(customDetailsBefore, storeB.repository().exerciseDetails(customId))
 
                 // Reopen with a fresh owner: the retained stage has no append authority.
-                storeB = r10aReopen(context, storeB)
-                val retained = r10aReadStage(storeB, account.accountId)
+                storeB = roomBackendReopen(context, storeB)
+                val retained = roomBackendReadStage(storeB, account.accountId)
                 assertNotNull("interrupted stage must be retained", retained)
                 assertFalse(checkNotNull(retained).canAppend)
 
                 // Explicit abandon (fresh observation inside the same run), then a
                 // NEW snapshot fully recovers.
-                r10aAbandonCurrentStage(storeB, account.accountId)
-                assertNull(r10aReadStage(storeB, account.accountId))
-                val recovered = r10aSnapshotConverge(storeB, account.accountId, apiB, R10aTestLease(), pageLimit = 1)
+                roomBackendAbandonCurrentStage(storeB, account.accountId)
+                assertNull(roomBackendReadStage(storeB, account.accountId))
+                val recovered = roomBackendSnapshotConverge(storeB, account.accountId, apiB, RoomBackendTestLease(), pageLimit = 1)
                 assertEquals(ProjectionPublicationStatus.PUBLISHED, recovered.status)
 
                 // Absence is per-store by design: A observed the deletion (delete),
@@ -194,7 +194,7 @@ class RoomBackendRecoveryAbsenceTest {
                 for ((label, store) in listOf("A" to storeA, "B" to storeB)) {
                     assertNull("$label known removed", store.repository().workoutDetails(known.id))
                     val knownCanonical = checkNotNull(
-                        store.database.r10aReadCanonical(account.accountId, "workout", known.id),
+                        store.database.roomBackendReadCanonical(account.accountId, "workout", known.id),
                     ) { "$label must retain known evidence" }
                     if (label == "A") {
                         assertEquals("$label observed deletion", "delete", knownCanonical.canonicalState)
@@ -223,15 +223,15 @@ class RoomBackendRecoveryAbsenceTest {
                     assertEquals(
                         "$label known children gone",
                         0,
-                        store.database.r10aCount(
+                        store.database.roomBackendCount(
                             "SELECT COUNT(*) FROM workout_exercises WHERE workout_id = ?",
                             arrayOf(known.id),
                         ),
                     )
-                    r10aAssertOutboxEmpty(store.database, account.accountId, "$label recovered")
-                    val cache = r10aAssertBaselineComplete(store.database, account.accountId, "$label recovered")
+                    roomBackendAssertOutboxEmpty(store.database, account.accountId, "$label recovered")
+                    val cache = roomBackendAssertBaselineComplete(store.database, account.accountId, "$label recovered")
                     assertEquals("$label epochs match", cache.cacheEpoch, cache.materializedEpoch)
-                    assertEquals("$label staging empty", 0, store.database.r10aStageCount(account.accountId))
+                    assertEquals("$label staging empty", 0, store.database.roomBackendStageCount(account.accountId))
                 }
                 val extraSetA = checkNotNull(storeA.repository().workoutDetails(extra.id))
                     .exercises.single().sets.single().id
@@ -242,23 +242,23 @@ class RoomBackendRecoveryAbsenceTest {
                 assertTrue("distinct roots keep distinct sets", extraSetA != knownSetId)
                 assertTrue(
                     "known set id disappears on A",
-                    storeA.database.r10aCount(
+                    storeA.database.roomBackendCount(
                         "SELECT COUNT(*) FROM workout_sets WHERE id = ?",
                         arrayOf(knownSetId),
                     ) == 0,
                 )
                 assertTrue(
                     "known set id disappears on B",
-                    storeB.database.r10aCount(
+                    storeB.database.roomBackendCount(
                         "SELECT COUNT(*) FROM workout_sets WHERE id = ?",
                         arrayOf(knownSetId),
                     ) == 0,
                 )
-                r10aAssertQuiescentTail(storeA, account.accountId, apiA, "A quiescent")
-                r10aAssertQuiescentTail(storeB, account.accountId, apiB, "B quiescent")
+                roomBackendAssertQuiescentTail(storeA, account.accountId, apiA, "A quiescent")
+                roomBackendAssertQuiescentTail(storeB, account.accountId, apiB, "B quiescent")
             } finally {
-                r10aCloseAndDelete(context, storeA)
-                r10aCloseAndDelete(context, storeB)
+                roomBackendCloseAndDelete(context, storeA)
+                roomBackendCloseAndDelete(context, storeB)
             }
         } finally {
             transport.client.dispatcher.executorService.shutdown()

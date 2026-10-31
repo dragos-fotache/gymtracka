@@ -32,14 +32,9 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R07a independent pull-checkpoint acceptance: eligible read/check/commit,
- * null-vs-corrupt boundaries, opaque cursors, multi-root commit preservation,
- * unknown-DELETE evidence, no-op advance, conflict rollback, invalid input,
- * owned-input race, trigger rollback and redacted displays.
- *
- * Real Room, no mocked DAOs, no sleeps. Every expectation is a literal
- * authored from docs/archive/remaining-work/R07a-task.md; no production encoder
- * output is used as an oracle and no production source was inspected.
+ * Real Room checks for eligible checkpoint read/check/commit, null versus corrupt state, opaque
+ * cursors, complete multi-root batches, unknown deletes, no-op progress, rollback, input ownership
+ * and redaction.
  */
 class PullCheckpointTest : GymDatabaseTest() {
 
@@ -182,7 +177,7 @@ class PullCheckpointTest : GymDatabaseTest() {
         // Untouched scopes: foreign account rows, local domain aggregate,
         // outstanding outbox intent and a newer local generation.
         database.claimSeedWorkout(PULL_FOREIGN_WORKOUT, PULL_ACCOUNT_B, "Foreign")
-        database.r05bSeedCanonicalRow(
+        database.canonicalSeedCanonicalRow(
             PULL_ACCOUNT_B,
             "workout",
             PULL_FOREIGN_WORKOUT,

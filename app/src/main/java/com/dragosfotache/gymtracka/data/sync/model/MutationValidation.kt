@@ -3,7 +3,7 @@ package com.dragosfotache.gymtracka.data.sync.model
 /**
  * Shape invariants for typed mutation envelopes and import snapshots.
  * Kind/target/payload-ID matching and value ranges live here; source
- * authorization and current-state rules belong to the later service layer.
+ * authorization and current-state rules belong to the service layer.
  */
 
 fun validateWorkoutImportModel(snapshot: WorkoutImportModel): WorkoutImportModel {

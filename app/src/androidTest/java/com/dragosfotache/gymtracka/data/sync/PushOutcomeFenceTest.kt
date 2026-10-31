@@ -34,7 +34,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R06b independent fence acceptance: stale exact-row/session/epoch checks,
+ * fence acceptance: stale exact-row/session/epoch checks,
  * foreign/closed capability use, caller cancellation, late responses with
  * newer tail edits, trigger-induced rollback and unrelated-table isolation.
  * Real Room, no mocked DAOs, no sleeps.

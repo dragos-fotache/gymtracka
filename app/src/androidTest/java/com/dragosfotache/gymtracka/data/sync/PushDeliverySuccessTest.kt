@@ -18,7 +18,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * R06d driver boundary: ordered multi-head success through real capture,
+ * driver boundary: ordered multi-head success through real capture,
  * scripted API and canonical acknowledgment. Each HTTP call observes exactly
  * one committed frozen explicit head outside Room.
  */

@@ -10,16 +10,8 @@ import com.dragosfotache.gymtracka.data.sync.model.SnapshotResultModel
 import kotlinx.coroutines.CompletableDeferred
 
 /**
- * R07c independent QA fixtures. Hand-written from docs/archive/remaining-work/R07c-task.md
- * and the coordinator's harness facts only.
- *
- * Every expected value below is a literal authored here; no production encoder
- * output is used as an oracle. Durable seeding reuses the vetted R06a
- * claim/capture helpers and R06c acknowledgment builders plus the R07a
- * pull-seam helpers and R07b pull-driver script types; only sync-driver
- * literals and the combined push+pull script transport are new. No production
- * declaration, implementation, generated code, diff or Worker output was
- * inspected.
+ * Literal sync-driver fixtures reuse claim, outcome, acknowledgment and pull helpers; scripted
+ * transports gate actual driver boundaries.
  */
 
 // Distinct sync-driver literals: never overlap PULL_*/PD_*/ACK_*/CLAIM_* tokens.

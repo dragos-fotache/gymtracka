@@ -16,7 +16,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R10a matrix 2: actual lost response, exact replay and active replacement.
+ * RoomBackend matrix 2: actual lost response, exact replay and active replacement.
  *
  * A custom plus a populated ACTIVE workout fully settle on both stores first.
  * The relay then withholds A's single active autosave response (rename, no
@@ -35,31 +35,31 @@ import org.junit.runner.RunWith
 class RoomBackendLostResponseTest {
 
     companion object {
-        const val SETTLED_NAME = "R10a Settled"
-        const val AUTOSAVE_NAME = "R10a Autosaved"
-        const val REPLACEMENT_NAME = "R10a Replacement"
+        const val SETTLED_NAME = "RoomBackend Settled"
+        const val AUTOSAVE_NAME = "RoomBackend Autosaved"
+        const val REPLACEMENT_NAME = "RoomBackend Replacement"
         const val STARTED_AT_MILLIS = 1_790_259_200_000L
     }
 
     @Test
     fun lostResponseExactReplayActiveReplacement() = runBlocking(Dispatchers.IO) {
-        val inputs = r10aRequireInputs()
-        val transport = r10aNewTransport(inputs)
+        val inputs = roomBackendRequireInputs()
+        val transport = roomBackendNewTransport(inputs)
         try {
-            val account = r10aMintAccount(transport, inputs.port)
+            val account = roomBackendMintAccount(transport, inputs.port)
             val context = InstrumentationRegistry.getInstrumentation().targetContext
-            var storeA = r10aOpenStore(context, "loss-a", account.accountId)
-            var storeB = r10aOpenStore(context, "loss-b", account.accountId)
+            var storeA = roomBackendOpenStore(context, "loss-a", account.accountId)
+            var storeB = roomBackendOpenStore(context, "loss-b", account.accountId)
             try {
-                val apiA = r10aNewApi(transport, account)
-                val apiB = r10aNewApi(transport, account)
-                r10aSnapshotConverge(storeA, account.accountId, apiA, R10aTestLease())
-                r10aSnapshotConverge(storeB, account.accountId, apiB, R10aTestLease())
+                val apiA = roomBackendNewApi(transport, account)
+                val apiB = roomBackendNewApi(transport, account)
+                roomBackendSnapshotConverge(storeA, account.accountId, apiA, RoomBackendTestLease())
+                roomBackendSnapshotConverge(storeB, account.accountId, apiB, RoomBackendTestLease())
 
                 // Settle a custom plus a populated ACTIVE workout on both stores.
                 val repoA = storeA.repository()
                 val customId = repoA.createCustomExercise(
-                    "R10a Loss Press", null, emptySet(), null, null, "",
+                    "RoomBackend Loss Press", null, emptySet(), null, null, "",
                 )
                 val settled = repoA.startEmptyWorkout(STARTED_AT_MILLIS)
                 repoA.updateWorkoutName(settled.id, SETTLED_NAME)
@@ -70,13 +70,13 @@ class RoomBackendLostResponseTest {
                         settledEntry.sets.single().copy(repetitions = 8, weightKg = 55.0, isCompleted = true),
                     ),
                 )
-                val clock = R10aMutableNow(System.currentTimeMillis())
-                val (_, settleA) = r10aDeliverAndPublish(
-                    storeA, account.accountId, apiA, R10aTestLease(), nowMillis = clock::get,
+                val clock = RoomBackendMutableNow(System.currentTimeMillis())
+                val (_, settleA) = roomBackendDeliverAndPublish(
+                    storeA, account.accountId, apiA, RoomBackendTestLease(), nowMillis = clock::get,
                 )
                 assertNotNull(settleA)
                 val (_, settleB) =
-                    r10aDeliverAndPublish(storeB, account.accountId, apiB, R10aTestLease())
+                    roomBackendDeliverAndPublish(storeB, account.accountId, apiB, RoomBackendTestLease())
                 assertNotNull(settleB)
                 assertEquals(
                     SETTLED_NAME,
@@ -85,12 +85,12 @@ class RoomBackendLostResponseTest {
 
                 // Lose ONE active autosave with no queued successor.
                 repoA.updateWorkoutName(settled.id, AUTOSAVE_NAME)
-                val frozen = storeA.database.r10aOutboxRows(account.accountId)
+                val frozen = storeA.database.roomBackendOutboxRows(account.accountId)
                 assertTrue("A must hold exactly the autosave head", frozen.size == 1)
                 val frozenMutationId = frozen.single().mutationId
-                r10aLoseNextPush(transport, inputs.port, account)
-                val (lostDelivery, lostPublication) = r10aDeliverAndPublish(
-                    storeA, account.accountId, apiA, R10aTestLease(), nowMillis = clock::get,
+                roomBackendLoseNextPush(transport, inputs.port, account)
+                val (lostDelivery, lostPublication) = roomBackendDeliverAndPublish(
+                    storeA, account.accountId, apiA, RoomBackendTestLease(), nowMillis = clock::get,
                 )
                 assertTrue(
                     "lost response must defer, got [${lostDelivery.pushStop}]",
@@ -99,18 +99,18 @@ class RoomBackendLostResponseTest {
                 assertNull(lostDelivery.pullStop)
                 assertNull(lostDelivery.hasOutstandingLocalWork)
                 assertNull("no publication without an eligible tail", lostPublication)
-                val retainedLoss = storeA.database.r10aOutboxRows(account.accountId)
-                r10aAssertOutboxFrozen(frozen, retainedLoss, "A lost response")
+                val retainedLoss = storeA.database.roomBackendOutboxRows(account.accountId)
+                roomBackendAssertOutboxFrozen(frozen, retainedLoss, "A lost response")
 
                 // Reopen with a fresh owner: the post-loss snapshot is exact.
-                storeA = r10aReopen(context, storeA)
-                assertEquals(retainedLoss, storeA.database.r10aOutboxRows(account.accountId))
-                clock.advanceBeyond(storeA.database.r10aOutboxRetryAfterMax(account.accountId))
+                storeA = roomBackendReopen(context, storeA)
+                assertEquals(retainedLoss, storeA.database.roomBackendOutboxRows(account.accountId))
+                clock.advanceBeyond(storeA.database.roomBackendOutboxRetryAfterMax(account.accountId))
 
                 // B pulls the actual committed named populated ACTIVE root, then
                 // starts a replacement with no explicit delete first.
                 val (discovery, discoveredPublication) =
-                    r10aDeliverAndPublish(storeB, account.accountId, apiB, R10aTestLease())
+                    roomBackendDeliverAndPublish(storeB, account.accountId, apiB, RoomBackendTestLease())
                 assertEquals(PushDeliveryStop.Empty, discovery.pushStop)
                 assertEquals(PullDeliveryStop.Tail, discovery.pullStop)
                 assertNotNull(discoveredPublication)
@@ -121,7 +121,7 @@ class RoomBackendLostResponseTest {
                 assertEquals(AUTOSAVE_NAME, discovered.workout.name)
                 assertEquals(1, discovered.exercises.single().sets.size)
                 val settledRevisionB = checkNotNull(
-                    storeB.database.r10aReadCanonical(account.accountId, "workout", settled.id),
+                    storeB.database.roomBackendReadCanonical(account.accountId, "workout", settled.id),
                 ).serverRevision
                 val repoB = storeB.repository()
                 val replacement = repoB.startEmptyWorkout(STARTED_AT_MILLIS + 1_000L)
@@ -135,7 +135,7 @@ class RoomBackendLostResponseTest {
                     ),
                 )
                 val replaceOutcome =
-                    r10aDeliverAndPublish(storeB, account.accountId, apiB, R10aTestLease())
+                    roomBackendDeliverAndPublish(storeB, account.accountId, apiB, RoomBackendTestLease())
                 assertNotNull("B replacement requires an eligible tail", replaceOutcome.second)
                 assertNull(
                     "sole-active start removes the old root atomically",
@@ -148,9 +148,9 @@ class RoomBackendLostResponseTest {
 
                 // A's unchanged retry observes the original duplicate batch, then
                 // catches up the complete delete plus new-active batch.
-                val recorder = R10aRecordingPushApi(r10aNewApi(transport, account))
-                val retryOutcome = r10aDeliverAndPublish(
-                    storeA, account.accountId, recorder, R10aTestLease(), nowMillis = clock::get,
+                val recorder = RoomBackendRecordingPushApi(roomBackendNewApi(transport, account))
+                val retryOutcome = roomBackendDeliverAndPublish(
+                    storeA, account.accountId, recorder, RoomBackendTestLease(), nowMillis = clock::get,
                 )
                 assertNotNull("A retry requires an eligible tail", retryOutcome.second)
                 val duplicate = recorder.pushResults.flatMap { it.results }
@@ -169,12 +169,12 @@ class RoomBackendLostResponseTest {
                     settledRevisionB,
                     checkNotNull(duplicateUpsert).revision,
                 )
-                r10aAssertOutboxEmpty(storeA.database, account.accountId, "A after retry")
+                roomBackendAssertOutboxEmpty(storeA.database, account.accountId, "A after retry")
                 val repoA2 = storeA.repository()
                 assertNull("old root must not survive as a ghost", repoA2.workoutDetails(settled.id))
                 assertTrue(
                     "old children must cascade",
-                    storeA.database.r10aCount(
+                    storeA.database.roomBackendCount(
                         "SELECT COUNT(*) FROM workout_exercises WHERE workout_id = ?",
                         arrayOf(settled.id),
                     ) == 0,
@@ -188,15 +188,15 @@ class RoomBackendLostResponseTest {
                     replacementDetails.exercises.single().sets.size == 1,
                 )
                 val deleteCanonical = checkNotNull(
-                    storeA.database.r10aReadCanonical(account.accountId, "workout", settled.id),
+                    storeA.database.roomBackendReadCanonical(account.accountId, "workout", settled.id),
                 ) { "A must retain the delete revision" }
                 assertEquals("delete", deleteCanonical.canonicalState)
                 assertTrue((deleteCanonical.serverRevision ?: 0L) > 0L)
                 val replacementRevisionA = checkNotNull(
-                    storeA.database.r10aReadCanonical(account.accountId, "workout", replacement.id),
+                    storeA.database.roomBackendReadCanonical(account.accountId, "workout", replacement.id),
                 ).serverRevision
                 val replacementRevisionB = checkNotNull(
-                    storeB.database.r10aReadCanonical(account.accountId, "workout", replacement.id),
+                    storeB.database.roomBackendReadCanonical(account.accountId, "workout", replacement.id),
                 ).serverRevision
                 assertEquals(replacementRevisionB, replacementRevisionA)
                 assertEquals(
@@ -205,9 +205,9 @@ class RoomBackendLostResponseTest {
                 )
                 assertEquals(
                     "final DELETE revision agrees",
-                    checkNotNull(storeB.database.r10aReadCanonical(account.accountId, "workout", settled.id))
+                    checkNotNull(storeB.database.roomBackendReadCanonical(account.accountId, "workout", settled.id))
                         .serverRevision,
-                    checkNotNull(storeA.database.r10aReadCanonical(account.accountId, "workout", settled.id))
+                    checkNotNull(storeA.database.roomBackendReadCanonical(account.accountId, "workout", settled.id))
                         .serverRevision,
                 )
 
@@ -215,45 +215,45 @@ class RoomBackendLostResponseTest {
                 // a fully empty root graph on both stores.
                 repoA2.deleteWorkout(replacement.id)
                 assertNotNull(
-                    r10aDeliverAndPublish(
-                        storeA, account.accountId, r10aNewApi(transport, account), R10aTestLease(),
+                    roomBackendDeliverAndPublish(
+                        storeA, account.accountId, roomBackendNewApi(transport, account), RoomBackendTestLease(),
                     ).second,
                 )
-                r10aDeliverAndPublish(storeB, account.accountId, apiB, R10aTestLease())
+                roomBackendDeliverAndPublish(storeB, account.accountId, apiB, RoomBackendTestLease())
                 assertTrue("freed custom deletes", repoA2.deleteCustomExercise(customId))
                 assertNotNull(
-                    r10aDeliverAndPublish(
-                        storeA, account.accountId, r10aNewApi(transport, account), R10aTestLease(),
+                    roomBackendDeliverAndPublish(
+                        storeA, account.accountId, roomBackendNewApi(transport, account), RoomBackendTestLease(),
                     ).second,
                 )
-                r10aDeliverAndPublish(storeB, account.accountId, apiB, R10aTestLease())
+                roomBackendDeliverAndPublish(storeB, account.accountId, apiB, RoomBackendTestLease())
                 for ((label, store) in listOf("A" to storeA, "B" to storeB)) {
                     assertNull("$label no active workout", store.repository().activeWorkout())
                     assertNull("$label replacement removed", store.repository().workoutDetails(replacement.id))
                     assertTrue(
                         "$label workout descendants gone",
-                        store.database.r10aCount(
+                        store.database.roomBackendCount(
                             "SELECT COUNT(*) FROM workout_exercises WHERE workout_id = ?",
                             arrayOf(replacement.id),
                         ) == 0,
                     )
                     assertTrue(
                         "$label no live workouts",
-                        store.database.r10aCount(
+                        store.database.roomBackendCount(
                             "SELECT COUNT(*) FROM workouts WHERE deleted_at_millis IS NULL",
                             emptyArray(),
                         ) == 0,
                     )
                     assertTrue(
                         "$label no live routines",
-                        store.database.r10aCount(
+                        store.database.roomBackendCount(
                             "SELECT COUNT(*) FROM routines WHERE deleted_at_millis IS NULL",
                             emptyArray(),
                         ) == 0,
                     )
                     assertTrue(
                         "$label no live custom exercises",
-                        store.database.r10aCount(
+                        store.database.roomBackendCount(
                             "SELECT COUNT(*) FROM exercises " +
                                 "WHERE is_user_created = 1 AND deleted_at_millis IS NULL",
                             emptyArray(),
@@ -263,16 +263,16 @@ class RoomBackendLostResponseTest {
                         "$label custom deleted",
                         "delete",
                         checkNotNull(
-                            store.database.r10aReadCanonical(account.accountId, "customExercise", customId),
+                            store.database.roomBackendReadCanonical(account.accountId, "customExercise", customId),
                         ).canonicalState,
                     )
-                    r10aAssertOutboxEmpty(store.database, account.accountId, "$label deleted")
+                    roomBackendAssertOutboxEmpty(store.database, account.accountId, "$label deleted")
                 }
-                r10aAssertQuiescentTail(storeA, account.accountId, apiA, "A quiescent")
-                r10aAssertQuiescentTail(storeB, account.accountId, apiB, "B quiescent")
+                roomBackendAssertQuiescentTail(storeA, account.accountId, apiA, "A quiescent")
+                roomBackendAssertQuiescentTail(storeB, account.accountId, apiB, "B quiescent")
             } finally {
-                r10aCloseAndDelete(context, storeA)
-                r10aCloseAndDelete(context, storeB)
+                roomBackendCloseAndDelete(context, storeA)
+                roomBackendCloseAndDelete(context, storeB)
             }
         } finally {
             transport.client.dispatcher.executorService.shutdown()

@@ -13,13 +13,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R04a independent QA: AES/GCM vault cipher over real JCA.
- *
- * Derived from R04a-task encryption rules only. Uses a fake VaultKeyProvider backed by a
- * real AES-256 key so sealed-format, IV, tag, AAD and failure-mapping behavior is verified
- * against actual crypto, without Android Keystore or network. An independent JCA
- * seal/open pair (literal spec AAD + header + GCMParameterSpec(128, 12-byte IV)) proves
- * AES/GCM/128-bit-tag/header binding rather than production-only symmetry.
+ * AES/GCM vault cipher over real JCA.
  */
 class VaultCipherTest {
 

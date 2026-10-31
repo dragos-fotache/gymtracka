@@ -15,12 +15,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * R04c independent QA: runtime authority fencing for recovered handles.
- *
- * Observable black-box tests from the R04c spec's normative API facts plus
- * QA-owned fixtures. No production source inspected. Deterministic JVM:
- * TestScope/virtual time/deferred gates, no sleeps. Cancellation identity is
- * asserted INSIDE the actual caller.
+ * runtime authority fencing for recovered handles.
  *
  * Covers acceptance cases 11-14 (stale handles, logout races, shared
  * rotation/retry, safe-failure preservation). Startup precedence lives in
@@ -355,7 +350,7 @@ class SessionRecoveryAuthorizationTest {
         val gate = CompletableDeferred<Unit>()
         s.auth.refreshGate = { gate.await() }
         s.auth.answer(F.session(accessValue = "access-new", refreshValue = "refresh-new"))
-        val probe = CancellationException("qa-caller-refresh")
+        val probe = CancellationException("test-caller-refresh")
         val outcome = CompletableDeferred<Throwable?>()
         val job = launch {
             try {
@@ -517,7 +512,7 @@ class SessionRecoveryAuthorizationTest {
         runCurrent()
         s.coordinator.invalidate()
         assertTrue(s.coordinator.state is SessionRecoveryState.PrivacyLocked)
-        val probe = CancellationException("qa-injected-transport-race")
+        val probe = CancellationException("test-injected-transport-race")
         fault = probe
         gate.complete(Unit)
         advanceUntilIdle()
@@ -551,7 +546,7 @@ class SessionRecoveryAuthorizationTest {
         s.coordinator.invalidate()
         val newer = s.coordinator.reconcile()
         assertTrue(newer is SessionRecoveryState.Active)
-        val probe = CancellationException("qa-injected-newer-transport")
+        val probe = CancellationException("test-injected-newer-transport")
         fault = probe
         gate.complete(Unit)
         advanceUntilIdle()
@@ -576,8 +571,8 @@ class SessionRecoveryAuthorizationTest {
             fault?.let { throw it }
         }
         s.auth.answer(F.session(accessValue = "access-new", refreshValue = "refresh-new"))
-        val callerProbe = CancellationException("qa-caller-transport-dominates")
-        val injected = CancellationException("qa-injected-transport-masked")
+        val callerProbe = CancellationException("test-caller-transport-dominates")
+        val injected = CancellationException("test-injected-transport-masked")
         val outcome = CompletableDeferred<Throwable?>()
         val job = launch {
             try {
@@ -707,7 +702,7 @@ class SessionRecoveryAuthorizationTest {
     fun callerCancellationDuringRequestCallbackDominatesAndStaysActive() = runTest {
         val s = freshSetup()
         val gate = CompletableDeferred<Unit>()
-        val probe = CancellationException("qa-caller-callback")
+        val probe = CancellationException("test-caller-callback")
         val outcome = CompletableDeferred<Throwable?>()
         val job = launch {
             try {
@@ -733,7 +728,7 @@ class SessionRecoveryAuthorizationTest {
     @Test
     fun injectedCallbackCancellationPropagatesIdentically() = runTest {
         val s = freshSetup()
-        val injected = CancellationException("qa-injected-callback")
+        val injected = CancellationException("test-injected-callback")
         val caught = try {
             s.session.withAccessToken { throw injected }
             null
@@ -750,7 +745,7 @@ class SessionRecoveryAuthorizationTest {
     @Test
     fun runtimeAuthorityFaultLocksWithClosedErrorAndDeadHandle() = runTest {
         val s = activeSetup()
-        s.authority.failNow(RuntimeException("qa-authority-runtime"))
+        s.authority.failNow(RuntimeException("test-authority-runtime"))
         // Invoking the handle makes this an in-flight caller: UNAVAILABLE or
         // STALE_SESSION are both closed outcomes of the clarified rule.
         val error = try {
@@ -819,7 +814,7 @@ class SessionRecoveryAuthorizationTest {
             }
         }
         runCurrent()
-        s.authority.failNow(RuntimeException("qa-authority-inflight"))
+        s.authority.failNow(RuntimeException("test-authority-inflight"))
         gate.complete(Unit)
         advanceUntilIdle()
         val error = finished.await()
@@ -905,7 +900,7 @@ class SessionRecoveryAuthorizationTest {
         s.coordinator.invalidate()
         val newer = s.coordinator.reconcile()
         assertTrue(newer is SessionRecoveryState.Active)
-        val probe = CancellationException("qa-injected-callback-newer")
+        val probe = CancellationException("test-injected-callback-newer")
         fault = probe
         gate.complete(Unit)
         advanceUntilIdle()
@@ -922,7 +917,7 @@ class SessionRecoveryAuthorizationTest {
     fun callerCancellationDuringCallbackRacingInvalidateStaysPrivate() = runTest {
         val s = freshSetup()
         val gate = CompletableDeferred<Unit>()
-        val probe = CancellationException("qa-caller-callback-invalidate")
+        val probe = CancellationException("test-caller-callback-invalidate")
         val outcome = CompletableDeferred<Throwable?>()
         val job = launch {
             try {

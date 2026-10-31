@@ -37,16 +37,9 @@ import org.junit.Test
 import kotlin.coroutines.CoroutineContext
 
 /**
- * R08c independent baseline fence acceptance: driver issuance authority,
+ * baseline fence acceptance: driver issuance authority,
  * source/session/epoch/corruption fences, atomic rollback, publication
  * selection/pairing and capability-retirement recovery.
- *
- * Real Room, no mocked DAOs/stores/admission, no sleeps. New
- * eligibility/pairing failures assert generic safe rejection (cancellation
- * identity never swallowed) paired with full persisted-state and stage
- * oracles, per the coordinator-confirmed contract; no invented exception
- * taxonomy is asserted. Existing staging/driver/publication matrices are
- * reused, not duplicated.
  */
 class SnapshotBaselineFenceTest : GymDatabaseTest() {
 
@@ -127,7 +120,7 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
             assertBaselineResult(baseline, 1L, BASE_BASELINE_1, 1L, 1L, false)
             expectBaselineReject("duplicate completion") { loop.complete(run, downloaded) }
         }
-        assertEquals(1L, db.r05cReadCache(CLAIM_ACCOUNT_A)!!.cacheEpoch)
+        assertEquals(1L, db.projectionReadCache(CLAIM_ACCOUNT_A)!!.cacheEpoch)
         assertTrue(db.stageRowsFor(CLAIM_ACCOUNT_A).isEmpty())
     }
 
@@ -163,7 +156,7 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
             expectBaselineReject("failure result") { loop.complete(run, failed) }
             assertEquals(beforeFailure, db.claimSnapshot())
         }
-        assertEquals(false, db.r05cReadCache(CLAIM_ACCOUNT_A)!!.baselineComplete)
+        assertEquals(false, db.projectionReadCache(CLAIM_ACCOUNT_A)!!.baselineComplete)
         assertEquals(STAGE_SYNC_CURSOR, db.syncDao().getSyncState(CLAIM_ACCOUNT_A)?.cursor)
         db.baseAbandonObserved(owner)
 
@@ -213,7 +206,7 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
 
         // A live storage-appended terminal stage that THIS driver never
         // issued is not completion authority, even when shaped Downloaded.
-        // The internal result constructor is coordinator-supplied for this
+
         // NEGATIVE test only; if the test friend module cannot see it, the
         // coordinator relays a compile-only alternate before execution.
         val store = db.claimPushStore(claimSession(), owner)
@@ -281,7 +274,7 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
             expectBaselineReject("retired terminal cannot retry") { loop.complete(run, terminal) }
             assertEquals(beforeStale, db.claimSnapshot())
         }
-        assertEquals(5L, db.baseCanonicalRevision(CLAIM_ACCOUNT_A, R05B_TYPE_CUSTOM, BASE_CUSTOM_1))
+        assertEquals(5L, db.baseCanonicalRevision(CLAIM_ACCOUNT_A, CANONICAL_TYPE_CUSTOM, BASE_CUSTOM_1))
         assertEquals(1, db.stageRowsFor(CLAIM_ACCOUNT_A).size)
         // Recovery is durable observation plus explicit abandon and NEW-stage restart, never readoption.
         db.baseWithLoop(owner, pageApi(db, stalePage), 1L) { run, _ ->
@@ -296,7 +289,7 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
             owner, BASE_STAGE_3, listOf(SnapshotScriptResponse.Page(freshPage)), epoch = 1L,
         )
         assertBaselineResult(recovered.second, 2L, BASE_BASELINE_2, 1L, 1L, false)
-        assertEquals(6L, db.baseCanonicalRevision(CLAIM_ACCOUNT_A, R05B_TYPE_CUSTOM, BASE_CUSTOM_1))
+        assertEquals(6L, db.baseCanonicalRevision(CLAIM_ACCOUNT_A, CANONICAL_TYPE_CUSTOM, BASE_CUSTOM_1))
 
         // Concurrent duplicate attempts on one terminal issuance complete exactly once.
         val dupePage = stagePage(
@@ -314,9 +307,9 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
             }
             assertEquals(1, successes)
         }
-        assertEquals(3L, db.r05cReadCache(CLAIM_ACCOUNT_A)!!.cacheEpoch)
+        assertEquals(3L, db.projectionReadCache(CLAIM_ACCOUNT_A)!!.cacheEpoch)
         assertTrue(db.stageRowsFor(CLAIM_ACCOUNT_A).isEmpty())
-        assertEquals("upsert", db.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_CUSTOM, BASE_CUSTOM_2))
+        assertEquals("upsert", db.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_CUSTOM, BASE_CUSTOM_2))
     }
 
     private suspend fun completeCounting(
@@ -404,7 +397,7 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
         db.baseWithLoop(owner, pageApi(db, page)) { run, loop ->
             val terminal = checkNotNull(loop.start(run, BASE_STAGE_3, pageLimit = BASE_PAGE_LIMIT).download)
             val originalCount =
-                db.r05cQuery(
+                db.projectionQuery(
                     "SELECT record_count AS n FROM sync_snapshot_stages WHERE stage_id = ?",
                     arrayOf(BASE_STAGE_3),
                 ).single()["n"] as Long
@@ -421,7 +414,7 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
             // Raw evidence proves the stage is still retained, not cleaned up.
             assertEquals(
                 1L,
-                db.r05cQuery(
+                db.projectionQuery(
                     "SELECT COUNT(*) AS n FROM sync_snapshot_stages WHERE stage_id = ?",
                     arrayOf(BASE_STAGE_3),
                 ).single()["n"],
@@ -473,8 +466,8 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
             assertEquals(beforeOverflow, db.claimSnapshot())
             assertNotNull(run.readSnapshotStage())
         }
-        assertEquals(Long.MAX_VALUE, db.r05cReadCache(CLAIM_ACCOUNT_A)!!.cacheEpoch)
-        assertNull(db.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_CUSTOM, BASE_CUSTOM_1))
+        assertEquals(Long.MAX_VALUE, db.projectionReadCache(CLAIM_ACCOUNT_A)!!.cacheEpoch)
+        assertNull(db.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_CUSTOM, BASE_CUSTOM_1))
         assertEquals(STAGE_SYNC_CURSOR, db.syncDao().getSyncState(CLAIM_ACCOUNT_A)?.cursor)
         // Begin fencing is unaffected: a new stage can still start after explicit abandon.
         db.baseAbandonObserved(overflowOwner, Long.MAX_VALUE)
@@ -494,18 +487,18 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
             cacheEpoch = BASE_EPOCH,
         )
         db.claimSeedDevice(CLAIM_ACCOUNT_B, CLAIM_GENERATION)
-        db.r05cSetCache(CLAIM_ACCOUNT_B, baselineComplete = false)
+        db.projectionSetCache(CLAIM_ACCOUNT_B, baselineComplete = false)
         // One valid prior OBSERVED missing root: the fault download carries
         // only upserts, so completion also performs a snapshot_absent write.
         // Seeded through the vetted canonical contract harness, never a snapshot.
-        db.r05cApplyCanonical(
-            r05bPull(
-                batchId = R05B_BATCH_1,
-                cursor = R05B_CURSOR_1,
-                changes = r05bJsonArray(
-                    r05bChange(
-                        R05B_TYPE_ROUTINE, BASE_ROUTINE_1, R05B_OP_UPSERT, 3L,
-                        r05bRoutineRecord(id = BASE_ROUTINE_1, name = "Base Routine", revision = 3L),
+        db.projectionApplyCanonical(
+            canonicalPull(
+                batchId = CANONICAL_BATCH_1,
+                cursor = CANONICAL_CURSOR_1,
+                changes = canonicalJsonArray(
+                    canonicalChange(
+                        CANONICAL_TYPE_ROUTINE, BASE_ROUTINE_1, CANONICAL_OP_UPSERT, 3L,
+                        canonicalRoutineRecord(id = BASE_ROUTINE_1, name = "Base Routine", revision = 3L),
                     ),
                 ),
             ),
@@ -539,12 +532,12 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
         }
         // Earlier upsert writes rolled back with the blocked cache write,
         // and the performed snapshot_absent write rolled back with them.
-        assertNull(db.baseCanonicalState(CLAIM_ACCOUNT_B, R05B_TYPE_WORKOUT, BASE_WORKOUT_1))
-        assertNull(db.baseCanonicalState(CLAIM_ACCOUNT_B, R05B_TYPE_CUSTOM, BASE_CUSTOM_2))
-        assertEquals("upsert", db.baseCanonicalState(CLAIM_ACCOUNT_B, R05B_TYPE_ROUTINE, BASE_ROUTINE_1))
-        assertEquals(3L, db.baseCanonicalRevision(CLAIM_ACCOUNT_B, R05B_TYPE_ROUTINE, BASE_ROUTINE_1))
-        assertEquals(false, db.r05cReadCache(CLAIM_ACCOUNT_B)!!.baselineComplete)
-        assertEquals(BASE_EPOCH, db.r05cReadCache(CLAIM_ACCOUNT_B)!!.cacheEpoch)
+        assertNull(db.baseCanonicalState(CLAIM_ACCOUNT_B, CANONICAL_TYPE_WORKOUT, BASE_WORKOUT_1))
+        assertNull(db.baseCanonicalState(CLAIM_ACCOUNT_B, CANONICAL_TYPE_CUSTOM, BASE_CUSTOM_2))
+        assertEquals("upsert", db.baseCanonicalState(CLAIM_ACCOUNT_B, CANONICAL_TYPE_ROUTINE, BASE_ROUTINE_1))
+        assertEquals(3L, db.baseCanonicalRevision(CLAIM_ACCOUNT_B, CANONICAL_TYPE_ROUTINE, BASE_ROUTINE_1))
+        assertEquals(false, db.projectionReadCache(CLAIM_ACCOUNT_B)!!.baselineComplete)
+        assertEquals(BASE_EPOCH, db.projectionReadCache(CLAIM_ACCOUNT_B)!!.cacheEpoch)
         assertEquals(STAGE_SYNC_CURSOR_2, db.syncDao().getSyncState(CLAIM_ACCOUNT_B)?.cursor)
         // Explicit abandon plus NEW-stage restart recovers after the fault clears.
         db.baseAbandonObserved(overflowOwner, BASE_EPOCH, bSession)
@@ -553,8 +546,8 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
             loop.complete(run, terminal)
         }
         assertBaselineResult(recovered, 1L, BASE_BASELINE_2, 1L, 2L, false)
-        assertEquals("snapshot_absent", db.baseCanonicalState(CLAIM_ACCOUNT_B, R05B_TYPE_ROUTINE, BASE_ROUTINE_1))
-        assertEquals(3L, db.baseCanonicalRevision(CLAIM_ACCOUNT_B, R05B_TYPE_ROUTINE, BASE_ROUTINE_1))
+        assertEquals("snapshot_absent", db.baseCanonicalState(CLAIM_ACCOUNT_B, CANONICAL_TYPE_ROUTINE, BASE_ROUTINE_1))
+        assertEquals(3L, db.baseCanonicalRevision(CLAIM_ACCOUNT_B, CANONICAL_TYPE_ROUTINE, BASE_ROUTINE_1))
         db.claimSeedDevice(CLAIM_ACCOUNT_A, CLAIM_GENERATION)
     }
 
@@ -614,14 +607,14 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
             // One valid prior OBSERVED missing root: the fault download
             // carries upserts, so completion performs both install writes and
             // a snapshot_absent write inside the canceled transaction.
-            callbackDb.r05cApplyCanonical(
-                r05bPull(
-                    batchId = R05B_BATCH_1,
-                    cursor = R05B_CURSOR_1,
-                    changes = r05bJsonArray(
-                        r05bChange(
-                            R05B_TYPE_ROUTINE, BASE_ROUTINE_1, R05B_OP_UPSERT, 3L,
-                            r05bRoutineRecord(id = BASE_ROUTINE_1, name = "Base Routine", revision = 3L),
+            callbackDb.projectionApplyCanonical(
+                canonicalPull(
+                    batchId = CANONICAL_BATCH_1,
+                    cursor = CANONICAL_CURSOR_1,
+                    changes = canonicalJsonArray(
+                        canonicalChange(
+                            CANONICAL_TYPE_ROUTINE, BASE_ROUTINE_1, CANONICAL_OP_UPSERT, 3L,
+                            canonicalRoutineRecord(id = BASE_ROUTINE_1, name = "Base Routine", revision = 3L),
                         ),
                     ),
                 ),
@@ -672,11 +665,11 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
                 assertTrue("install branch must execute before cancel", installSeen.get())
                 assertTrue("absence branch must execute before cancel", absenceSeen.get())
                 assertEquals(admitted, callbackDb.claimSnapshot())
-                assertNull(callbackDb.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_WORKOUT_1))
-                assertNull(callbackDb.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_CUSTOM, BASE_CUSTOM_1))
-                assertEquals("upsert", callbackDb.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_ROUTINE, BASE_ROUTINE_1))
-                assertEquals(3L, callbackDb.baseCanonicalRevision(CLAIM_ACCOUNT_A, R05B_TYPE_ROUTINE, BASE_ROUTINE_1))
-                assertEquals(false, callbackDb.r05cReadCache(CLAIM_ACCOUNT_A)!!.baselineComplete)
+                assertNull(callbackDb.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_WORKOUT_1))
+                assertNull(callbackDb.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_CUSTOM, BASE_CUSTOM_1))
+                assertEquals("upsert", callbackDb.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_ROUTINE, BASE_ROUTINE_1))
+                assertEquals(3L, callbackDb.baseCanonicalRevision(CLAIM_ACCOUNT_A, CANONICAL_TYPE_ROUTINE, BASE_ROUTINE_1))
+                assertEquals(false, callbackDb.projectionReadCache(CLAIM_ACCOUNT_A)!!.baselineComplete)
                 assertEquals(STAGE_SYNC_CURSOR, callbackDb.syncDao().getSyncState(CLAIM_ACCOUNT_A)?.cursor)
                 assertEquals(1, callbackDb.stageRowsFor(CLAIM_ACCOUNT_A).size)
                 // The canceled attempt retires its result in the live run...
@@ -691,8 +684,8 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
                     checkNotNull(retryLoop.start(run, BASE_STAGE_2, pageLimit = BASE_PAGE_LIMIT).download)
                 val recovered = retryLoop.complete(run, retryTerminal)
                 assertBaselineResult(recovered, 1L, BASE_BASELINE_1, 1L, 2L, false)
-                assertEquals("snapshot_absent", callbackDb.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_ROUTINE, BASE_ROUTINE_1))
-                assertEquals(3L, callbackDb.baseCanonicalRevision(CLAIM_ACCOUNT_A, R05B_TYPE_ROUTINE, BASE_ROUTINE_1))
+                assertEquals("snapshot_absent", callbackDb.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_ROUTINE, BASE_ROUTINE_1))
+                assertEquals(3L, callbackDb.baseCanonicalRevision(CLAIM_ACCOUNT_A, CANONICAL_TYPE_ROUTINE, BASE_ROUTINE_1))
             }
         } finally {
             callbackDb.close()
@@ -767,12 +760,12 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
                     txEnded.await()
                     // Inspect durable state WITHOUT draining the queued
                     // caller continuation: the commit stands on its own.
-                    val cacheAfter = hookDb.r05cReadCache(CLAIM_ACCOUNT_A)!!
+                    val cacheAfter = hookDb.projectionReadCache(CLAIM_ACCOUNT_A)!!
                     assertTrue(cacheAfter.baselineComplete)
                     assertEquals(1L, cacheAfter.cacheEpoch)
                     assertTrue(cacheAfter.projectionDirty)
                     assertEquals(BASE_BASELINE_1, hookDb.syncDao().getSyncState(CLAIM_ACCOUNT_A)?.cursor)
-                    assertEquals("upsert", hookDb.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_CUSTOM, BASE_CUSTOM_1))
+                    assertEquals("upsert", hookDb.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_CUSTOM, BASE_CUSTOM_1))
                     assertTrue(hookDb.stageRowsFor(CLAIM_ACCOUNT_A).isEmpty())
                     observedEpoch = cacheAfter.cacheEpoch
                     // Now cancel the resumption and drain: no baseline result
@@ -801,8 +794,8 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
             assertTrue(pubApi.snapshotCalls.isEmpty())
             val pubStore = hookDb.claimPushStore(claimSession(), owner)
             pubStore.withRun(observedEpoch) { run ->
-                val lease = R05cTestLease()
-                val publication = run.publishProjection(hookDb.r05cStore(barrier = r05cGrantBarrier(lease)))
+                val lease = ProjectionTestLease()
+                val publication = run.publishProjection(hookDb.projectionStore(barrier = projectionGrantBarrier(lease)))
                 assertEquals(ProjectionPublicationStatus.PUBLISHED, publication.status)
                 assertEquals(2L, publication.cacheEpoch)
                 assertEquals(1, lease.closeCount)
@@ -850,9 +843,9 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
             checkNotNull(loop.start(run, BASE_STAGE_1, pageLimit = BASE_PAGE_LIMIT).download)
         }
         val beforeBlocked = db.claimSnapshot()
-        val blockedLease = R05cTestLease()
+        val blockedLease = ProjectionTestLease()
         expectBaselineReject("downloaded stage blocks publication") {
-            db.r05cStore(barrier = r05cGrantBarrier(blockedLease)).publish(BASE_EPOCH)
+            db.projectionStore(barrier = projectionGrantBarrier(blockedLease)).publish(BASE_EPOCH)
         }
         assertEquals(1, blockedLease.closeCount)
         assertEquals(beforeBlocked, db.claimSnapshot())
@@ -861,15 +854,15 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
         // fixture-owned counter is restored afterwards for valid abandon;
         // that restore is test-only cleanup, never production recovery.
         val originalCount =
-            db.r05cQuery(
+            db.projectionQuery(
                 "SELECT record_count AS n FROM sync_snapshot_stages WHERE stage_id = ?",
                 arrayOf(BASE_STAGE_1),
             ).single()["n"] as Long
         db.claimExec("UPDATE sync_snapshot_stages SET record_count = ? WHERE stage_id = ?", arrayOf(999L, BASE_STAGE_1))
         val beforeCorrupt = db.claimSnapshot()
-        val corruptLease = R05cTestLease()
+        val corruptLease = ProjectionTestLease()
         expectBaselineReject("corrupt stage blocks publication") {
-            db.r05cStore(barrier = r05cGrantBarrier(corruptLease)).publish(BASE_EPOCH)
+            db.projectionStore(barrier = projectionGrantBarrier(corruptLease)).publish(BASE_EPOCH)
         }
         assertEquals(beforeCorrupt, db.claimSnapshot())
         db.claimExec(
@@ -882,22 +875,22 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
         // account reuses its existing seeded cache row (no duplicate insert)
         // plus canonical application through the vetted contract harness.
         db.stageInsertInitialHeader(BASE_STAGE_2, BASE_PAGE_LIMIT, account = CLAIM_ACCOUNT_B)
-        db.r05cSetCache(CLAIM_ACCOUNT_A, baselineComplete = true)
-        db.r05cApplyCanonical(
-            r05bPull(
-                batchId = R05B_BATCH_1,
-                cursor = R05B_CURSOR_1,
-                changes = r05bJsonArray(
-                    r05bChange(
-                        R05B_TYPE_CUSTOM, R05B_CUSTOM_A, R05B_OP_UPSERT, 1L,
-                        r05bCustomRecord(id = R05B_CUSTOM_A, name = "Foreign-proof"),
+        db.projectionSetCache(CLAIM_ACCOUNT_A, baselineComplete = true)
+        db.projectionApplyCanonical(
+            canonicalPull(
+                batchId = CANONICAL_BATCH_1,
+                cursor = CANONICAL_CURSOR_1,
+                changes = canonicalJsonArray(
+                    canonicalChange(
+                        CANONICAL_TYPE_CUSTOM, CANONICAL_CUSTOM_A, CANONICAL_OP_UPSERT, 1L,
+                        canonicalCustomRecord(id = CANONICAL_CUSTOM_A, name = "Foreign-proof"),
                     ),
                 ),
             ),
             BASE_EPOCH,
         )
-        val foreignLease = R05cTestLease()
-        val published = db.r05cStore(barrier = r05cGrantBarrier(foreignLease)).publish(BASE_EPOCH)
+        val foreignLease = ProjectionTestLease()
+        val published = db.projectionStore(barrier = projectionGrantBarrier(foreignLease)).publish(BASE_EPOCH)
         assertEquals(ProjectionPublicationStatus.PUBLISHED, published.status)
         assertEquals(1, foreignLease.closeCount)
         assertEquals(1, db.stageRowsFor(CLAIM_ACCOUNT_B).size)
@@ -922,12 +915,12 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
         assertBaselineResult(baseline.second, 1L, BASE_BASELINE_1, 1L, 1L, false)
 
         // A revoked lease fails without durable effects and still closes exactly once.
-        val revoked = R05cTestLease()
+        val revoked = ProjectionTestLease()
         revoked.revoke()
         val beforeRevoked = db.claimSnapshot()
         db.baseWithLoop(owner, pageApi(db, page), 1L) { run, _ ->
             expectBaselineReject("revoked lease") {
-                run.publishProjection(db.r05cStore(barrier = r05cGrantBarrier(revoked)))
+                run.publishProjection(db.projectionStore(barrier = projectionGrantBarrier(revoked)))
             }
         }
         assertEquals(1, revoked.closeCount)
@@ -935,24 +928,24 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
 
         // Acquisition-race capture protects the whole projection; nothing is partially published.
         db.claimSeedWorkout(BASE_WORKOUT_2, CLAIM_ACCOUNT_A, "Old visible")
-        val raceLease = R05cTestLease()
+        val raceLease = ProjectionTestLease()
         val raceApi = SnapshotDeliveryScriptApi(db, mutableListOf(), mutableListOf())
-        val workoutsBefore = db.r05cDump("workouts").size
+        val workoutsBefore = db.projectionDump("workouts").size
         val protected = db.baseWithLoop(owner, raceApi, 1L) { run, _ ->
-            val barrier = r05cGrantBarrier(raceLease) {
+            val barrier = projectionGrantBarrier(raceLease) {
                 db.claimSeedWorkout(BASE_LOCAL_NEW, CLAIM_ACCOUNT_A, "Race capture")
                 val captureStore = db.claimCaptureStore(claimSession(), mutableListOf(BASE_MUTATION_1))
                 db.claimCaptureStart(captureStore, CLAIM_ACCOUNT_A, BASE_LOCAL_NEW)
             }
-            run.publishProjection(db.r05cStore(barrier = barrier))
+            run.publishProjection(db.projectionStore(barrier = barrier))
         }
         assertEquals(ProjectionPublicationStatus.PROTECTED, protected.status)
         assertEquals(1, raceLease.closeCount)
-        assertEquals(workoutsBefore + 1, db.r05cDump("workouts").size)
-        assertEquals(1, db.r05cQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_WORKOUT_2)).size)
-        assertEquals(1, db.r05cQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_LOCAL_NEW)).size)
+        assertEquals(workoutsBefore + 1, db.projectionDump("workouts").size)
+        assertEquals(1, db.projectionQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_WORKOUT_2)).size)
+        assertEquals(1, db.projectionQuery("SELECT * FROM workouts WHERE id = ?", arrayOf(BASE_LOCAL_NEW)).size)
         assertEquals(1, db.syncDao().getOutboxForAccount(CLAIM_ACCOUNT_A).size)
-        assertTrue(db.r05cReadCache(CLAIM_ACCOUNT_A)!!.projectionDirty)
+        assertTrue(db.projectionReadCache(CLAIM_ACCOUNT_A)!!.projectionDirty)
     }
 
     @Test
@@ -973,7 +966,7 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val otherDatabase = Room.inMemoryDatabaseBuilder(context, GymDatabase::class.java).build()
         try {
-            val recording = R05cRecordingBarrier(R05cTestLease())
+            val recording = ProjectionRecordingBarrier(ProjectionTestLease())
             db.baseWithLoop(owner, api) { run, _ ->
                 expectBaselineReject("wrong physical database") {
                     run.publishProjection(ProjectionStore(otherDatabase, claimSession(), recording))
@@ -985,7 +978,7 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
         }
 
         // A publisher bound to another session never reaches the barrier either.
-        val sessionRecording = R05cRecordingBarrier(R05cTestLease())
+        val sessionRecording = ProjectionRecordingBarrier(ProjectionTestLease())
         db.baseWithLoop(owner, api) { run, _ ->
             expectBaselineReject("wrong session") {
                 run.publishProjection(ProjectionStore(db, claimSession(account = CLAIM_ACCOUNT_B), sessionRecording))
@@ -1024,9 +1017,9 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
             val control = checkNotNull(run.readPullCheckpoint()) { "baseline plus cursor must admit a checkpoint" }
             run.checkPullCheckpoint(control)
 
-            val lease = R05cTestLease()
+            val lease = ProjectionTestLease()
             expectBaselineReject("colliding publication") {
-                run.publishProjection(db.r05cStore(barrier = r05cGrantBarrier(lease)))
+                run.publishProjection(db.projectionStore(barrier = projectionGrantBarrier(lease)))
             }
             assertEquals(1, lease.closeCount)
 
@@ -1035,10 +1028,10 @@ class SnapshotBaselineFenceTest : GymDatabaseTest() {
             expectBaselineReject("retired pull token") { run.checkPullCheckpoint(control) }
             assertNotNull(run.readPullCheckpoint())
         }
-        assertEquals(1L, db.r05cReadCache(CLAIM_ACCOUNT_A)!!.cacheEpoch)
+        assertEquals(1L, db.projectionReadCache(CLAIM_ACCOUNT_A)!!.cacheEpoch)
         assertEquals(BASE_BASELINE_1, db.syncDao().getSyncState(CLAIM_ACCOUNT_A)?.cursor)
-        assertTrue(db.r05cReadCache(CLAIM_ACCOUNT_A)!!.projectionDirty)
-        assertEquals("upsert", db.baseCanonicalState(CLAIM_ACCOUNT_A, R05B_TYPE_WORKOUT, BASE_WORKOUT_1))
+        assertTrue(db.projectionReadCache(CLAIM_ACCOUNT_A)!!.projectionDirty)
+        assertEquals("upsert", db.baseCanonicalState(CLAIM_ACCOUNT_A, CANONICAL_TYPE_WORKOUT, BASE_WORKOUT_1))
     }
 
     private fun pageApi(db: GymDatabase, vararg pages: SnapshotResultModel) =

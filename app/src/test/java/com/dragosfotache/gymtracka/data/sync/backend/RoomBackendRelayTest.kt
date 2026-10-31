@@ -26,11 +26,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 
-/** Coordinator-owned host controls, not QA's independent Room convergence oracles. */
+/**
+ * Checks host relay controls independently of Android Room convergence assertions.
+ */
 class RoomBackendRelayTest {
     @Test
     fun occupiedMetadataIsRefusedBeforeFixtureAccess() {
-        val directory = Files.createTempDirectory("r10-relay-ownership-")
+        val directory = Files.createTempDirectory("relay-relay-ownership-")
         val metadata = directory.resolve("metadata.json")
         Files.writeString(metadata, "unrelated")
         try {
@@ -68,10 +70,10 @@ class RoomBackendRelayTest {
                             it.code to it.body.string()
                         }
                     }
-                    val path = "/__r10__/same-account-session"
+                    val path = "/__test__/same-account-session"
                     assertEquals(401, call(path).first)
                     assertEquals(401, call(path, "unknown-test-bearer").first)
-                    val initial = call("/__r10__/session")
+                    val initial = call("/__test__/session")
                     assertEquals(200, initial.first)
                     val first = JSONObject(initial.second)
                     val replacement = call(path, first.getString("accessToken"))
@@ -124,15 +126,15 @@ class RoomBackendRelayTest {
                         return client.newCall(builder.build()).execute().use { it.code to it.body.string() }
                     }
                     fun account(): JSONObject {
-                        val result = call("/__r10__/account")
+                        val result = call("/__test__/account")
                         assertEquals(200, result.first)
                         return JSONObject(result.second)
                     }
                     val firstAccount = account()
                     val first = firstAccount.getString("accessToken")
                     val second = account().getString("accessToken")
-                    assertEquals(401, call("/__r10__/lose-next-push", "unrecognized").first)
-                    assertEquals(204, call("/__r10__/lose-next-push", first).first)
+                    assertEquals(401, call("/__test__/lose-next-push", "unrecognized").first)
+                    assertEquals(204, call("/__test__/lose-next-push", first).first)
                     val root = UUID.randomUUID().toString()
                     val mutation = UUID.randomUUID().toString()
                     val mutationJson = """{"mutationId":"$mutation","type":"workout.start","aggregateType":"workout","aggregateId":"$root","localGeneration":1,"payload":{"id":"$root","name":"Relay control proof","startedAt":"2026-09-24T10:00:00.000Z"}}"""

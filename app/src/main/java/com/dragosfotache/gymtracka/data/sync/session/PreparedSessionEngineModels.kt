@@ -38,7 +38,7 @@ internal enum class PreparedCompletionStatus {
 /**
  * Immutable safe summary of one private prepared completion or recovery
  * invocation. [cacheEpoch] reflects only a known durable epoch at return,
- * never promotion authority; [delivery] is the actual bounded R07 tail run
+ * never promotion authority; [delivery] is the actual bounded shared delivery tail run
  * when one executed, never an inferred summary. There is no public
  * constructor or copy; instances are created only by
  * [PreparedSessionEngineCoordinator] after commit and stable rereads.

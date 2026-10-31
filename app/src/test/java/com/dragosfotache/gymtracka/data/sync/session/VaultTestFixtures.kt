@@ -12,12 +12,7 @@ import java.security.Key
 import javax.crypto.SecretKey
 
 /**
- * R04a independent QA fixtures.
- *
- * Derived solely from docs/remaining-work/R04a-task.md (independent binary fixture grammar
- * and approved API facts) plus contributor normative sources. No production source was read.
- * The binary builder below is an INDEPENDENT implementation of the version-1 record grammar;
- * production VaultRecordCodec output is cross-checked against it, never the reverse.
+ * fixtures.
  */
 internal object VaultTestFixtures {
     const val RECORD_MAGIC: Int = 0x47545331 // GTS1

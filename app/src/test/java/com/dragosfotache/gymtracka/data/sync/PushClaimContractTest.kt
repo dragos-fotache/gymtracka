@@ -11,7 +11,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * R06a independent contract checks: exception hierarchy with fixed safe
+ * contract checks: exception hierarchy with fixed safe
  * messages, opaque-capability construction limits and head-result shapes.
  * Pure JVM: no database, no network. Room-backed behavior lives in the
  * androidTest PushClaim suites.

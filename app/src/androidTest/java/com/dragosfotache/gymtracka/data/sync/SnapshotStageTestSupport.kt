@@ -14,13 +14,8 @@ import com.dragosfotache.gymtracka.data.sync.model.WorkoutRecordModel
 import com.dragosfotache.gymtracka.data.sync.model.WorkoutSetModel
 
 /**
- * R08a independent QA fixtures. Hand-written from docs/archive/remaining-work/R08a-task.md
- * and the coordinator's source-independent API/harness facts only.
- *
- * Every expected value below is a literal authored here; no production encoder
- * output is used as an oracle and no production source was inspected. Durable
- * seeding reuses the vetted R06a claim/capture helpers; only staging-seam
- * builders and fresh stage literals are new.
+ * Literal staging records/pages, durable seed helpers and exact stored-evidence observations.
+ * Expected bytes are independent of production encoding.
  */
 
 // Fresh stage literals: valid lowercase UUIDs, distinct from every
@@ -58,7 +53,7 @@ internal const val STAGE_CUSTOM_1 = "e6666666-6666-4666-8666-666666666666"
 internal const val STAGE_CUSTOM_2 = "e7777777-7777-4777-8777-777777777777"
 internal const val STAGE_UNKNOWN = "e8888888-8888-4888-8888-888888888888"
 
-// Fixed safe stage messages from the R08a specification (not production oracles).
+// Fixed safe stage messages from the snapshot staging specification (not production oracles).
 internal const val STAGE_STALE_MESSAGE = "Stale snapshot stage"
 internal const val STAGE_STORAGE_MESSAGE = "Snapshot stage storage operation failed"
 internal const val STAGE_ACTIVE_MESSAGE = "Snapshot stage requires explicit completion or abandonment"

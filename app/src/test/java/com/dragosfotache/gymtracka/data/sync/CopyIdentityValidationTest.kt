@@ -26,7 +26,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R02b QA: clone/copy family identity rules for the three copy commands.
+ * clone/copy family identity rules for the three copy commands.
  *
  * source = source root + sourceExerciseIds + sourceSetIds; target = new root +
  * target entry ids + target set ids. Each side must be internally unique for ALL

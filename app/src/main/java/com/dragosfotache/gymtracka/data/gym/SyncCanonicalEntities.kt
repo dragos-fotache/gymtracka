@@ -8,7 +8,7 @@ import androidx.room.PrimaryKey
  * Independent canonical/deletion evidence. No domain FK: watermarks and deletion
  * revisions must survive physical removal/rematerialization of the visible root.
  * An unobserved reservation has no server revision or JSON; it is not a server record.
- * Future validated canonical writes own upsert/delete/snapshot_absent transitions.
+ * Validated canonical writes own upsert/delete/snapshot_absent transitions.
  */
 @Entity(
     tableName = "sync_canonical_roots",

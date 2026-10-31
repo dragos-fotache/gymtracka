@@ -17,7 +17,7 @@ internal class AccountImportConsentDecision internal constructor() {
 }
 
 /**
- * R13c one-current nonqueueing active-import consent bridge. Composable warning
+ * one-current nonqueueing active-import consent bridge. Composable warning
  * callbacks capture the exact opaque decision token. Caller cancellation releases
  * the pending decision; a stale token answer after cancellation or close can never
  * consent a future request. Close permanently fences and cancels pending work.

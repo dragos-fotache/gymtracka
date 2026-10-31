@@ -1,7 +1,7 @@
 package com.dragosfotache.gymtracka.data.sync.legacy
 
 /**
- * R13b opt-in private import policy. Construction performs no I/O.
+ * opt-in private import policy. Construction performs no I/O.
  * Null policy on the facade retains the accepted legacy-refusal policy.
  * Displays are fixed/redacted.
  */

@@ -28,7 +28,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R06d driver boundary: cancellation during HTTP plus a genuinely late
+ * driver boundary: cancellation during HTTP plus a genuinely late
  * adversarial response cannot acknowledge; unexpected errors propagate
  * without retry writes; a typed failure racing cancellation persists nothing.
  */

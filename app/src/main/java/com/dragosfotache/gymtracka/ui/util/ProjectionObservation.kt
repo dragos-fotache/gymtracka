@@ -1,7 +1,7 @@
 package com.dragosfotache.gymtracka.ui.util
 
 /**
- * R12b same-ID remembered-field reconciliation for projection refresh.
+ * same-ID remembered-field reconciliation for projection refresh.
  *
  * Raw accepted text is not identical to its parsed persistence representation. When
  * incoming weight/repetitions equal the currently accepted draft's sanitized parsed

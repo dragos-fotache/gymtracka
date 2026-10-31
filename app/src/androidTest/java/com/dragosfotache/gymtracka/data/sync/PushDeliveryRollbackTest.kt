@@ -22,7 +22,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R06d driver boundary: triggered acknowledgment rollback propagates and
+ * driver boundary: triggered acknowledgment rollback propagates and
  * retains the exact frozen row without sending a successor; recovery
  * re-admits it. Invalid acknowledgment context yields retained corruption,
  * never success.

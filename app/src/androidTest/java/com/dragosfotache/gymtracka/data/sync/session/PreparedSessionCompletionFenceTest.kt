@@ -7,9 +7,9 @@ import com.dragosfotache.gymtracka.data.gym.GymDatabase
 import com.dragosfotache.gymtracka.data.sync.model.AggregateType
 import com.dragosfotache.gymtracka.data.sync.model.MutationKind
 import com.dragosfotache.gymtracka.data.sync.model.MutationPayload
-import com.dragosfotache.gymtracka.data.sync.r05cGrantBarrier
-import com.dragosfotache.gymtracka.data.sync.r05cQuery
-import com.dragosfotache.gymtracka.data.sync.R05cTestLease
+import com.dragosfotache.gymtracka.data.sync.projectionGrantBarrier
+import com.dragosfotache.gymtracka.data.sync.projectionQuery
+import com.dragosfotache.gymtracka.data.sync.ProjectionTestLease
 import com.dragosfotache.gymtracka.data.sync.store.CanonicalStore
 import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationBarrier
 import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationLease
@@ -37,15 +37,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R09d independent QA: newest-invocation fencing, cancellation, ordinary-path
- * refusal and closed-error preservation around completed preparation.
- *
- * Derived ONLY from docs/archive/remaining-work/R09d-task.md fence/rollback contract
- * plus the coordinator-supplied completion contract (failure-class mapping,
- * redaction rules, existing failure-name retention) and vetted QA-owned
- * helpers. No production declarations, diffs, Worker work, generated
- * sources, decompiled classes or schema JSON inspected. Unspecified new
- * categories are asserted for closedness/preservation, never a brittle enum.
+ * Checks newest-invocation fences, cancellation, ordinary-path refusal and closed-error
+ * preservation around prepared-session completion.
  */
 @RunWith(AndroidJUnit4::class)
 class PreparedSessionCompletionFenceTest {
@@ -76,8 +69,8 @@ class PreparedSessionCompletionFenceTest {
             // with no success and no ACTIVE writes.
             val entered = CompletableDeferred<Unit>()
             val release = CompletableDeferred<Unit>()
-            val lease = R05cTestLease()
-            val barrier = r05cGrantBarrier(
+            val lease = ProjectionTestLease()
+            val barrier = projectionGrantBarrier(
                 lease = lease,
                 onAcquire = {
                     entered.complete(Unit)
@@ -104,7 +97,7 @@ class PreparedSessionCompletionFenceTest {
             val freshTransport = PreparedEngineTransport()
             C.queueCompletionEmptyTail(freshTransport)
             val fresh = F.engine(database, vault, PreparedEngineAuthApi(), freshTransport, owner)
-            val result = fresh.completePreparation(r05cGrantBarrier(lease = R05cTestLease()))
+            val result = fresh.completePreparation(projectionGrantBarrier(lease = ProjectionTestLease()))
             assertEquals(PreparedCompletionStatus.COMPLETED, result.status)
             C.assertRoomActive(harness, database)
             C.assertVaultActiveFor(vault, 2L)
@@ -144,13 +137,13 @@ class PreparedSessionCompletionFenceTest {
                     release.await()
                 }
             }
-            val lease = R05cTestLease()
+            val lease = ProjectionTestLease()
             // An explicitly invalid lease rolls back with either a closed
             // error or a NOT_READY refusal: never a completion claim.
             var completed = false
             supervisorScope {
                 val job = async {
-                    engine.completePreparation(r05cGrantBarrier(lease = lease))
+                    engine.completePreparation(projectionGrantBarrier(lease = lease))
                 }
                 entered.await()
                 lease.revoke()
@@ -172,7 +165,7 @@ class PreparedSessionCompletionFenceTest {
             // Atomic rollback: domain untouched, cache/ledger kept,
             // journal/device still PREPARING, vault still PREPARED.
             assertTrue(
-                database.r05cQuery("SELECT id FROM routines").isEmpty(),
+                database.projectionQuery("SELECT id FROM routines").isEmpty(),
             )
             assertEquals(cacheBefore, harness.accountCache(database, F.ACCOUNT))
             assertEquals(rootsBefore, harness.canonicalRoots(database, F.ACCOUNT))
@@ -203,7 +196,7 @@ class PreparedSessionCompletionFenceTest {
                 "UPDATE sync_session_authority SET revision = 9223372036854775807 WHERE id = 1",
             )
             val cacheBefore = harness.accountCache(database, F.ACCOUNT)
-            val barrier = r05cGrantBarrier(lease = R05cTestLease())
+            val barrier = projectionGrantBarrier(lease = ProjectionTestLease())
             try {
                 engine.completePreparation(barrier)
                 fail("expected exhausted counter to fail closed")
@@ -241,8 +234,8 @@ class PreparedSessionCompletionFenceTest {
             // non-PREPARING NOT_READY instead).
             val entered = CompletableDeferred<Unit>()
             val release = CompletableDeferred<Unit>()
-            val barrier = r05cGrantBarrier(
-                lease = R05cTestLease(),
+            val barrier = projectionGrantBarrier(
+                lease = ProjectionTestLease(),
                 onAcquire = {
                     entered.complete(Unit)
                     release.await()
@@ -381,7 +374,7 @@ class PreparedSessionCompletionFenceTest {
             }
             supervisorScope {
                 val job = async {
-                    engine.completePreparation(r05cGrantBarrier(lease = R05cTestLease()))
+                    engine.completePreparation(projectionGrantBarrier(lease = ProjectionTestLease()))
                 }
                 entered.await()
                 engine.invalidate()
@@ -443,7 +436,7 @@ class PreparedSessionCompletionFenceTest {
             supervisorScope {
                 val job = async {
                     try {
-                        engine.completePreparation(r05cGrantBarrier(lease = R05cTestLease()))
+                        engine.completePreparation(projectionGrantBarrier(lease = ProjectionTestLease()))
                     } catch (e: CancellationException) {
                         callerCancelled = true
                         throw e
@@ -500,7 +493,7 @@ class PreparedSessionCompletionFenceTest {
                     } else if (deviceWriteSeen.getAndSet(false)) {
                         fired.set(true)
                         armed.set(false)
-                        runnerJob.cancel(CancellationException("r09d post-write cancel"))
+                        runnerJob.cancel(CancellationException("completion post-write cancel"))
                     }
                 }
             },
@@ -526,8 +519,8 @@ class PreparedSessionCompletionFenceTest {
                     try {
                         // Arming at barrier acquisition: the tail is done, so
                         // the next device UPDATE is the completion write.
-                        val barrier = r05cGrantBarrier(
-                            lease = R05cTestLease(),
+                        val barrier = projectionGrantBarrier(
+                            lease = ProjectionTestLease(),
                             onAcquire = { armed.set(true) },
                         )
                         engine.completePreparation(barrier)
@@ -551,7 +544,7 @@ class PreparedSessionCompletionFenceTest {
             assertTrue(runnerJob.isCancelled)
             // Complete pre-commit rollback: published graph gone, every
             // store kept, tail kept, vault never promoted.
-            assertTrue(database.r05cQuery("SELECT id FROM routines").isEmpty())
+            assertTrue(database.projectionQuery("SELECT id FROM routines").isEmpty())
             assertEquals(cacheBefore, harness.accountCache(database, F.ACCOUNT))
             assertEquals(rootsBefore, harness.canonicalRoots(database, F.ACCOUNT))
             assertEquals(journalBefore, harness.journalRow(database))
@@ -579,7 +572,7 @@ class PreparedSessionCompletionFenceTest {
             val journalBefore = harness.journalRow(database)
             val deviceBefore = harness.deviceRow(database)
             val cacheBefore = harness.accountCache(database, F.ACCOUNT)
-            val failing = ProjectionPublicationBarrier { throw RuntimeException("r09d-acquire-fault") }
+            val failing = ProjectionPublicationBarrier { throw RuntimeException("completion-acquire-fault") }
             try {
                 engine.completePreparation(failing)
                 fail("expected barrier failure to fail closed")
@@ -613,11 +606,11 @@ class PreparedSessionCompletionFenceTest {
             assertNotNull(engine.bootstrap(stageId = F.STAGE_NEW).baseline)
             // Corrupt storage type: revision must be an integer journal counter.
             database.openHelper.writableDatabase.execSQL(
-                "UPDATE sync_session_authority SET revision = 'r09d-not-a-number' WHERE id = 1",
+                "UPDATE sync_session_authority SET revision = 'completion-not-a-number' WHERE id = 1",
             )
             val callsBefore = transport.capturedRequests.size
             try {
-                engine.completePreparation(r05cGrantBarrier())
+                engine.completePreparation(projectionGrantBarrier())
                 fail("expected corrupt authority to fail closed")
             } catch (e: PreparedEngineException) {
                 C.assertClosedCompletion(e)
@@ -647,7 +640,7 @@ class PreparedSessionCompletionFenceTest {
                 "UPDATE sync_device_state SET cache_state = 'ready' WHERE id = 1",
             )
             try {
-                engine.completePreparation(r05cGrantBarrier())
+                engine.completePreparation(projectionGrantBarrier())
                 fail("expected mismatched tuple to fail closed")
             } catch (e: PreparedEngineException) {
                 C.assertClosedCompletion(e)
@@ -682,7 +675,7 @@ class PreparedSessionCompletionFenceTest {
                         changed = true,
                         extraRoots = emptyList(),
                     ) {
-                        MutationPayload.WorkoutStart(F.OUTBOX_WORKOUT, "R09d Local", F.FIXED_CLOCK)
+                        MutationPayload.WorkoutStart(F.OUTBOX_WORKOUT, "completion Local", F.FIXED_CLOCK)
                     }
                 }
                 fail("ordinary SyncStore must refuse PREPARING")
@@ -701,8 +694,8 @@ class PreparedSessionCompletionFenceTest {
             } catch (_: StaleSessionException) {
             }
             var acquired = 0
-            val lease = R05cTestLease()
-            val barrier = r05cGrantBarrier(lease = lease, onAcquire = { acquired += 1 })
+            val lease = ProjectionTestLease()
+            val barrier = projectionGrantBarrier(lease = lease, onAcquire = { acquired += 1 })
             try {
                 ProjectionStore(database, RepositorySession(F.ACCOUNT, 1L), barrier).publish(0L)
                 fail("ordinary ProjectionStore must refuse PREPARING")
@@ -740,7 +733,7 @@ class PreparedSessionCompletionFenceTest {
             val engine = F.engine(database, vault, PreparedEngineAuthApi(), transport, F.owner())
             assertNotNull(engine.bootstrap(stageId = F.STAGE_NEW).baseline)
             supervisorScope {
-                val job = async { engine.completePreparation(r05cGrantBarrier(lease = R05cTestLease())) }
+                val job = async { engine.completePreparation(projectionGrantBarrier(lease = ProjectionTestLease())) }
                 entered.await()
                 job.cancelAndJoin()
                 assertTrue(job.isCancelled)
@@ -780,19 +773,19 @@ class PreparedSessionCompletionFenceTest {
             // with cache/journal/device together. Bootstrap never writes an
             // active phase, so the trigger is inert until completion.
             database.openHelper.writableDatabase.execSQL(
-                "CREATE TRIGGER r09d_no_active AFTER UPDATE ON sync_session_authority" +
+                "CREATE TRIGGER completion_no_active AFTER UPDATE ON sync_session_authority" +
                     " WHEN NEW.phase = 'active'" +
-                    " BEGIN SELECT RAISE(ABORT, 'r09d-journal-fault'); END",
+                    " BEGIN SELECT RAISE(ABORT, 'completion-journal-fault'); END",
             )
             try {
-                engine.completePreparation(r05cGrantBarrier(lease = R05cTestLease()))
+                engine.completePreparation(projectionGrantBarrier(lease = ProjectionTestLease()))
                 fail("expected journal trigger fault to fail closed")
             } catch (e: PreparedEngineException) {
                 C.assertClosedCompletion(e)
             }
             // Full post-write rollback: the nonempty domain graph is gone,
             // cache/ledger/journal/device/tail kept, vault unpromoted.
-            assertTrue(database.r05cQuery("SELECT id FROM routines").isEmpty())
+            assertTrue(database.projectionQuery("SELECT id FROM routines").isEmpty())
             assertEquals(cacheBefore, harness.accountCache(database, F.ACCOUNT))
             assertEquals(rootsBefore, harness.canonicalRoots(database, F.ACCOUNT))
             assertEquals(journalBefore, harness.journalRow(database))
@@ -828,24 +821,24 @@ class PreparedSessionCompletionFenceTest {
             // back. Only this trigger differs from the passing happy path,
             // so its refusal proves the hook engaged.
             database.openHelper.writableDatabase.execSQL(
-                "CREATE TRIGGER r09d_ignore_ready BEFORE UPDATE ON sync_device_state" +
+                "CREATE TRIGGER completion_ignore_ready BEFORE UPDATE ON sync_device_state" +
                     " WHEN NEW.cache_state=\"ready\"" +
                     " BEGIN SELECT RAISE(IGNORE); END",
             )
             assertTrue(
-                database.r05cQuery(
+                database.projectionQuery(
                     "SELECT name FROM sqlite_master WHERE type = 'trigger'" +
-                        " AND name = 'r09d_ignore_ready'",
+                        " AND name = 'completion_ignore_ready'",
                 ).isNotEmpty(),
             )
             try {
-                engine.completePreparation(r05cGrantBarrier(lease = R05cTestLease()))
+                engine.completePreparation(projectionGrantBarrier(lease = ProjectionTestLease()))
                 fail("expected count-zero device write to fail closed")
             } catch (e: PreparedEngineException) {
                 C.assertClosedCompletion(e)
             }
             // Exact whole-state rollback: published graph gone, every store kept.
-            assertTrue(database.r05cQuery("SELECT id FROM routines").isEmpty())
+            assertTrue(database.projectionQuery("SELECT id FROM routines").isEmpty())
             assertEquals(cacheBefore, harness.accountCache(database, F.ACCOUNT))
             assertEquals(rootsBefore, harness.canonicalRoots(database, F.ACCOUNT))
             assertEquals(journalBefore, harness.journalRow(database))
@@ -879,18 +872,18 @@ class PreparedSessionCompletionFenceTest {
             // after the completion wrote it, so post-write verification
             // fails and the whole transaction rolls back.
             database.openHelper.writableDatabase.execSQL(
-                "CREATE TRIGGER r09d_wrong_device AFTER UPDATE ON sync_device_state" +
+                "CREATE TRIGGER completion_wrong_device AFTER UPDATE ON sync_device_state" +
                     " BEGIN UPDATE sync_device_state" +
                     " SET cached_account_id = '00000000-0000-4000-8000-000000000000'," +
                     " session_generation = 99 WHERE id = 1; END",
             )
             try {
-                engine.completePreparation(r05cGrantBarrier(lease = R05cTestLease()))
+                engine.completePreparation(projectionGrantBarrier(lease = ProjectionTestLease()))
                 fail("expected rewritten device tuple to fail closed")
             } catch (e: PreparedEngineException) {
                 C.assertClosedCompletion(e)
             }
-            assertTrue(database.r05cQuery("SELECT id FROM routines").isEmpty())
+            assertTrue(database.projectionQuery("SELECT id FROM routines").isEmpty())
             assertEquals(cacheBefore, harness.accountCache(database, F.ACCOUNT))
             assertEquals(rootsBefore, harness.canonicalRoots(database, F.ACCOUNT))
             assertEquals(journalBefore, harness.journalRow(database))
@@ -938,7 +931,7 @@ class PreparedSessionCompletionFenceTest {
             var completed = false
             try {
                 val outcome =
-                    engine.completePreparation(r05cGrantBarrier(lease = R05cTestLease()))
+                    engine.completePreparation(projectionGrantBarrier(lease = ProjectionTestLease()))
                 C.assertRedactedCompletion(outcome.toString())
                 completed = outcome.status == PreparedCompletionStatus.COMPLETED
             } catch (e: PreparedEngineException) {
@@ -969,12 +962,12 @@ class PreparedSessionCompletionFenceTest {
             C.queueCompletionEmptyTail(transport)
             val engine = F.engine(database, vault, PreparedEngineAuthApi(), transport, F.owner())
             assertNotNull(engine.bootstrap(stageId = F.STAGE_NEW).baseline)
-            val completed = engine.completePreparation(r05cGrantBarrier(lease = R05cTestLease()))
+            val completed = engine.completePreparation(projectionGrantBarrier(lease = ProjectionTestLease()))
             assertEquals(PreparedCompletionStatus.COMPLETED, completed.status)
             C.assertRedactedCompletion(completed.toString())
             // Closed validation errors are fixed-safe even after completion.
             try {
-                engine.completePreparation(r05cGrantBarrier(), maxPushMutations = 0)
+                engine.completePreparation(projectionGrantBarrier(), maxPushMutations = 0)
                 fail("expected INVALID_INPUT")
             } catch (e: PreparedEngineException) {
                 assertEquals(PreparedEngineFailure.INVALID_INPUT, e.failure)

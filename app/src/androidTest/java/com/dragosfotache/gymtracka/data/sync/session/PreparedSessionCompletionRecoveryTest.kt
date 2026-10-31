@@ -1,9 +1,9 @@
 package com.dragosfotache.gymtracka.data.sync.session
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.dragosfotache.gymtracka.data.sync.r05cGrantBarrier
-import com.dragosfotache.gymtracka.data.sync.r05cQuery
-import com.dragosfotache.gymtracka.data.sync.R05cTestLease
+import com.dragosfotache.gymtracka.data.sync.projectionGrantBarrier
+import com.dragosfotache.gymtracka.data.sync.projectionQuery
+import com.dragosfotache.gymtracka.data.sync.ProjectionTestLease
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -16,16 +16,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R09d independent QA: durable recovery of the Room-committed /
- * vault-unpromoted gap plus recovery refusal paths.
- *
- * Derived ONLY from docs/archive/remaining-work/R09d-task.md recovery contract plus
- * the coordinator-supplied completion contract (gap production via throwing
- * lease.close, file reopen + reopenVault harness, no-HTTP/no-write recovery
- * bounds, refusal mapping) and vetted QA-owned helpers. No production
- * declarations, diffs, Worker work, generated sources, decompiled classes
- * or schema JSON inspected. Gaps are produced by legitimate committed
- * writes, never fabricated progress.
+ * Checks durable recovery of the Room-committed, vault-unpromoted gap and refusal of incompatible
+ * completion evidence.
  */
 @RunWith(AndroidJUnit4::class)
 class PreparedSessionCompletionRecoveryTest {
@@ -41,7 +33,7 @@ class PreparedSessionCompletionRecoveryTest {
 
     @Test
     fun leaseCloseFailureGapRecoversExactPairAfterFileReopen() = runTest {
-        val dbName = "r09d-complete-gap.db"
+        val dbName = "completion-complete-gap.db"
         val database = harness.createFileDb(dbName)
         val auth = PreparedEngineAuthApi()
         val transport = PreparedEngineTransport()
@@ -53,7 +45,7 @@ class PreparedSessionCompletionRecoveryTest {
             val engine = F.engine(database, vault, auth, transport, F.owner())
             assertNotNull(engine.bootstrap(stageId = F.STAGE_NEW).baseline)
             val throwing = ThrowingCloseLease()
-            val barrier = r05cGrantBarrier(lease = throwing)
+            val barrier = projectionGrantBarrier(lease = throwing)
             // Normative order: lease close precedes the known Room return
             // and promotion, so the fault MUST surface and leave the exact
             // Room-ACTIVE / vault-PREPARED gap: never silent success.
@@ -121,7 +113,7 @@ class PreparedSessionCompletionRecoveryTest {
             C.queueCompletionEmptyTail(transport)
             val engine = F.engine(database, vault, auth, transport, F.owner())
             assertNotNull(engine.bootstrap(stageId = F.STAGE_NEW).baseline)
-            val completed = engine.completePreparation(r05cGrantBarrier(lease = R05cTestLease()))
+            val completed = engine.completePreparation(projectionGrantBarrier(lease = ProjectionTestLease()))
             assertEquals(PreparedCompletionStatus.COMPLETED, completed.status)
             C.assertVaultActiveFor(vault, 2L)
             val callsBefore = transport.capturedRequests.size
@@ -153,7 +145,7 @@ class PreparedSessionCompletionRecoveryTest {
             assertNotNull(engine.bootstrap(stageId = F.STAGE_NEW).baseline)
             assertEquals(
                 PreparedCompletionStatus.COMPLETED,
-                engine.completePreparation(r05cGrantBarrier(lease = R05cTestLease())).status,
+                engine.completePreparation(projectionGrantBarrier(lease = ProjectionTestLease())).status,
             )
             C.assertVaultActiveFor(vault, 2L)
             // Break the checkpoint: recovery must refuse without repair.
@@ -189,7 +181,7 @@ class PreparedSessionCompletionRecoveryTest {
             assertNotNull(engine.bootstrap(stageId = F.STAGE_NEW).baseline)
             assertEquals(
                 PreparedCompletionStatus.COMPLETED,
-                engine.completePreparation(r05cGrantBarrier(lease = R05cTestLease())).status,
+                engine.completePreparation(projectionGrantBarrier(lease = ProjectionTestLease())).status,
             )
             database.openHelper.writableDatabase.execSQL(
                 "UPDATE sync_account_cache SET baseline_complete = 0, projection_dirty = 1," +
@@ -223,7 +215,7 @@ class PreparedSessionCompletionRecoveryTest {
             assertNotNull(engine.bootstrap(stageId = F.STAGE_NEW).baseline)
             assertEquals(
                 PreparedCompletionStatus.COMPLETED,
-                engine.completePreparation(r05cGrantBarrier(lease = R05cTestLease())).status,
+                engine.completePreparation(projectionGrantBarrier(lease = ProjectionTestLease())).status,
             )
             // Simulate vault loss: fresh empty vault for the same Room.
             harness.clean()
@@ -256,7 +248,7 @@ class PreparedSessionCompletionRecoveryTest {
             assertNotNull(engine.bootstrap(stageId = F.STAGE_NEW).baseline)
             assertEquals(
                 PreparedCompletionStatus.COMPLETED,
-                engine.completePreparation(r05cGrantBarrier(lease = R05cTestLease())).status,
+                engine.completePreparation(projectionGrantBarrier(lease = ProjectionTestLease())).status,
             )
             // Orphan credential: a VALID record (binding and session account
             // agree) for an unrelated account. Recovery against Room ACTIVE
@@ -299,7 +291,7 @@ class PreparedSessionCompletionRecoveryTest {
             // lease.close fails the completion after Room committed.
             val throwing = ThrowingCloseLease()
             try {
-                engine.completePreparation(r05cGrantBarrier(lease = throwing))
+                engine.completePreparation(projectionGrantBarrier(lease = throwing))
                 fail("expected gap-producing close fault")
             } catch (_: PreparedEngineException) {
             } catch (_: RuntimeException) {
@@ -309,7 +301,7 @@ class PreparedSessionCompletionRecoveryTest {
             // Age the unpromoted PREPARED record out of band: expired grant
             // plus whitespace-exact pending bytes at rev1 -> rev2. Recovery
             // must phase-promote THIS record verbatim, never refresh it.
-            val whitespaceBody = "{\n  \"refreshToken\": \"r09c-refresh-001\"\n}"
+            val whitespaceBody = "{\n  \"refreshToken\": \"bootstrap-refresh-001\"\n}"
             val gapRecord = checkNotNull(vault.load().record)
             val aged = gapRecord.copy(
                 session = F.grant(accessExpires = F.FIXED_CLOCK - 60_000L),
@@ -347,7 +339,7 @@ class PreparedSessionCompletionRecoveryTest {
             )
             assertEquals(F.REFRESH, vault.load().record?.pendingRefresh?.attempt?.refreshToken?.value)
             // Empty-graph materialization stayed clean and domain-empty.
-            assertTrue(database.r05cQuery("SELECT id FROM routines").isEmpty())
+            assertTrue(database.projectionQuery("SELECT id FROM routines").isEmpty())
             val cache = checkNotNull(harness.accountCache(database, F.ACCOUNT))
             assertEquals(1L, cache.baselineComplete)
             assertEquals(0L, cache.projectionDirty)
@@ -379,7 +371,7 @@ class PreparedSessionCompletionRecoveryTest {
             // Legitimate gap first: Room ACTIVE, vault still PREPARED.
             val throwing = ThrowingCloseLease()
             try {
-                engine.completePreparation(r05cGrantBarrier(lease = throwing))
+                engine.completePreparation(projectionGrantBarrier(lease = throwing))
                 org.junit.Assert.fail("expected gap-producing close fault")
             } catch (_: PreparedEngineException) {
             } catch (_: RuntimeException) {

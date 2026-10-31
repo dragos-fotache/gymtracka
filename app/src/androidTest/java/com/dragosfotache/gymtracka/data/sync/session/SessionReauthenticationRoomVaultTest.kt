@@ -33,16 +33,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R09e independent QA: real Room + actual test-owned Android encrypted vault.
- *
- * Derived ONLY from docs/archive/remaining-work/R09e-task.md coordinator ordering/
- * crash/recovery contracts plus QA-owned harness facts (R09a/b literal
- * seeds, RoomSessionAuthority read/beginReauthentication/
- * finishReauthentication, AndroidSessionVault.createForTesting
- * namespace/alias rules, test-owned cleanup, literal journal/device SQL,
- * delayed-CAS gate, PushRunOwner internal mutex). No production
- * declarations, diffs, Worker work, generated sources, decompiled classes or
- * schema JSON inspected. Deterministic only, no sleeps.
+ * Real Room and namespaced Android encrypted-vault checks for settled same-account replacement,
+ * pending refusal and recoverable journal gaps.
  */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @RunWith(AndroidJUnit4::class)
@@ -85,7 +77,7 @@ class SessionReauthenticationRoomVaultTest {
     private fun frozenWrapper(): String {
         val inner = "{\"mutationId\":\"$MUT_FROZEN\",\"type\":\"workout.start\"," +
             "\"aggregateType\":\"workout\",\"aggregateId\":\"$WORKOUT_A\"," +
-            "\"localGeneration\":4,\"payload\":{\"id\":\"$WORKOUT_A\",\"name\":\"R09e\"}}"
+            "\"localGeneration\":4,\"payload\":{\"id\":\"$WORKOUT_A\",\"name\":\"reauthentication\"}}"
         val escaped = inner.replace("\\", "\\\\").replace("\"", "\\\"")
         return "{\"payloadVersion\":1,\"requestJson\":\"$escaped\"," +
             "\"affectedRoots\":[{\"aggregateType\":\"workout\",\"aggregateId\":\"$WORKOUT_A\"," +
@@ -99,7 +91,7 @@ class SessionReauthenticationRoomVaultTest {
     private val usedDatabases = mutableListOf<String>()
 
     private fun testNamespace(suffix: String): String {
-        val namespace = "gymtracka-test-r09e-$suffix"
+        val namespace = "gymtracka-test-reauthentication-$suffix"
         usedNamespaces.add(namespace)
         return namespace
     }
@@ -572,7 +564,7 @@ class SessionReauthenticationRoomVaultTest {
                         assertFalse("queued invocation must not complete while mutex held", job.isCompleted)
                         assertEquals(expected, authority.read())
                         assertEquals(1L, vault.load().revision)
-                        val probe = CancellationException("queued-cancel-r09e")
+                        val probe = CancellationException("queued-cancel-reauthentication")
                         job.cancel(probe)
                         assertSame(probe, done.await())
                         job.join()
@@ -592,13 +584,13 @@ class SessionReauthenticationRoomVaultTest {
         }
     }
 
-    // ---- Reopen + R09b recognition with foreign preservation ----
+    // ---- Reopen + preparation recognition with foreign preservation ----
 
     @Test
-    fun fileReopenFinalPairPlusGapPlusR09bRecognitionAndForeignPreserved() = runTest {
+    fun fileReopenFinalPairPlusGapPlusPreparationRecognitionAndForeignPreserved() = runTest {
         val namespace = testNamespace("reopen")
         deleteNamespacePath(namespace)
-        val dbName = "r09e-reopen.db"
+        val dbName = "reauthentication-reopen.db"
         val database = createFileDb(dbName)
         try {
             seedActiveAuthorityWithCompleteCache(database)
@@ -620,7 +612,7 @@ class SessionReauthenticationRoomVaultTest {
         // the close/reopen.
         val gapNamespace = testNamespace("gap")
         deleteNamespacePath(gapNamespace)
-        val gapDbName = "r09e-gap.db"
+        val gapDbName = "reauthentication-gap.db"
         val gapDb = createFileDb(gapDbName)
         val gapTransitioning = try {
             seedActiveAuthorityWithCompleteCache(gapDb)
@@ -645,7 +637,7 @@ class SessionReauthenticationRoomVaultTest {
         }
 
         // Non-destructive reopen of the finished pair: final matching
-        // PREPARING/PREPARED, R09b recognition, foreign rows intact.
+        // PREPARING/PREPARED, preparation recognition, foreign rows intact.
         val reopened = reopenFileDb(dbName)
         try {
             val vault = AndroidSessionVault.createForTesting(context, namespace)

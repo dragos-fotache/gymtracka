@@ -2,22 +2,21 @@
 
 GymTracka is a single-module (`:app`) Kotlin Android application built with Jetpack Compose, Material 3, and Room. The namespace/application ID is `com.dragosfotache.gymtracka`; the minimum SDK is 24.
 
-This file contains only rules that apply to most Android implementation tasks. Detailed Android architecture, testing, and delivery plans live in `docs/`; cross-project product behavior and backend/sync contracts live in the nested `shared-docs/` repository. Do not duplicate either here.
+This file contains technical rules for Android changes. Architecture, sync, and testing references live in `docs/`; cross-project product behavior and backend/sync contracts live in the nested `shared-docs/` repository. Do not duplicate either here.
 
 ## Read the relevant documentation
 
-Start with [`docs/README.md`](docs/README.md) for reading routes and documentation ownership. **Replace current state; append only to historical evidence.** Keep active docs free of session history; do not recursively ingest `docs/` or read `docs/archive/` for routine orientation.
+Start with [`docs/README.md`](docs/README.md) for the documentation index. Documentation describes the checked-in implementation; future features, unresolved issues, and verification gaps belong in [`docs/future-improvements.md`](docs/future-improvements.md).
 
 Android-only documentation belongs in this repository's `docs/`. The nested `shared-docs/` repository contains only material shared with the backend project. Before changing an area, read the relevant sections of its authoritative source document:
 
 - Product behavior, screen flows, UI conventions, and known limitations: [`shared-docs/docs/product-behavior.md`](shared-docs/docs/product-behavior.md).
 - Android structure, Room schema/migrations, repositories, state holders, and persistence invariants: [`docs/architecture.md`](docs/architecture.md).
-- Test layers, procedures, coverage boundaries, and recorded evidence: [`docs/testing-strategy.md`](docs/testing-strategy.md).
-- Coordinator pickup: [`docs/coordinator-handoff.md`](docs/coordinator-handoff.md), then the status/dependency summary in [`docs/remaining-work-roadmap.md`](docs/remaining-work-roadmap.md). Read [`docs/coordinator-workflow.md`](docs/coordinator-workflow.md) before delegation.
-- Sync implementation boundaries and approved future integration: [`docs/sync/implementation.md`](docs/sync/implementation.md) and task-relevant sections of [`docs/sync/integration-design.md`](docs/sync/integration-design.md).
+- Test layers, commands, fixtures, coverage boundaries, and CI: [`docs/testing-strategy.md`](docs/testing-strategy.md).
+- Current sync capabilities: [`docs/sync/README.md`](docs/sync/README.md), with focused references for [storage](docs/sync/storage.md), [engine](docs/sync/engine.md), and [authentication/recovery](docs/sync/auth-and-recovery.md).
 - Backend domain contract, proposed server schema, offline sync, and HTTP API: [`shared-docs/docs/backend-contract/README.md`](shared-docs/docs/backend-contract/README.md).
 
-Use the [progressive reading policy](docs/README.md#progressive-reading-and-context-discipline): keep pickup minimal, then read the sections/code needed for each concrete design or implementation decision. For backend or sync work, read the applicable contract sections, referenced wire schemas/types and directly needed dependencies before changing behavior; do not traverse the entire linked contract map during routine startup. Expand reading whenever an invariant or dependency requires it. The checked-in Android code is the authority for what the current app implements; the shared contract is the authority for finalized future backend/sync decisions. If implementation and documentation diverge, identify whether the change is intentional and update the affected local or shared document in the same task.
+Read the sections and code needed for each concrete decision; follow dependencies when an invariant is unclear rather than recursively reading the entire documentation tree. For backend or sync changes, read the applicable contract sections and referenced wire schemas/types before changing behavior. Android code is the authority for current implementation; the shared contract is the authority for finalized cross-project requirements. Keep affected documentation consistent with intentional changes, within the requested repository scope.
 
 ## Code navigation and search
 
@@ -31,7 +30,7 @@ Use the [progressive reading policy](docs/README.md#progressive-reading-and-cont
 - JVM tests: `./gradlew :app:testDebugUnitTest --console=plain`.
 - Debug build: `./gradlew :app:assembleDebug`.
 - Instrumentation and migration tests require an emulator/device: `./gradlew :app:connectedDebugAndroidTest --console=plain`.
-- Run the narrowest relevant tests while iterating, then the broader checks appropriate to the change. Run `git diff --check` before handoff.
+- Run the narrowest relevant tests while iterating, then the broader checks appropriate to the change. Run `git diff --check` before finishing.
 - Room/KSP has pre-existing warnings about missing foreign-key indexes on catalogue join tables. Do not treat them as a failure unless the change touches those tables.
 - For every Room entity change, bump the database version, add a data-preserving migration, update exported schema snapshots, and compile with KSP. Never use destructive migration fallback.
 
@@ -48,15 +47,15 @@ Use the [progressive reading policy](docs/README.md#progressive-reading-and-cont
 ## Persistence and domain safeguards
 
 - The bundled `app/src/main/assets/databases/gym.db` is a version-1 source asset. Room copies it into app-private storage and migrates the runtime database. Do not edit the asset to add user-data tables.
-- The runtime Room database is currently version 14. It combines the read-only bundled catalogue with custom exercises, workouts, routines, and sync storage foundations.
+- The runtime Room database is currently version 15. It combines the read-only bundled catalogue with custom exercises, workouts, routines, and sync storage foundations.
 - Bundled exercises are immutable. Creation, editing, and deletion apply only to rows marked `is_user_created`; keep repository/DAO guards intact.
 - IDs are client-generated UUID strings. Storage positions are zero-based and consecutive; UI numbering is one-based.
 - Weight is kilograms. The selected rest countdown (`rest_duration_seconds`) and actual elapsed rest (`rest_seconds`) are different values.
 - User editing is persistence-first. Workout names, notes, rest durations, sets, completion, and routine edits autosave. New mutable controls should follow this behavior.
 - Multi-row behavior must remain transactional. This includes finishing a workout, cloning/performing again, starting from or saving as a routine, adding exercises with history, relationship replacement, and deletion plus sibling renumbering.
-- Finishing requires at least one completed set, removes unfinished sets and newly empty exercises, renumbers survivors, and only then marks the workout finished.
+- Finishing requires at least one completed set with valid repetitions and weight, removes other sets and newly empty exercises, renumbers survivors, and only then marks the workout finished.
 - Replacing an exercise changes only its catalogue exercise reference. Preserve the workout-exercise ID, notes, rest duration, sets, and any timer association.
-- Discard/delete operations currently hard-delete local aggregates and rely on foreign-key cascades. Future sync changes this behavior; consult the sync contract before altering deletion semantics.
+- Account-owned root deletion retains a tombstone and captures a delete command while removing children/relationships as applicable. Local compatibility paths hard-delete and use foreign-key cascades. Preserve scoped reference guards and transactional capture; consult the sync contract before changing deletion semantics.
 - Derived values such as total volume are calculated, not stored.
 
 ## Compose and interaction rules
@@ -83,4 +82,4 @@ Use the [progressive reading policy](docs/README.md#progressive-reading-and-cont
 - Prefer focused private composables, small state-holder methods, explicit names, and narrow repository methods.
 - Keep user-visible terminology and persistence terminology precise: workout versus routine, configured rest versus recorded rest, and active versus finished.
 - Avoid unrelated cleanup. Preserve existing user changes in this working tree and inspect the diff before editing overlapping code.
-- When Android architecture, schema, tests, or delivery milestones change, update the corresponding file in `docs/`. When cross-project product behavior or sync/API decisions change, update `shared-docs/docs/`. Do not expand this guide with either.
+- Keep Android architecture, schema, sync, and testing descriptions current in `docs/`; keep proposed improvements in `docs/future-improvements.md`. Shared product and sync/API requirements belong in `shared-docs/docs/` and should be changed only within an explicitly requested shared scope. Do not duplicate those references in this guide.

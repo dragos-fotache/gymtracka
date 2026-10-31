@@ -46,11 +46,7 @@ import org.junit.Test
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 /**
- * R12b independent QA: projection-epoch driven refresh across feature states.
- *
- * Hand-written from docs/remaining-work/R12b-task.md only. Uses virtual time,
- * CompletableDeferred gates and MutableStateFlow epochs; no sleeps, no
- * production oracles, no R12a/R05 matrix repetition.
+ * projection-epoch driven refresh across feature states.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProjectionRefreshStateTest {

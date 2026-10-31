@@ -20,7 +20,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R03b QA: real local TLS endpoint tests.
+ * real local TLS endpoint tests.
  *
  * TEST-owned trusted TLS only: production adapter + actual OkHttpServiceTransport
  * send HTTPS to a locally trusted MockWebServer origin. No isolated backend,

@@ -10,7 +10,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
 /**
- * R13b same-transaction acceptance receipt writer for the existing accepted
+ * same-transaction acceptance receipt writer for the existing accepted
  * batch transaction. Uses the consolidated strict validator for full
  * journal/entry/source/authority checks with pre-write fencing and
  * post-write rechecks. Persists one immutable receipt for a validated

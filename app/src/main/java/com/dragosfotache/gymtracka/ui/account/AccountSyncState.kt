@@ -1,6 +1,10 @@
 package com.dragosfotache.gymtracka.ui.account
 
 import com.dragosfotache.gymtracka.data.sync.api.SyncApiException
+import com.dragosfotache.gymtracka.data.sync.engine.PullDeliveryStop
+import com.dragosfotache.gymtracka.data.sync.engine.PushDeliveryStop
+import com.dragosfotache.gymtracka.data.sync.engine.SnapshotDownloadStop
+import com.dragosfotache.gymtracka.data.sync.session.OrdinaryRecoveryPreparation
 import com.dragosfotache.gymtracka.data.sync.session.AccountRecoveryConfirmation
 import com.dragosfotache.gymtracka.data.sync.session.AppAccountSession
 import com.dragosfotache.gymtracka.data.sync.session.AppReconciliationResult
@@ -39,7 +43,9 @@ internal interface AccountSyncOperations {
         expectedCacheEpoch: Long,
         restartStageId: String? = null,
     ): AppReconciliationResult
-    suspend fun prepareOrdinaryRecovery(session: AppAccountSession): AccountRecoveryConfirmation?
+    suspend fun reconnect(session: AppAccountSession, expectedCacheEpoch: Long): AppReconciliationResult =
+        reconcile(session, expectedCacheEpoch)
+    suspend fun prepareOrdinaryRecovery(session: AppAccountSession): OrdinaryRecoveryPreparation
     suspend fun recoverOrdinaryRejection(
         session: AppAccountSession,
         confirmation: AccountRecoveryConfirmation,
@@ -47,7 +53,7 @@ internal interface AccountSyncOperations {
 }
 
 /**
- * R13d facade delegation for sync operations. Resolves every call against the synchronous
+ * facade delegation for sync operations. Resolves every call against the synchronous
  * exact-live binding; a queued collector alone can never authorize another handle. No DAO access.
  */
 internal class SessionAccountSyncOperations(
@@ -93,8 +99,11 @@ internal class SessionAccountSyncOperations(
 
     override suspend fun prepareOrdinaryRecovery(
         session: AppAccountSession,
-    ): AccountRecoveryConfirmation? =
-        accountState.sessionCoordinator.prepareOrdinaryRecovery(session)
+    ): OrdinaryRecoveryPreparation =
+        accountState.sessionCoordinator.prepareOrdinaryRecoveryOutcome(session)
+
+    override suspend fun reconnect(session: AppAccountSession, expectedCacheEpoch: Long): AppReconciliationResult =
+        accountState.sessionCoordinator.reconcile(session, expectedCacheEpoch, connectionRestored = true)
 
     override suspend fun recoverOrdinaryRejection(
         session: AppAccountSession,
@@ -108,6 +117,15 @@ internal enum class AccountSyncError {
     UNAVAILABLE,
     REAUTHENTICATION_REQUIRED,
     STALE_CONFIRMATION,
+    CANCELLED,
+}
+
+internal enum class AccountRecoveryStatus {
+    NOTHING_ELIGIBLE,
+    BLOCKED,
+    PREPARATION_FAILED,
+    RECOVERY_FAILED,
+    STALE_CONFIRMATION,
 }
 
 /** Foreground/edit/manual presentation snapshot. Safe advisory state only. */
@@ -117,10 +135,15 @@ internal data class AccountSyncUiState(
     val error: AccountSyncError? = null,
     val retainedStageId: String? = null,
     val recovery: AccountRecoveryConfirmation? = null,
+    val recoveryStatus: AccountRecoveryStatus? = null,
+    val successfulSyncs: Long = 0L,
+    /** Monotonic per live handle, so repeated identical failures can refresh reachability. */
+    val connectionCheckRequests: Long = 0L,
+    val retryAtMillis: Long? = null,
 )
 
 /**
- * R13d foreground/edit/manual controller. Composition-owned and inert until [start] plus
+ * foreground/edit/manual controller. Composition-owned and inert until [start] plus
  * explicit foreground lifecycle admission; construction alone performs no work and no network.
  *
  * Triggers: foreground entry with a current ACTIVE handle queues one bounded reconciliation;
@@ -152,7 +175,7 @@ internal class AccountSyncState(
     private var started: Boolean = false
     private var foreground: Boolean = false
     /**
-     * R13d raw-vs-covered demand watermarks for the exact watched handle. [observedWatermark]
+     * raw-vs-covered demand watermarks for the exact watched handle. [observedWatermark]
      * is the highest successfully-committed counter seen raw pre-debounce; [coveredWatermark]
      * is the highest counter known covered by a fresh admission/epoch read. Demand is
      * observed > covered. Both reset on handle replacement so a new handle never inherits
@@ -186,6 +209,7 @@ internal class AccountSyncState(
      * invalidations. Cleared on handle replacement and disposal.
      */
     private var entryDemand: AppAccountSession? = null
+    private var reconnectDemand: AppAccountSession? = null
     private var disposed: Boolean = false
 
     private val _uiState = MutableStateFlow(AccountSyncUiState())
@@ -247,6 +271,7 @@ internal class AccountSyncState(
                     editsJob = null
                     watchedHandle = active
                     if (watermarkHandle !== active) {
+                        if (reconnectDemand !== active) reconnectDemand = null
                         observedWatermark = 0L
                         coveredWatermark = 0L
                         entryDemand = null
@@ -313,25 +338,48 @@ internal class AccountSyncState(
         }
     }
 
-    /** Explicit recovery preparation. No-op while another operation owns the slot. */
+    /** Coalesces a fresh service reconnection with owned work, bound to the observed handle. */
+    fun connectionRestored(session: AppAccountSession) {
+        synchronized(lock) {
+            val active = (operations.state.value as? AppSessionState.Active)?.session
+            if (disposed || !started || !foreground || active !== session) return
+            reconnectDemand = session
+        }
+        requestAuto()
+    }
+
+    /** Explicit recovery preparation. Fresh facade checks decide eligibility on every press. */
     fun prepareRecovery() {
         val slot = acquireSlot() ?: return
+        synchronized(lock) {
+            if (disposed || slot != generation) return
+            if (operations.state.value is AppSessionState.Active) {
+                _uiState.value = _uiState.value.copy(busy = true, stop = null, recoveryStatus = null)
+            }
+        }
         launchOwned(slot) { gen, handle ->
-            setBusyIfCurrent(gen, true)
             try {
-                val confirmation = operations.prepareOrdinaryRecovery(handle)
-                if (!checkCurrent(gen)) return@launchOwned
-                if (confirmation == null) {
-                    finishIfCurrent(gen, stop = null, retainedStageId = null, AccountSyncError.UNAVAILABLE, null)
-                } else {
-                    finishRecoveryPrepared(gen, confirmation)
+                when (val result = operations.prepareOrdinaryRecovery(handle)) {
+                    is OrdinaryRecoveryPreparation.Prepared -> {
+                        if (!checkCurrent(gen)) return@launchOwned
+                        finishRecoveryPrepared(gen, result.confirmation)
+                    }
+                    else -> {
+                        if (!checkCurrent(gen)) return@launchOwned
+                        val status = when (result) {
+                            OrdinaryRecoveryPreparation.NothingEligible -> AccountRecoveryStatus.NOTHING_ELIGIBLE
+                            OrdinaryRecoveryPreparation.Blocked -> AccountRecoveryStatus.BLOCKED
+                            else -> AccountRecoveryStatus.PREPARATION_FAILED
+                        }
+                        finishRecoveryStatus(gen, status)
+                    }
                 }
             } catch (e: CancellationException) {
                 settleCancelled(gen)
                 throw e
             } catch (e: Exception) {
                 if (!checkCurrentSilent(gen)) return@launchOwned
-                finishIfCurrent(gen, stop = null, retainedStageId = null, mapError(e), null)
+                finishRecoveryError(gen, e, preparing = true)
             }
         }
     }
@@ -347,13 +395,13 @@ internal class AccountSyncState(
             try {
                 val result = operations.recoverOrdinaryRejection(handle, confirmation)
                 if (!checkCurrent(gen)) return@launchOwned
-                finishIfCurrent(gen, result.stop, result.retainedStageId, null, null)
+                finishReconciliationIfCurrent(gen, result)
             } catch (e: CancellationException) {
                 settleCancelled(gen)
                 throw e
             } catch (e: Exception) {
                 if (!checkCurrentSilent(gen)) return@launchOwned
-                finishIfCurrent(gen, stop = null, retainedStageId = null, mapError(e), null)
+                finishRecoveryError(gen, e, preparing = false)
             }
         }
     }
@@ -377,7 +425,7 @@ internal class AccountSyncState(
                 }
                 val result = operations.reconcile(handle, epoch, stageId)
                 if (!checkCurrent(gen)) return@launchOwned
-                finishIfCurrent(gen, result.stop, result.retainedStageId, null, null)
+                finishReconciliationIfCurrent(gen, result)
             } catch (e: CancellationException) {
                 settleCancelled(gen)
                 throw e
@@ -394,7 +442,11 @@ internal class AccountSyncState(
             if (disposed) return
             if (currentJob?.isActive != true && retiringJob == null) return
             generation += 1
+            val cancelledGeneration = generation
             retireLocked()
+            // Immediate completion may already have admitted newer foreground/edit demand.
+            if (generation != cancelledGeneration) return
+            _uiState.value = _uiState.value.copy(error = AccountSyncError.CANCELLED)
             if (retiringJob == null) {
                 _uiState.value = _uiState.value.copy(busy = false)
             }
@@ -422,6 +474,7 @@ internal class AccountSyncState(
             watchedHandle = null
             watermarkHandle = null
             entryDemand = null
+            reconnectDemand = null
             readinessHandle = null
             readinessDeferred = null
             occupied = false
@@ -471,6 +524,7 @@ internal class AccountSyncState(
             editsJob = null
             watchedHandle = handle
             if (watermarkHandle !== handle) {
+                if (reconnectDemand !== handle) reconnectDemand = null
                 observedWatermark = 0L
                 coveredWatermark = 0L
                 entryDemand = null
@@ -621,6 +675,7 @@ internal class AccountSyncState(
                 editsJob = null
                 watchedHandle = active
                 if (watermarkHandle !== active) {
+                    if (reconnectDemand !== active) reconnectDemand = null
                     observedWatermark = 0L
                     coveredWatermark = 0L
                     entryDemand = null
@@ -764,9 +819,12 @@ internal class AccountSyncState(
             try {
                 val epoch = operations.observeCacheEpoch(resolution)
                 if (!checkCurrent(gen)) return
-                val result = operations.reconcile(resolution, epoch)
+                val reconnect = synchronized(lock) {
+                    (reconnectDemand === resolution).also { if (it) reconnectDemand = null }
+                }
+                val result = if (reconnect) operations.reconnect(resolution, epoch) else operations.reconcile(resolution, epoch)
                 if (!checkCurrent(gen)) return
-                finishIfCurrent(gen, result.stop, result.retainedStageId, null, null)
+                finishReconciliationIfCurrent(gen, result)
             } catch (e: CancellationException) {
                 settleCancelled(gen)
                 throw e
@@ -825,8 +883,26 @@ internal class AccountSyncState(
     private fun setBusyIfCurrent(gen: Long, busy: Boolean) {
         synchronized(lock) {
             if (disposed || gen != generation) return
-            _uiState.value = _uiState.value.copy(busy = busy, error = null)
+            _uiState.value = _uiState.value.copy(busy = busy, stop = null, error = null, retryAtMillis = null)
         }
+    }
+
+    private fun finishReconciliationIfCurrent(gen: Long, result: AppReconciliationResult) {
+        // Transport faults and retryable HTTP errors share Transient. Push also collapses
+        // these into Deferred/backoff, so request a fresh advisory check rather than infer
+        // Offline from the sync stop. Authentication, rejection and budget stops do not.
+        val checkConnection = result.delivery?.push?.stop is PushDeliveryStop.Deferred ||
+            (result.delivery?.pull?.stop as? PullDeliveryStop.Failed)?.failure is SyncApiException.Transient ||
+            (result.snapshot?.stop as? SnapshotDownloadStop.Failed)?.failure is SyncApiException.Transient
+        finishIfCurrent(
+            gen,
+            result.stop,
+            result.retainedStageId,
+            error = null,
+            recovery = null,
+            requestConnectionCheck = checkConnection,
+            retryAtMillis = (result.delivery?.push?.stop as? PushDeliveryStop.Deferred)?.retryAfterMillis,
+        )
     }
 
     private fun finishIfCurrent(
@@ -835,6 +911,8 @@ internal class AccountSyncState(
         retainedStageId: String?,
         error: AccountSyncError?,
         recovery: AccountRecoveryConfirmation?,
+        requestConnectionCheck: Boolean = false,
+        retryAtMillis: Long? = null,
     ) {
         synchronized(lock) {
             if (disposed || gen != generation) return
@@ -842,8 +920,14 @@ internal class AccountSyncState(
                 busy = false,
                 stop = stop,
                 error = error,
-                retainedStageId = retainedStageId,
+                retainedStageId = if (error == null) retainedStageId else _uiState.value.retainedStageId,
                 recovery = recovery,
+                retryAtMillis = retryAtMillis,
+                recoveryStatus = if (stop == AppReconciliationStop.TAIL) null else _uiState.value.recoveryStatus,
+                successfulSyncs = _uiState.value.successfulSyncs +
+                    if (stop == AppReconciliationStop.TAIL && error == null) 1L else 0L,
+                connectionCheckRequests = _uiState.value.connectionCheckRequests +
+                    if (requestConnectionCheck || error == AccountSyncError.UNAVAILABLE) 1L else 0L,
             )
         }
     }
@@ -851,7 +935,45 @@ internal class AccountSyncState(
     private fun finishRecoveryPrepared(gen: Long, confirmation: AccountRecoveryConfirmation) {
         synchronized(lock) {
             if (disposed || gen != generation) return
-            _uiState.value = _uiState.value.copy(busy = false, error = null, recovery = confirmation)
+            _uiState.value = _uiState.value.copy(
+                busy = false,
+                recovery = confirmation,
+                recoveryStatus = null,
+            )
+        }
+    }
+
+    private fun finishRecoveryStatus(gen: Long, status: AccountRecoveryStatus) {
+        synchronized(lock) {
+            if (disposed || gen != generation) return
+            _uiState.value = _uiState.value.copy(
+                busy = false,
+                recovery = null,
+                recoveryStatus = status,
+                connectionCheckRequests = _uiState.value.connectionCheckRequests +
+                    if (status == AccountRecoveryStatus.PREPARATION_FAILED ||
+                        status == AccountRecoveryStatus.RECOVERY_FAILED
+                    ) 1L else 0L,
+            )
+        }
+    }
+
+    private fun finishRecoveryError(gen: Long, error: Exception, preparing: Boolean) {
+        val mapped = mapError(error)
+        if (mapped == AccountSyncError.REAUTHENTICATION_REQUIRED) {
+            synchronized(lock) {
+                if (disposed || gen != generation) return
+                _uiState.value = _uiState.value.copy(busy = false, error = mapped, recovery = null)
+            }
+        } else {
+            finishRecoveryStatus(
+                gen,
+                when {
+                    mapped == AccountSyncError.STALE_CONFIRMATION -> AccountRecoveryStatus.STALE_CONFIRMATION
+                    preparing -> AccountRecoveryStatus.PREPARATION_FAILED
+                    else -> AccountRecoveryStatus.RECOVERY_FAILED
+                },
+            )
         }
     }
 
@@ -866,6 +988,7 @@ internal class AccountSyncState(
         synchronized(lock) {
             if (disposed || gen != generation) return
             occupied = false
+            _uiState.value = _uiState.value.copy(busy = false)
         }
     }
 }

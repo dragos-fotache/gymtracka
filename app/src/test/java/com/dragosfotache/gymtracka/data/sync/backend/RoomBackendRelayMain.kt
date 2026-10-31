@@ -21,10 +21,10 @@ internal class RoomRelayControls(private val fixture: RealBackendFixture) {
     private val responseLoss = ConcurrentHashMap.newKeySet<String>()
 
     fun dispatch(request: RecordedRequest): MockResponse? {
-        if (!request.target.startsWith("/__r10__/")) return null
+        if (!request.target.startsWith("/__test__/")) return null
         if (request.method != "POST") return response(405)
         return when (request.target) {
-            "/__r10__/account" -> {
+            "/__test__/account" -> {
                 // The JDBC fixture is host-only and already checks its live run guard.
                 val account = synchronized(fixture) { fixture.newAccount() }
                 tokens.add("Bearer ${account.accessToken}")
@@ -37,7 +37,7 @@ internal class RoomRelayControls(private val fixture: RealBackendFixture) {
                         .toString(),
                 )
             }
-            "/__r10__/session" -> {
+            "/__test__/session" -> {
                 // Test-only credential setup, then a real service refresh supplies
                 // authoritative token deadlines. No domain outcome is simulated.
                 val seed = synchronized(fixture) { fixture.newAuthSession() }
@@ -58,7 +58,7 @@ internal class RoomRelayControls(private val fixture: RealBackendFixture) {
                         .toString(),
                 )
             }
-            "/__r10__/same-account-session" -> {
+            "/__test__/same-account-session" -> {
                 val authorization = request.headers["Authorization"]
                 val account = authorization?.let(accountsByAuthorization::get)
                 if (account == null) {
@@ -89,7 +89,7 @@ internal class RoomRelayControls(private val fixture: RealBackendFixture) {
                     )
                 }
             }
-            "/__r10__/lose-next-push" -> {
+            "/__test__/lose-next-push" -> {
                 val authorization = request.headers["Authorization"]
                 if (authorization == null || authorization !in tokens) {
                     response(401)

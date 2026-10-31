@@ -15,7 +15,7 @@ data class DurableOutboxRow(
 )
 
 /**
- * Focused durable-row reader for later engine use. Checks the payload column version
+ * Focused durable-row reader for engine use. Checks the payload column version
  * before content, decodes the wrapper with decodeDurableRequest (version-first), and
  * exposes the full request with its exact raw text and effects. Every row/envelope
  * identity is then compared: mutation ID, aggregate type/ID, mutation type, and local

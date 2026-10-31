@@ -35,13 +35,7 @@ import org.junit.runner.RunWith
 import org.xmlpull.v1.XmlPullParser
 
 /**
- * R04a independent QA: actual Android storage / Keystore / packaging checks.
- *
- * Derived from R04a-task encryption/Android-I/O/backup rules only. androidTest does not
- * compile src/test fixtures, so this file keeps small PRIVATE independent fixtures below
- * (canonical values only, no production symmetry). Uses test-owned isolated
- * namespaces/aliases (gymtracka-test-*) and cleans only own paths/keys/outside targets;
- * the production namespace/alias and app data are never touched. No network, no sleeps.
+ * actual Android storage / Keystore / packaging checks.
  */
 @RunWith(AndroidJUnit4::class)
 class SessionVaultAndroidTest {
@@ -116,7 +110,7 @@ class SessionVaultAndroidTest {
     private val usedOutsideDirs: MutableList<File> = mutableListOf()
 
     private fun testNamespace(suffix: String): String {
-        val namespace = "gymtracka-test-r04a-$suffix"
+        val namespace = "gymtracka-test-file-$suffix"
         usedNamespaces.add(namespace)
         return namespace
     }
@@ -903,7 +897,7 @@ class SessionVaultAndroidTest {
         run {
             val namespace = testNamespace("insidelink-ns")
             deleteNamespacePath(namespace)
-            val target = File(noBackupDir(), "gymtracka-test-r04a-linktarget-ns").also {
+            val target = File(noBackupDir(), "gymtracka-test-file-linktarget-ns").also {
                 usedNamespaces.add(it.name)
                 it.mkdirs()
             }
@@ -935,7 +929,7 @@ class SessionVaultAndroidTest {
             val namespace = testNamespace("insidelink-file")
             deleteNamespacePath(namespace)
             namespaceDir(namespace).mkdirs()
-            val target = File(noBackupDir(), "gymtracka-test-r04a-linktarget-file").also {
+            val target = File(noBackupDir(), "gymtracka-test-file-linktarget-file").also {
                 usedNamespaces.add(it.name)
                 it.mkdirs()
             }
@@ -974,7 +968,7 @@ class SessionVaultAndroidTest {
             val vault = AndroidSessionVault.createForTesting(context, namespace)
             vault.compareAndSet(0L, recordA())
             val committedBefore = vaultFile(namespace).readBytes()
-            val target = File(noBackupDir(), "gymtracka-test-r04a-linktarget-temp").also {
+            val target = File(noBackupDir(), "gymtracka-test-file-linktarget-temp").also {
                 usedNamespaces.add(it.name)
                 it.mkdirs()
             }
@@ -1074,9 +1068,9 @@ class SessionVaultAndroidTest {
 
     @Test
     fun invalidNamespaceShapesRejectedSafe() {
-        // Total length allows 64 chars within owned gymtracka-test-r04a-* naming: the
+        // Total length allows 64 chars within owned gymtracka-test-file-* naming: the
         // 64-length name is a VALID positive, the 65-length name must be rejected.
-        val valid64 = "gymtracka-test-r04a-" + "y".repeat(44)
+        val valid64 = "gymtracka-test-file-" + "y".repeat(44)
         usedNamespaces.add(valid64)
         try {
             AndroidVaultFileStorage(context, valid64)
@@ -1092,7 +1086,7 @@ class SessionVaultAndroidTest {
             "has space",
             "../escape",
             "a/b",
-            "gymtracka-test-r04a-" + "y".repeat(45),
+            "gymtracka-test-file-" + "y".repeat(45),
         )) {
             try {
                 AndroidVaultFileStorage(context, bad)

@@ -19,20 +19,10 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R09g independent QA: inert superseded-evidence model + v1/v2 codec + CAS fences.
- *
- * Derived ONLY from docs/archive/remaining-work/R09g-task.md normative archive/codec/CAS
- * contracts plus QA-owned fixtures (VaultTestFixtures, RefreshTestFixtures).
- * No production declarations, diffs, Worker work, generated sources, decompiled
- * classes or schema JSON inspected. Independent v2 bytes are built here from
- * the spec grammar, never from the production encoder; production output is
- * cross-checked against them.
- *
- * Validity rule for every archive fixture: entries have strictly increasing
- * source revisions and generations, consistent origin/account with the current
- * record, a LOWER generation than the current record, a refresh token distinct
- * from the current record, and each sourceRevision below the snapshot revision.
- * Foreign entries carry a matching foreign ServiceSession account.
+ * Checks superseded-evidence validation, v1/v2 encoding and CAS fences against independently built
+ * binary bytes. Entries have increasing source revisions/generations, matching origin/account,
+ * lower generation than the current record, distinct refresh tokens and source revisions below the
+ * snapshot revision.
  */
 class VaultSupersededEvidenceTest {
 

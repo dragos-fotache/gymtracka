@@ -45,19 +45,10 @@ import org.json.JSONObject
 import kotlin.coroutines.CoroutineContext
 
 /**
- * Inert Room-backed push-claim boundary. Serializes one account/session run,
- * selects the explicit sequence head, freezes it durably before returning its
- * exact request, and fences replay/late callback admission. A future caller can
- * perform HTTP outside Room while holding this run's ownership.
- *
- * This slice performs no HTTP, retry loops or engine work. R06b adds single-head
- * outcome classification with durable rejection, invalid-response, size and
- * retry/error persistence plus bounded backoff scheduling under the same
- * claim/session/cache fencing. R06c adds atomic single-head acknowledgment
- * committing the complete accepted canonical batch, exact frozen removal and
- * generation-scoped metadata acknowledgment in one fenced transaction.
- * Returning a claim never means delivered or converged. Production constructs
- * neither this store nor an engine.
+ * Shared process-local owner for one physical database's sync runs. Serializes explicit-head
+ * claiming, transport outside Room, canonical acknowledgment, pull, snapshots and publication.
+ * Each store transaction separately rechecks session, cache epoch and exact retained evidence.
+ * This owner is not a multiprocess lease or durable account authority.
  */
 class PushRunOwner {
     internal val mutex = Mutex()
@@ -296,6 +287,14 @@ class PushRun internal constructor(
      */
     private var currentSnapshotStage: SnapshotStage? = null
 
+    private var connectionRestored = false
+
+    /** One connection-restoration event applies only to the first head selected by this run. */
+    internal suspend fun retryConnectionHeadAfterReconnect() {
+        requireAdmitted()
+        connectionRestored = true
+    }
+
     internal fun close() {
         open = false
     }
@@ -386,6 +385,8 @@ class PushRun internal constructor(
             throw IllegalStateException("Push claim requires an active transaction")
         }
         checkCanonicalFences(database, accountId, sessionGeneration, expectedCacheEpoch, preparedPermit)
+        val restored = connectionRestored
+        connectionRestored = false
         currentCoroutineContext().ensureActive()
         if (hasSelectedSnapshotStage()) {
             currentCoroutineContext().ensureActive()
@@ -412,7 +413,9 @@ class PushRun internal constructor(
         currentCoroutineContext().ensureActive()
         if (head.sequence <= 0L ||
             head.attemptCount < 0 ||
-            (head.retryAfterMillis != null && head.retryAfterMillis < 0L)
+            (head.retryAfterMillis != null && head.retryAfterMillis < 0L) ||
+            head.retryCause !in setOf("unknown", "connection") ||
+            (head.retryCause == "connection" && (head.state != "frozen" || head.retryAfterMillis == null || head.attemptCount < 1))
         ) {
             currentCoroutineContext().ensureActive()
             return PushHeadResult.Blocked(PushBlockReason.CORRUPT)
@@ -477,7 +480,8 @@ class PushRun internal constructor(
         }
         checkLegacyImportGate(head)?.let { return it }
         val retryAt = head.retryAfterMillis
-        if (retryAt != null && retryAt > nowMillis) {
+        val resetConnectionDelay = restored && head.retryCause == "connection"
+        if (retryAt != null && retryAt > nowMillis && !resetConnectionDelay) {
             currentCoroutineContext().ensureActive()
             return PushHeadResult.Deferred(retryAt)
         }
@@ -489,11 +493,17 @@ class PushRun internal constructor(
             head.state,
             head.attemptCount,
             newAttemptCount,
+            resetConnectionDelay,
         )
         if (updated != 1) {
             throw IllegalStateException("Push head changed during transaction")
         }
-        val frozen = head.copy(state = "frozen", attemptCount = newAttemptCount)
+        val frozen = head.copy(
+            state = "frozen",
+            attemptCount = newAttemptCount,
+            retryAfterMillis = if (resetConnectionDelay) null else head.retryAfterMillis,
+            retryCause = if (resetConnectionDelay) "unknown" else head.retryCause,
+        )
         if (dao.getOutboxHead(accountId) != frozen) {
             throw IllegalStateException("Push head changed during transaction")
         }
@@ -511,7 +521,7 @@ class PushRun internal constructor(
     }
 
     /**
-     * R13b legacy-import send gate. No legacy journal means ordinary
+     * legacy-import send gate. No legacy journal means ordinary
      * behavior. With a journal, strictly validates settlement state
      * (progress anchor, consecutive accepted prefix, outbox correspondence,
      * frozen source/entries) before any HTTP/freeze effect beyond the
@@ -738,6 +748,7 @@ class PushRun internal constructor(
                                     errorCode = null,
                                     errorMessage = null,
                                     retryAfterMillis = retryAt,
+                                    retryCause = if (failure.connectionFailure && failure.retryAfterMillis == null) "connection" else "unknown",
                                 )
                                 PushFailureResult.RetryScheduled(retryAt)
                             }
@@ -810,7 +821,7 @@ class PushRun internal constructor(
 
     /**
      * Atomically acknowledges one complete accepted canonical batch for the exact
-     * claimed head: applies the whole batch with R05b arbitration/family
+     * claimed head: applies the whole batch with canonical batches arbitration/family
      * validation, acknowledges generation-scoped local root metadata, removes
      * only the selected exact frozen row, and marks the account projection dirty.
      * The accepted snapshot is data, not write authority: its private origin
@@ -990,6 +1001,7 @@ class PushRun internal constructor(
         errorCode: String?,
         errorMessage: String?,
         retryAfterMillis: Long?,
+        retryCause: String = "unknown",
     ) {
         if (!database.inTransaction()) {
             throw IllegalStateException("Push outcome requires an active transaction")
@@ -1007,6 +1019,7 @@ class PushRun internal constructor(
             errorCode = errorCode,
             errorMessage = errorMessage,
             retryAfterMillis = retryAfterMillis,
+            retryCause = retryCause,
         )
         if (updated != 1) {
             throw IllegalStateException("Push head changed during transaction")
@@ -1016,6 +1029,7 @@ class PushRun internal constructor(
             errorCode = errorCode,
             errorMessage = errorMessage,
             retryAfterMillis = retryAfterMillis,
+            retryCause = retryCause,
         )
         val headAfter = database.syncDao().getOutboxHead(accountId)
         currentCoroutineContext().ensureActive()
@@ -1028,7 +1042,7 @@ class PushRun internal constructor(
     }
 
     /**
-     * R13d confirmed ordinary discard. In one fenced Room transaction deletes only the
+     * confirmed ordinary discard. In one fenced Room transaction deletes only the
      * caller-captured exact ordinary rows, resets the selected pull cursor to null while
      * preserving recorded last-success, and marks the projection dirty. The caller compared
      * the complete captured rows/authority/epoch/legacy proof immediately before this call;

@@ -42,7 +42,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * R03a QA: response ownership, streaming, cancellation and strict body policy.
+ * response ownership, streaming, cancellation and strict body policy.
  * Test-owned scripted [Call.Factory] seam only; no real network.
  * Scripted races use [CompletableDeferred] gates with bounded [withTimeout];
  * no threads, sleeps or delay polling.
@@ -327,6 +327,7 @@ class ServiceHttpOwnershipTest {
             }
             fail("I/O failure must throw")
         } catch (e: SyncApiException.Transient) {
+            assertTrue(e.connectionFailure)
             assertTrue(e.cause == null)
             assertTrue(e.suppressed.isEmpty())
         }

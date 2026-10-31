@@ -2,9 +2,9 @@ package com.dragosfotache.gymtracka.data.sync.session
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.dragosfotache.gymtracka.data.sync.engine.PullDeliveryStop
-import com.dragosfotache.gymtracka.data.sync.r05cGrantBarrier
-import com.dragosfotache.gymtracka.data.sync.r05cQuery
-import com.dragosfotache.gymtracka.data.sync.R05cTestLease
+import com.dragosfotache.gymtracka.data.sync.projectionGrantBarrier
+import com.dragosfotache.gymtracka.data.sync.projectionQuery
+import com.dragosfotache.gymtracka.data.sync.ProjectionTestLease
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -16,18 +16,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R09d independent QA: inert completed preparation and exact vault promotion.
- *
- * Derived ONLY from docs/archive/remaining-work/R09d-task.md normative API/safety
- * matrix plus the coordinator-supplied completion contract (session-package
- * result/status types, SyncDeliveryResult field shapes, barrier request
- * semantics, frame-consumption sequence, failure-class mapping) and vetted
- * QA-owned helpers (PreparedEngineFixtures/Harness/Transport/AuthApi, R05c
- * lease/barrier fakes, completion support above). No production
- * declarations, diffs, Worker work, generated sources, decompiled classes
- * or schema JSON inspected. Each test proves a distinct completion defect
- * with independent durable oracles; R09a/b/c matrices are reused, never
- * duplicated.
+ * Checks complete private preparation and exact vault phase promotion through real storage,
+ * preserving grant and pending-request evidence.
  */
 @RunWith(AndroidJUnit4::class)
 class PreparedSessionCompletionTest {
@@ -59,8 +49,8 @@ class PreparedSessionCompletionTest {
             val tailBefore = harness.syncState(database, F.ACCOUNT)
             assertNotNull(tailBefore)
 
-            val lease = R05cTestLease()
-            val barrier = r05cGrantBarrier(lease = lease)
+            val lease = ProjectionTestLease()
+            val barrier = projectionGrantBarrier(lease = lease)
             val result = engine.completePreparation(barrier)
             assertEquals(PreparedCompletionStatus.COMPLETED, result.status)
             val delivery = checkNotNull(result.delivery)
@@ -119,8 +109,8 @@ class PreparedSessionCompletionTest {
             assertNotNull(bootstrapped.baseline)
             val cacheBefore = checkNotNull(harness.accountCache(database, F.ACCOUNT))
 
-            val lease = R05cTestLease()
-            val barrier = r05cGrantBarrier(lease = lease)
+            val lease = ProjectionTestLease()
+            val barrier = projectionGrantBarrier(lease = lease)
             val result = engine.completePreparation(barrier)
             assertEquals(PreparedCompletionStatus.COMPLETED, result.status)
             val delivery = checkNotNull(result.delivery)
@@ -136,7 +126,7 @@ class PreparedSessionCompletionTest {
             val routeA = roots.single { it.aggregateId == F.ROUTE_A }
             assertEquals(2L, routeA.serverRevision)
             assertTrue(roots.any { it.aggregateId == F.ROUTE_B && it.serverRevision == 1L })
-            val domainA = database.r05cQuery(
+            val domainA = database.projectionQuery(
                 "SELECT name, account_id, server_revision, sync_state FROM routines WHERE id = ?",
                 arrayOf(F.ROUTE_A),
             ).single()
@@ -144,7 +134,7 @@ class PreparedSessionCompletionTest {
             assertEquals(F.ACCOUNT, domainA["account_id"])
             assertEquals(2L, domainA["server_revision"])
             assertEquals("synced", domainA["sync_state"])
-            val domainB = database.r05cQuery(
+            val domainB = database.projectionQuery(
                 "SELECT name, account_id FROM routines WHERE id = ?",
                 arrayOf(F.ROUTE_B),
             ).single()
@@ -180,8 +170,8 @@ class PreparedSessionCompletionTest {
             assertNotNull(engine.bootstrap(stageId = F.STAGE_NEW).baseline)
             val journalBefore = harness.journalRow(database)
             val deviceBefore = harness.deviceRow(database)
-            val lease = R05cTestLease()
-            val barrier = r05cGrantBarrier(lease = lease)
+            val lease = ProjectionTestLease()
+            val barrier = projectionGrantBarrier(lease = lease)
 
             val badCalls: List<suspend () -> Unit> = listOf(
                 { engine.completePreparation(barrier, maxPushMutations = 0) },
@@ -230,7 +220,7 @@ class PreparedSessionCompletionTest {
             val transport = PreparedEngineTransport()
             val engine = F.engine(database, vault, PreparedEngineAuthApi(), transport, F.owner())
             try {
-                engine.completePreparation(r05cGrantBarrier())
+                engine.completePreparation(projectionGrantBarrier())
                 fail("expected missing credentials to fail closed")
             } catch (e: PreparedEngineException) {
                 assertEquals(PreparedEngineFailure.NOT_PREPARED, e.failure)
@@ -254,7 +244,7 @@ class PreparedSessionCompletionTest {
             harness.reservePreparedPair(database, vault)
             val transport = PreparedEngineTransport()
             val engine = F.engine(database, vault, PreparedEngineAuthApi(), transport, F.owner())
-            val result = engine.completePreparation(r05cGrantBarrier())
+            val result = engine.completePreparation(projectionGrantBarrier())
             assertEquals(PreparedCompletionStatus.NOT_READY, result.status)
             assertNull(result.delivery)
             C.assertRedactedCompletion(result.toString())
@@ -286,7 +276,7 @@ class PreparedSessionCompletionTest {
             val headerBefore = harness.stageHeader(database, F.STAGE_RETAINED)
             assertNotNull(headerBefore)
 
-            val result = engine.completePreparation(r05cGrantBarrier())
+            val result = engine.completePreparation(projectionGrantBarrier())
             assertEquals(PreparedCompletionStatus.NOT_READY, result.status)
             C.assertRedactedCompletion(result.toString())
             // Retained stage is preserved, never adopted or abandoned here.
@@ -310,7 +300,7 @@ class PreparedSessionCompletionTest {
             transport.queueOk(C.pushRejectionBody(F.OUTBOX_NEWER_MUT))
             val engine = F.engine(database, vault, PreparedEngineAuthApi(), transport, F.owner())
             assertNotNull(engine.bootstrap(stageId = F.STAGE_NEW).baseline)
-            // A NEW pending head IS transmitted by the actual R07 push driver;
+            // A NEW pending head IS transmitted by the actual shared delivery push driver;
             // its rejection is then durably retained and prevents completion.
             harness.seedOutboxRow(
                 database,
@@ -322,7 +312,7 @@ class PreparedSessionCompletionTest {
                 state = "pending",
                 payloadJson = F.durablePayloadJson(F.OUTBOX_NEWER_MUT, F.OUTBOX_WORKOUT, 4L),
             )
-            val result = engine.completePreparation(r05cGrantBarrier())
+            val result = engine.completePreparation(projectionGrantBarrier())
             assertEquals(PreparedCompletionStatus.NOT_READY, result.status)
             C.assertRedactedCompletion(result.toString())
             // Exactly one actual push transmission, then the stop: no pull
@@ -370,7 +360,7 @@ class PreparedSessionCompletionTest {
                 payloadJson = F.durablePayloadJson(F.OUTBOX_REJECTED_MUT, F.OUTBOX_WORKOUT, 1L),
             )
             val callsBefore = transport.capturedRequests.size
-            val result = engine.completePreparation(r05cGrantBarrier())
+            val result = engine.completePreparation(projectionGrantBarrier())
             assertEquals(PreparedCompletionStatus.NOT_READY, result.status)
             // A rejected predecessor protects the run: no pull around it, no
             // empty-summary inference of a tail.
@@ -395,8 +385,8 @@ class PreparedSessionCompletionTest {
             C.queueCompletionEmptyTail(transport)
             val engine = F.engine(database, vault, PreparedEngineAuthApi(), transport, F.owner())
             assertNotNull(engine.bootstrap(stageId = F.STAGE_NEW).baseline)
-            val lease = R05cTestLease()
-            val barrier = r05cGrantBarrier(
+            val lease = ProjectionTestLease()
+            val barrier = projectionGrantBarrier(
                 lease = lease,
                 onAcquire = {
                     harness.seedOutboxRow(
@@ -437,26 +427,26 @@ class PreparedSessionCompletionTest {
             C.queueCompletionEmptyTail(transport)
             val engine = F.engine(database, vault, PreparedEngineAuthApi(), transport, F.owner())
             assertNotNull(engine.bootstrap(stageId = F.STAGE_NEW).baseline)
-            // Corrupt retained stage seeded through the vetted R09a column
+            // Corrupt retained stage seeded through the vetted Room authority column
             // contract (same garbage shape as the bootstrap precedent).
             database.openHelper.writableDatabase.execSQL(
                 "INSERT INTO sync_snapshot_stages (stage_id, account_id, session_generation, cache_epoch," +
                     " page_limit, source_state_present, source_cursor, source_last_success_millis," +
                     " source_baseline_complete, baseline_cursor, next_page_token, phase," +
                     " page_count, record_count)" +
-                    " VALUES (?, ?, 999, 0, 200, 0, NULL, NULL, 0, NULL, 'r09c-foreign-token', 'r09c-garbage', 3, 7)",
+                    " VALUES (?, ?, 999, 0, 200, 0, NULL, NULL, 0, NULL, 'bootstrap-foreign-token', 'bootstrap-garbage', 3, 7)",
                 arrayOf<Any?>(F.STAGE_CORRUPT, F.ACCOUNT),
             )
             database.openHelper.writableDatabase.execSQL(
                 "INSERT INTO sync_snapshot_records (stage_id, aggregate_type, aggregate_id," +
                     " server_revision, canonical_json, page_number, record_position)" +
-                    " VALUES (?, 'workout', 'r09c-garbage-root', 1, '{\"id\":\"garbage\"}', 0, 0)",
+                    " VALUES (?, 'workout', 'bootstrap-garbage-root', 1, '{\"id\":\"garbage\"}', 0, 0)",
                 arrayOf<Any?>(F.STAGE_CORRUPT),
             )
             val corruptBefore = harness.stageFullRow(database, F.STAGE_CORRUPT)
             assertNotNull(corruptBefore)
             try {
-                engine.completePreparation(r05cGrantBarrier(lease = R05cTestLease()))
+                engine.completePreparation(projectionGrantBarrier(lease = ProjectionTestLease()))
                 fail("expected corrupt stage to fail closed, never complete")
             } catch (e: PreparedEngineException) {
                 assertEquals(PreparedEngineFailure.AUTHORITY_UNAVAILABLE, e.failure)
@@ -486,15 +476,15 @@ class PreparedSessionCompletionTest {
             // page would finish at the tail (never reached under budget).
             transport.queueOk(
                 "{\"batches\":[{\"batchId\":\"c1000000-2222-4222-8222-222222222222\"," +
-                    "\"cursor\":\"r09d-mid\",\"changes\":" +
+                    "\"cursor\":\"completion-mid\",\"changes\":" +
                     "[${F.routineUpsertJson(F.ROUTE_A, "Mid cloud draft", 1)}]}]," +
-                    "\"nextCursor\":\"r09d-mid\",\"hasMore\":true}",
+                    "\"nextCursor\":\"completion-mid\",\"hasMore\":true}",
             )
             transport.queueOk(C.TAIL_EMPTY_PULL_BODY)
             val engine = F.engine(database, vault, PreparedEngineAuthApi(), transport, F.owner())
             assertNotNull(engine.bootstrap(stageId = F.STAGE_NEW).baseline)
             val result = engine.completePreparation(
-                r05cGrantBarrier(lease = R05cTestLease()),
+                projectionGrantBarrier(lease = ProjectionTestLease()),
                 maxPullPages = 1,
             )
             assertEquals(PreparedCompletionStatus.NOT_READY, result.status)
@@ -503,8 +493,8 @@ class PreparedSessionCompletionTest {
             val roots = harness.canonicalRoots(database, F.ACCOUNT)
             assertEquals(1, roots.size)
             assertEquals(1L, roots.single { it.aggregateId == F.ROUTE_A }.serverRevision)
-            assertEquals("r09d-mid" to F.FIXED_CLOCK, harness.syncState(database, F.ACCOUNT))
-            assertTrue(database.r05cQuery("SELECT id FROM routines").isEmpty())
+            assertEquals("completion-mid" to F.FIXED_CLOCK, harness.syncState(database, F.ACCOUNT))
+            assertTrue(database.projectionQuery("SELECT id FROM routines").isEmpty())
             C.assertRoomPreparingRev1(harness, database)
             C.assertVaultPreparedRev1(vault)
             engine.invalidate()
@@ -526,7 +516,7 @@ class PreparedSessionCompletionTest {
             assertNotNull(engine.bootstrap(stageId = F.STAGE_NEW).baseline)
             val journalBefore = harness.journalRow(database)
             val deviceBefore = harness.deviceRow(database)
-            val result = engine.completePreparation(r05cGrantBarrier(lease = R05cTestLease()))
+            val result = engine.completePreparation(projectionGrantBarrier(lease = ProjectionTestLease()))
             assertEquals(PreparedCompletionStatus.NOT_READY, result.status)
             C.assertRedactedCompletion(result.toString())
             // Typed transport stop preserved: failed pull attempted once,
@@ -564,7 +554,7 @@ class PreparedSessionCompletionTest {
             // Authorized test-only setup (same identity/operation): the
             // PREPARED record gains a whitespace-exact pending attempt that
             // completion admission itself observes.
-            val whitespaceBody = "{\n  \"refreshToken\": \"r09c-refresh-001\"\n}"
+            val whitespaceBody = "{\n  \"refreshToken\": \"bootstrap-refresh-001\"\n}"
             val admitted = checkNotNull(vault.load().record)
             val withPending = admitted.copy(
                 pendingRefresh = VaultPendingRefresh(
@@ -574,8 +564,8 @@ class PreparedSessionCompletionTest {
             )
             assertEquals(2L, vault.compareAndSet(1L, withPending).revision)
 
-            val lease = R05cTestLease()
-            val barrier = r05cGrantBarrier(lease = lease)
+            val lease = ProjectionTestLease()
+            val barrier = projectionGrantBarrier(lease = lease)
             val result = engine.completePreparation(barrier)
             assertEquals(PreparedCompletionStatus.COMPLETED, result.status)
             val delivery = checkNotNull(result.delivery)
@@ -589,7 +579,7 @@ class PreparedSessionCompletionTest {
             assertEquals(F.REFRESH_KEY, auth.seenAttempts.single().idempotencyKey)
             F.assertPull(transport.capturedRequests[3], F.TAIL, access = F.ACCESS_ROTATED)
             // Real materialized domain graph under the rotated session.
-            val domainA = database.r05cQuery(
+            val domainA = database.projectionQuery(
                 "SELECT name, account_id, server_revision, sync_state FROM routines WHERE id = ?",
                 arrayOf(F.ROUTE_A),
             ).single()
@@ -638,7 +628,7 @@ class PreparedSessionCompletionTest {
             val journalBefore = harness.journalRow(database)
             val rootsBefore = harness.canonicalRoots(database, F.ACCOUNT)
             try {
-                engine.completePreparation(r05cGrantBarrier(lease = R05cTestLease()))
+                engine.completePreparation(projectionGrantBarrier(lease = ProjectionTestLease()))
                 fail("expected physical collision to fail closed")
             } catch (e: PreparedEngineException) {
                 C.assertClosedCompletion(e)
@@ -647,7 +637,7 @@ class PreparedSessionCompletionTest {
             // exact bytes survive byte-identical.
             assertEquals(journalBefore, harness.journalRow(database))
             assertEquals(rootsBefore, harness.canonicalRoots(database, F.ACCOUNT))
-            val survivor = database.r05cQuery(
+            val survivor = database.projectionQuery(
                 "SELECT name, account_id, server_revision, local_generation, sync_state," +
                     " deleted_at_millis FROM routines WHERE id = ?",
                 arrayOf(F.ROUTE_A),

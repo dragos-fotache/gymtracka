@@ -36,24 +36,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R09f independent QA: real Room + actual test-owned Android encrypted
- * file/Keystore vault for exact-pending-refresh reconciliation.
- *
- * Derived ONLY from docs/archive/remaining-work/R09f-task.md normative API/protocol/
- * crash contracts plus QA-owned harness facts (R09e literal journal/device/
- * retained seeds, RoomSessionAuthority read/beginReauthentication,
- * AndroidSessionVault.createForTesting namespace/alias rules, test-owned
- * cleanup, delayed-CAS gate, PushRunOwner internal mutex, refresh-only
- * PreparedEngineAuthApi). No production declarations, diffs, Worker work,
- * generated sources, decompiled classes or schema JSON inspected.
- * Deterministic only, no sleeps. Clock/UUID providers throw AssertionError,
- * proving zero calls. Cleanup touches ONLY own namespaces/DBs; reopen never
- * deletes.
- *
- * Only the normative external API is referenced: suspend
- * reconcilePendingRefresh(expected, refreshCoordinator) and
- * SettledSessionObservation(room, vaultRevision). Each test proves a distinct
- * integration obligation; representative cases only, no exhaustive matrix.
+ * Real Room and namespaced Android encrypted-file/Keystore checks for exact pending-refresh
+ * reconciliation and durable reopen.
  */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 @RunWith(AndroidJUnit4::class)
@@ -108,7 +92,7 @@ class SessionPendingRefreshRoomVaultTest {
     private fun frozenWrapper(): String {
         val inner = "{\"mutationId\":\"$MUT_FROZEN\",\"type\":\"workout.start\"," +
             "\"aggregateType\":\"workout\",\"aggregateId\":\"$WORKOUT_A\"," +
-            "\"localGeneration\":4,\"payload\":{\"id\":\"$WORKOUT_A\",\"name\":\"R09f\"}}"
+            "\"localGeneration\":4,\"payload\":{\"id\":\"$WORKOUT_A\",\"name\":\"pending-refresh\"}}"
         val escaped = inner.replace("\\", "\\\\").replace("\"", "\\\"")
         return "{\"payloadVersion\":1,\"requestJson\":\"$escaped\"," +
             "\"affectedRoots\":[{\"aggregateType\":\"workout\",\"aggregateId\":\"$WORKOUT_A\"," +
@@ -122,7 +106,7 @@ class SessionPendingRefreshRoomVaultTest {
     private val usedDatabases = mutableListOf<String>()
 
     private fun testNamespace(suffix: String): String {
-        val namespace = "gymtracka-test-r09f-$suffix"
+        val namespace = "gymtracka-test-pending-refresh-$suffix"
         usedNamespaces.add(namespace)
         return namespace
     }
@@ -283,8 +267,8 @@ class SessionPendingRefreshRoomVaultTest {
             origin = originA(),
             vault = vault,
             authApi = auth,
-            clockMillis = { throw AssertionError("R09f replay must not read the clock") },
-            uuidProvider = { throw AssertionError("R09f replay must not mint UUIDs") },
+            clockMillis = { throw AssertionError("pending-refresh replay must not read the clock") },
+            uuidProvider = { throw AssertionError("pending-refresh replay must not mint UUIDs") },
             mutex = credentialMutex,
         )
         return LivePair(reauth, refresh, runOwner, credentialMutex)
@@ -388,7 +372,7 @@ class SessionPendingRefreshRoomVaultTest {
     }
 
     /**
-     * Test-only non-copying cancellation probe mirroring the QA-owned R09e
+     * Test-only non-copying cancellation probe mirroring the test reauthentication
      * harness: exact identity survives coroutine stack recovery because
      * [createCopy] returns null. Plain CancellationException risks a copy on
      * the recovery path, which would break assertSame; coroutine debug
@@ -401,10 +385,10 @@ class SessionPendingRefreshRoomVaultTest {
         override fun createCopy(): NoncopyingProbeCancellation? = null
     }
 
-    // ---- Happy replay then a separate R09e replacement on the real pair ----
+    // ---- Happy replay then a separate reauthentication replacement on the real pair ----
 
     @Test
-    fun happyExactReplayThenSeparateR09eTransitionPreservesRetained() = runTest {
+    fun happyExactReplayThenSeparateReauthenticationPreservesRetained() = runTest {
         val namespace = testNamespace("happy")
         deleteNamespacePath(namespace)
         val database = openInMemoryDb()
@@ -447,7 +431,7 @@ class SessionPendingRefreshRoomVaultTest {
             assertFalse(rendered.contains("opaque-refresh-replayed"))
             assertFalse(rendered.contains("opaque-refresh-old"))
 
-            // A SEPARATE R09e supplied-grant replacement on the SAME shared
+            // A SEPARATE reauthentication supplied-grant replacement on the SAME shared
             // runOwner/mutex/coordinator freshly reads/admits the settled
             // pair; only journal/device may change afterwards.
             val settled = authority.read()
@@ -476,7 +460,7 @@ class SessionPendingRefreshRoomVaultTest {
     fun transientFailureRetainsPendingThenNonDestructiveReopenRetriesExact() = runTest {
         val namespace = testNamespace("retry")
         deleteNamespacePath(namespace)
-        val dbName = "r09f-retry.db"
+        val dbName = "pending-refresh-retry.db"
         val database = createFileDb(dbName)
         val auth = PreparedEngineAuthApi()
         try {
@@ -562,7 +546,7 @@ class SessionPendingRefreshRoomVaultTest {
                     }
                 }
                 entered.await()
-                val probe = NoncopyingProbeCancellation("http-r09f-cancel")
+                val probe = NoncopyingProbeCancellation("http-pending-refresh-cancel")
                 job.cancel(probe)
                 release.complete(Unit)
                 // Exact cancellation identity escapes the HTTP seam (the
@@ -604,7 +588,7 @@ class SessionPendingRefreshRoomVaultTest {
             val auth = PreparedEngineAuthApi()
             val pair = coordinators(authority, vault, auth)
             val expected = authority.read()
-            // A real R09e reservation lands while the single HTTP send is
+            // A real reauthentication reservation lands while the single HTTP send is
             // admitted: old Room authorization is no longer valid.
             auth.refreshGate = {
                 authority.beginReauthentication(authority.read(), originA(), OP_NEW)
@@ -723,7 +707,7 @@ class SessionPendingRefreshRoomVaultTest {
                 }
                 val committed = gate.committedEntered.await()
                 assertEquals(2L, committed.revision)
-                val probe = NoncopyingProbeCancellation("lostreturn-cancel-r09f")
+                val probe = NoncopyingProbeCancellation("lostreturn-cancel-pending-refresh")
                 job.cancel(probe)
                 gate.release.complete(Unit)
                 assertSame(probe, done.await())
@@ -752,7 +736,7 @@ class SessionPendingRefreshRoomVaultTest {
     fun fileReopenAfterSuccessPreservesSettledPair() = runTest {
         val namespace = testNamespace("final")
         deleteNamespacePath(namespace)
-        val dbName = "r09f-final.db"
+        val dbName = "pending-refresh-final.db"
         val database = createFileDb(dbName)
         // Baseline stored OUTSIDE the closed DB scope: try-as-expression
         // carries the retained snapshot past close for the reopen comparison.

@@ -36,14 +36,6 @@ import javax.crypto.spec.SecretKeySpec
  * reachable, and its `gymtracka_android_test_guard` table must hold this run's
  * canonical UUID.
  *
- * Per-test accounts are minted exactly as the backend's own HTTP tests do: one
- * transaction inserting a fresh account/session row plus an HMAC-SHA256 access
- * credential (15-minute lifetime, the production access duration) derived from
- * the ephemeral test key with the backend's `GymTracka auth HMAC v1` label.
- * Every HTTP call is still authenticated by the real `SessionAuthorization`;
- * Google is not involved in this slice. Tokens live only in memory and never
- * appear in assertions, logs, or failure text.
- *
  * Bundled catalogue IDs resolve from the actual pinned seed via read-only SQL;
  * domain mutations go through HTTP only, never SQL writes.
  */

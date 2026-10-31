@@ -4,8 +4,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.dragosfotache.gymtracka.data.sync.model.AggregateType
 import com.dragosfotache.gymtracka.data.sync.model.MutationKind
 import com.dragosfotache.gymtracka.data.sync.model.MutationPayload
-import com.dragosfotache.gymtracka.data.sync.r05cGrantBarrier
-import com.dragosfotache.gymtracka.data.sync.R05cTestLease
+import com.dragosfotache.gymtracka.data.sync.projectionGrantBarrier
+import com.dragosfotache.gymtracka.data.sync.ProjectionTestLease
 import com.dragosfotache.gymtracka.data.sync.store.CanonicalStore
 import com.dragosfotache.gymtracka.data.sync.store.ProjectionStore
 import com.dragosfotache.gymtracka.data.sync.store.PushRunOwner
@@ -31,14 +31,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R09c independent QA: process/identity fencing around the prepared engine.
- *
- * Derived ONLY from docs/remaining-work/R09c-task.md admission/lease/fence
- * contracts and its "QA harness facts" section plus QA-owned harness facts
- * (see PreparedSessionEngineTestSupport header). No production declarations,
- * diffs, Worker work, generated sources, decompiled classes or schema JSON
- * inspected. Each test proves a distinct fail-closed seam; the detailed
- * vault/refresh matrix is reused, never duplicated.
+ * process/identity fencing around the prepared engine.
  */
 @RunWith(AndroidJUnit4::class)
 class PreparedSessionEngineFenceTest {
@@ -205,11 +198,11 @@ class PreparedSessionEngineFenceTest {
             val vault = harness.newVault()
             harness.reservePreparedPair(database, vault)
             val journalBefore = harness.journalRow(database)
-            // Test-owned AFTER-write tripwire (accepted QA trigger pattern):
+            // Test-owned AFTER-write tripwire (accepted tests trigger pattern):
             // any stage-record write bumps the journal revision inside the
             // same transaction.
             database.openHelper.writableDatabase.execSQL(
-                "CREATE TRIGGER r09c_tamper AFTER INSERT ON sync_snapshot_records " +
+                "CREATE TRIGGER bootstrap_tamper AFTER INSERT ON sync_snapshot_records " +
                     "BEGIN UPDATE sync_session_authority SET revision = revision + 1 WHERE id = 1; END",
             )
             val transport = PreparedEngineTransport()
@@ -254,7 +247,7 @@ class PreparedSessionEngineFenceTest {
             // Tripwire on the canonical commit instead: the downloaded terminal
             // stage/pages stand while the baseline post-write fails.
             database.openHelper.writableDatabase.execSQL(
-                "CREATE TRIGGER r09c_tamper_base AFTER INSERT ON sync_canonical_roots " +
+                "CREATE TRIGGER bootstrap_tamper_base AFTER INSERT ON sync_canonical_roots " +
                     "BEGIN UPDATE sync_session_authority SET revision = revision + 1 WHERE id = 1; END",
             )
             val transport = PreparedEngineTransport()
@@ -570,7 +563,7 @@ class PreparedSessionEngineFenceTest {
                         changed = true,
                         extraRoots = emptyList(),
                     ) {
-                        MutationPayload.WorkoutStart(F.OUTBOX_WORKOUT, "R09c Local", F.FIXED_CLOCK)
+                        MutationPayload.WorkoutStart(F.OUTBOX_WORKOUT, "bootstrap Local", F.FIXED_CLOCK)
                     }
                 }
                 fail("ordinary SyncStore must refuse PREPARING")
@@ -593,10 +586,10 @@ class PreparedSessionEngineFenceTest {
             // closed once, StaleSessionException, domain and cache unchanged.
             // (Only the private PushRun.publishProjection path rejects before
             // the barrier; the coordinator exposes no callback to invoke it,
-            // so final barrier review stays coordinator-owned.)
+
             var acquired = 0
-            val lease = R05cTestLease()
-            val barrier = r05cGrantBarrier(lease = lease, onAcquire = { acquired += 1 })
+            val lease = ProjectionTestLease()
+            val barrier = projectionGrantBarrier(lease = lease, onAcquire = { acquired += 1 })
             try {
                 ProjectionStore(database, RepositorySession(F.ACCOUNT, 1L), barrier).publish(0L)
                 fail("ordinary ProjectionStore must refuse PREPARING")

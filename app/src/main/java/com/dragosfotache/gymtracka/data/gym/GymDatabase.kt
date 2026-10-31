@@ -36,7 +36,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SyncLegacyImportProgressEntity::class,
         SyncLegacyImportAcceptanceEntity::class,
     ],
-    version = 14,
+    version = 15,
     exportSchema = true,
 )
 @TypeConverters(GymTypeConverters::class)
@@ -329,6 +329,7 @@ abstract class GymDatabase : RoomDatabase() {
             SessionAuthorityStorageMigration,
             LegacyImportStorageMigration,
             LegacyImportProgressMigration,
+            ConnectionRetryMigration,
         )
 
     }

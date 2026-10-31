@@ -9,7 +9,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
 /**
- * R13b pre-send settlement/consent gate for generic push paths. Uses the
+ * pre-send settlement/consent gate for generic push paths. Uses the
  * consolidated strict validator for full journal/entry/source/authority
  * checks with pre-write fencing. A missing journal with any orphan
  * entries/progress/receipts fails closed; no migration at all passes.

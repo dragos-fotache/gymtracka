@@ -49,8 +49,8 @@ import kotlinx.coroutines.sync.withLock
 /**
  * Inert explicitly constructed private prepared-session engine coordinator.
  * Freshly admits one matching private PREPARING Room / PREPARED vault pair
- * through the R09b reader, then reuses R08 complete snapshot establishment
- * and the R07 admitted shared push-before-pull delivery with valid-tail
+ * through the preparation reader, then reuses snapshots complete snapshot establishment
+ * and the shared delivery admitted shared push-before-pull delivery with valid-tail
  * bookkeeping under uninterrupted physical-DB ownership.
  *
  * [bootstrap] stops at a private canonical baseline and bounded actual tail.
@@ -126,8 +126,8 @@ internal class PreparedSessionEngineCoordinator(
 
     /**
      * Bootstraps the admitted private session: retained-stage fast path,
-     * explicit restart, chunked R08 snapshot download plus completion, or
-     * eligible durable-baseline recovery, followed by the R07 admitted
+     * explicit restart, chunked snapshots snapshot download plus completion, or
+     * eligible durable-baseline recovery, followed by the shared delivery admitted
      * shared tail on the same run. Holds the one shared owner continuously
      * from epoch observation through all work with no release, reacquire
      * or nested admission; HTTP stays outside Room.
@@ -140,6 +140,7 @@ internal class PreparedSessionEngineCoordinator(
         maxPullPages: Int = 100,
         pullPageLimit: Int = 100,
         restartRetainedStage: Boolean = false,
+        connectionRestored: Boolean = false,
     ): PreparedBootstrapResult {
         currentCoroutineContext().ensureActive()
         val canonicalStageId = try {
@@ -205,6 +206,7 @@ internal class PreparedSessionEngineCoordinator(
                 permit = permit,
                 readEpoch = { readDurableEpoch(permit, identity.binding.accountId) },
             ) { run ->
+                if (connectionRestored) run.retryConnectionHeadAfterReconnect()
                 bootstrapLocked(
                     fence = fence,
                     run = run,
@@ -345,7 +347,7 @@ internal class PreparedSessionEngineCoordinator(
 
     /**
      * Completes one explicitly constructed private preparation for a
-     * fresh/no-legacy pair: fresh actual R07 tail (actual push Empty then
+     * fresh/no-legacy pair: fresh actual shared delivery tail (actual push Empty then
      * actual pull terminal callback) plus complete projection and ACTIVE
      * journal/device in ONE Room transaction, followed by exact
      * PREPARED to ACTIVE vault CAS with durable recovery of the
@@ -663,7 +665,7 @@ internal class PreparedSessionEngineCoordinator(
     /**
      * Single-owner completion body on the admitted prepared run. Retained
      * stages and missing baselines/checkpoints return NOT_READY without
-     * delivery or hidden abandonment. Otherwise the admitted R07
+     * delivery or hidden abandonment. Otherwise the admitted shared delivery
      * push-before-pull seam runs and only an actual push Empty plus an
      * actual committed terminal tail with no outstanding work proceeds. The
      * refresh lease retires before promotion, post-tail Room/vault evidence
@@ -1548,7 +1550,7 @@ internal class PreparedSessionEngineCoordinator(
     }
 
     /**
-     * Fresh R09b admission without HTTP or Room writes. NotPreparing,
+     * Fresh preparation admission without HTTP or Room writes. NotPreparing,
      * NeedsGrant and Blocked observations never admit; Blocked maps to
      * the closed categories. The returned observation is advisory only:
      * the vault revision is freshly reread with full binding, operation,

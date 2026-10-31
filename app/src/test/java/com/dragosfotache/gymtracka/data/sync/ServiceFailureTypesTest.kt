@@ -152,7 +152,7 @@ class ServiceFailureTypesTest {
         )
         for (failure in failures) {
             try {
-                failure.initCause(RuntimeException("raw R02c cause"))
+                failure.initCause(RuntimeException("raw failure cause"))
                 fail("initCause should fail for ${failure.code}")
             } catch (expected: IllegalStateException) {
                 assertNull("cause stays null for ${failure.code}", failure.cause)

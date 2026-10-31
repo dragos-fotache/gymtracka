@@ -125,7 +125,7 @@ internal class SessionRefreshCoordinator(
     }
 
     /**
-     * Pure compatibility check for R09f exact-pending-refresh reconciliation:
+     * Pure compatibility check for pending-refresh reconciliation exact-pending-refresh reconciliation:
      * the supplied reauthentication owner must share this coordinator's
      * configured origin value plus its referentially identical vault and
      * credential mutex. Performs no I/O, clock, or UUID work.

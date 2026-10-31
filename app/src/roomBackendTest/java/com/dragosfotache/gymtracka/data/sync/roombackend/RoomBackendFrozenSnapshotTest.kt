@@ -23,7 +23,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R10a matrix 4: frozen snapshot plus post-baseline catchup.
+ * RoomBackend matrix 4: frozen snapshot plus post-baseline catchup.
  *
  * B downloads a multi-root baseline with page limit 1 and maxPages 1, so the
  * first page stops without the limit alone ending the invocation. A peer
@@ -38,31 +38,31 @@ import org.junit.runner.RunWith
 class RoomBackendFrozenSnapshotTest {
 
     companion object {
-        const val FROZEN_WORKOUT = "R10a Frozen"
-        const val FROZEN_ROUTINE = "R10a Frozen Routine"
-        const val RENAMED_WORKOUT = "R10a Renamed After Page"
+        const val FROZEN_WORKOUT = "RoomBackend Frozen"
+        const val FROZEN_ROUTINE = "RoomBackend Frozen Routine"
+        const val RENAMED_WORKOUT = "RoomBackend Renamed After Page"
         const val STARTED_AT_MILLIS = 1_790_259_400_000L
     }
 
     @Test
     fun frozenSnapshotPostBaselineCatchup() = runBlocking(Dispatchers.IO) {
-        val inputs = r10aRequireInputs()
-        val transport = r10aNewTransport(inputs)
+        val inputs = roomBackendRequireInputs()
+        val transport = roomBackendNewTransport(inputs)
         try {
-            val account = r10aMintAccount(transport, inputs.port)
+            val account = roomBackendMintAccount(transport, inputs.port)
             val context = InstrumentationRegistry.getInstrumentation().targetContext
-            val storeA = r10aOpenStore(context, "frozen-a", account.accountId)
-            val storeB = r10aOpenStore(context, "frozen-b", account.accountId)
+            val storeA = roomBackendOpenStore(context, "frozen-a", account.accountId)
+            val storeB = roomBackendOpenStore(context, "frozen-b", account.accountId)
             try {
-                val apiA = r10aNewApi(transport, account)
-                val apiB = r10aNewApi(transport, account)
-                r10aSnapshotConverge(storeA, account.accountId, apiA, R10aTestLease())
-                r10aSnapshotConverge(storeB, account.accountId, apiB, R10aTestLease())
+                val apiA = roomBackendNewApi(transport, account)
+                val apiB = roomBackendNewApi(transport, account)
+                roomBackendSnapshotConverge(storeA, account.accountId, apiA, RoomBackendTestLease())
+                roomBackendSnapshotConverge(storeB, account.accountId, apiB, RoomBackendTestLease())
 
                 // A commits several real roots.
                 val repoA = storeA.repository()
                 val customId = repoA.createCustomExercise(
-                    "R10a Frozen Press", null, emptySet(), null, null, "",
+                    "RoomBackend Frozen Press", null, emptySet(), null, null, "",
                 )
                 val routineId = repoA.createRoutineDraft().id
                 repoA.updateRoutineName(routineId, FROZEN_ROUTINE)
@@ -77,7 +77,7 @@ class RoomBackendFrozenSnapshotTest {
                     ),
                 )
                 assertNotNull(
-                    r10aDeliverAndPublish(storeA, account.accountId, apiA, R10aTestLease()).second,
+                    roomBackendDeliverAndPublish(storeA, account.accountId, apiA, RoomBackendTestLease()).second,
                 )
 
                 // B downloads the frozen baseline on one driver/run. A sibling
@@ -87,7 +87,7 @@ class RoomBackendFrozenSnapshotTest {
                 val firstPage = CompletableDeferred<Unit>()
                 val peerCommitted = CompletableDeferred<Unit>()
                 val snapshotJob = async(Dispatchers.IO) {
-                    pushStoreB.withRun(r10aDurableEpoch(storeB.database, account.accountId)) { run ->
+                    pushStoreB.withRun(roomBackendDurableEpoch(storeB.database, account.accountId)) { run ->
                         val snapshot = SnapshotDeliveryLoop(pushStoreB, apiB)
                         val start = snapshot.start(
                             run, UUID.randomUUID().toString(), maxPages = 1, pageLimit = 1,
@@ -121,7 +121,7 @@ class RoomBackendFrozenSnapshotTest {
                     // The peer updates the EXISTING workout name after the first page.
                     repoA.updateWorkoutName(frozen.id, RENAMED_WORKOUT)
                     assertNotNull(
-                        r10aDeliverAndPublish(storeA, account.accountId, apiA, R10aTestLease()).second,
+                        roomBackendDeliverAndPublish(storeA, account.accountId, apiA, RoomBackendTestLease()).second,
                     )
                     peerCommitted.complete(Unit)
                 }
@@ -132,15 +132,15 @@ class RoomBackendFrozenSnapshotTest {
                 // original while the domain still shows the old graph.
                 val frozenObj = JSONObject(
                     checkNotNull(
-                        storeB.database.r10aReadCanonicalJson(account.accountId, "workout", frozen.id),
+                        storeB.database.roomBackendReadCanonicalJson(account.accountId, "workout", frozen.id),
                     ) { "B must hold the frozen canonical" },
                 )
                 assertEquals(FROZEN_WORKOUT, frozenObj.getString("name"))
 
                 // An actual pull catches up the rename, then publication converges B.
-                val catchupLease = R10aTestLease()
+                val catchupLease = RoomBackendTestLease()
                 val (catchup, catchupPublication) =
-                    r10aDeliverAndPublish(storeB, account.accountId, apiB, catchupLease)
+                    roomBackendDeliverAndPublish(storeB, account.accountId, apiB, catchupLease)
                 assertEquals(PullDeliveryStop.Tail, catchup.pullStop)
                 assertNotNull(catchupPublication)
                 assertEquals(ProjectionPublicationStatus.PUBLISHED, checkNotNull(catchupPublication).status)
@@ -157,17 +157,17 @@ class RoomBackendFrozenSnapshotTest {
                 )
                 val renamedObj = JSONObject(
                     checkNotNull(
-                        storeB.database.r10aReadCanonicalJson(account.accountId, "workout", frozen.id),
+                        storeB.database.roomBackendReadCanonicalJson(account.accountId, "workout", frozen.id),
                     ),
                 )
                 assertEquals(RENAMED_WORKOUT, renamedObj.getString("name"))
-                r10aAssertOutboxEmpty(storeB.database, account.accountId, "B frozen")
-                assertEquals(0, storeB.database.r10aStageCount(account.accountId))
-                r10aAssertQuiescentTail(storeA, account.accountId, apiA, "A quiescent")
-                r10aAssertQuiescentTail(storeB, account.accountId, apiB, "B quiescent")
+                roomBackendAssertOutboxEmpty(storeB.database, account.accountId, "B frozen")
+                assertEquals(0, storeB.database.roomBackendStageCount(account.accountId))
+                roomBackendAssertQuiescentTail(storeA, account.accountId, apiA, "A quiescent")
+                roomBackendAssertQuiescentTail(storeB, account.accountId, apiB, "B quiescent")
             } finally {
-                r10aCloseAndDelete(context, storeA)
-                r10aCloseAndDelete(context, storeB)
+                roomBackendCloseAndDelete(context, storeA)
+                roomBackendCloseAndDelete(context, storeB)
             }
         } finally {
             transport.client.dispatcher.executorService.shutdown()

@@ -11,17 +11,8 @@ import com.dragosfotache.gymtracka.data.sync.model.SyncBatchModel
 import kotlinx.coroutines.CompletableDeferred
 
 /**
- * R07b independent QA fixtures. Hand-written from docs/archive/remaining-work/R07b-task.md
- * and the coordinator's QA harness facts only.
- *
- * Every expected value below is a literal authored here; no production encoder
- * output is used as an oracle. Durable seeding reuses the vetted R07a
- * pull-seam helpers ([pullSeedBaseline], [pullBatch], [pullUpsert],
- * [pullDelete], [pullWorkoutRecord], [pullRoutineRecord], [pullCustomRecord])
- * and the R06a claim/capture helpers; only pull-driver-specific scripted
- * transport builders and fresh cursor/batch literals are new. No production
- * declaration, implementation, generated production code, diff or Worker
- * output was inspected.
+ * Scripted pull transports and literal cursor/batch fixtures reuse the checkpoint and
+ * claim/capture helpers. Expected canonical values are independent of production encoder output.
  */
 
 // Fresh driver literals: distinct from every PULL_* literal and from each

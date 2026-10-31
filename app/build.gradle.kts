@@ -165,7 +165,7 @@ tasks.register("prepareRoomBackendRelay") {
     description = "Compiles the host-only Room backend relay and writes its launch classpath."
     group = "verification"
     val runtime = tasks.named<Test>("testDebugUnitTest").get().classpath
-    val destination = layout.buildDirectory.file("r10/relay-classpath.txt")
+    val destination = layout.buildDirectory.file("room-backend/relay-classpath.txt")
     dependsOn("compileDebugUnitTestKotlin")
     inputs.files(runtime)
     outputs.file(destination)

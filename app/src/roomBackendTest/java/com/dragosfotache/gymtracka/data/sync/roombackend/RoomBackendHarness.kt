@@ -43,52 +43,44 @@ import org.json.JSONObject
 import org.junit.Assert.assertTrue
 
 /**
- * R10a independent QA harness. Hand-written from docs/archive/remaining-work/R10a-task.md
- * (normative packet) and coordinator-supplied source-independent facts only.
- *
- * No production source inspected. Every domain expectation in the scenario files
- * is an independent literal; production encoder output is never used as an oracle.
- * Scripted [GymSyncApi] wrappers below may gate or fail real responses but never
- * synthesize successful domain data: success paths always delegate to the
- * delivered production [HttpGymSyncApi] over real verified TLS HTTP.
- *
- * Engine loop packages/signatures follow the archived composition contract and
- * its source-independent signature/schema appendix.
+ * Independent Room/service scenario fixtures use literal expected graphs. Scripted GymSyncApi
+ * wrappers gate or fail real responses; successful domain data always comes through HttpGymSyncApi
+ * over verified TLS HTTP.
  */
-internal const val R10A_ARG_PORT = "roomBackendPort"
-internal const val R10A_ARG_CERT = "roomBackendCertificate"
-internal const val R10A_SESSION_GENERATION = 1L
+internal const val ROOM_BACKEND_ARG_PORT = "roomBackendPort"
+internal const val ROOM_BACKEND_ARG_CERT = "roomBackendCertificate"
+internal const val ROOM_BACKEND_SESSION_GENERATION = 1L
 
-internal data class R10aInputs(val port: Int, val certificateBase64: String)
+internal data class RoomBackendInputs(val port: Int, val certificateBase64: String)
 
-internal data class R10aAccount(val accountId: String, val accessToken: String) {
-    override fun toString(): String = "R10aAccount(redacted)"
+internal data class RoomBackendAccount(val accountId: String, val accessToken: String) {
+    override fun toString(): String = "RoomBackendAccount(redacted)"
 }
 
 /** Explicit external gate: MUST fail when relay inputs are absent, never silently skip. */
-internal fun r10aRequireInputs(): R10aInputs {
+internal fun roomBackendRequireInputs(): RoomBackendInputs {
     val args = InstrumentationRegistry.getArguments()
-    val portRaw = requireNotNull(args.getString(R10A_ARG_PORT)) {
-        "R10a external gate requires instrumentation arg '$R10A_ARG_PORT'"
+    val portRaw = requireNotNull(args.getString(ROOM_BACKEND_ARG_PORT)) {
+        "RoomBackend external gate requires instrumentation arg '$ROOM_BACKEND_ARG_PORT'"
     }
-    val cert = requireNotNull(args.getString(R10A_ARG_CERT)) {
-        "R10a external gate requires instrumentation arg '$R10A_ARG_CERT'"
+    val cert = requireNotNull(args.getString(ROOM_BACKEND_ARG_CERT)) {
+        "RoomBackend external gate requires instrumentation arg '$ROOM_BACKEND_ARG_CERT'"
     }
     val port = requireNotNull(portRaw.toIntOrNull()) {
-        "R10a external gate requires numeric '$R10A_ARG_PORT'"
+        "RoomBackend external gate requires numeric '$ROOM_BACKEND_ARG_PORT'"
     }
-    require(cert.isNotBlank()) { "R10a external gate requires non-blank '$R10A_ARG_CERT'" }
-    return R10aInputs(port, cert)
+    require(cert.isNotBlank()) { "RoomBackend external gate requires non-blank '$ROOM_BACKEND_ARG_CERT'" }
+    return RoomBackendInputs(port, cert)
 }
 
-internal data class R10aTransport(
+internal data class RoomBackendTransport(
     val origin: ServiceOrigin,
     val client: OkHttpClient,
     val transport: OkHttpServiceTransport,
 )
 
 /** Normal verified-TLS stack per spec; hostname verification/TLS trust are never disabled. */
-internal fun r10aNewTransport(inputs: R10aInputs): R10aTransport {
+internal fun roomBackendNewTransport(inputs: RoomBackendInputs): RoomBackendTransport {
     val der = Base64.decode(inputs.certificateBase64, Base64.DEFAULT)
     val certificate = CertificateFactory.getInstance("X.509")
         .generateCertificate(ByteArrayInputStream(der)) as X509Certificate
@@ -102,11 +94,11 @@ internal fun r10aNewTransport(inputs: R10aInputs): R10aTransport {
     val timeouts = ServiceHttpTimeouts(readMillis = 2_000L)
     val client = newServiceHttpClient(timeouts = timeouts, builder = builder)
     val origin = ServiceOrigin.parse("https://localhost:${inputs.port}")
-    return R10aTransport(origin, client, OkHttpServiceTransport(origin, client))
+    return RoomBackendTransport(origin, client, OkHttpServiceTransport(origin, client))
 }
 
-internal fun r10aNewApi(transport: R10aTransport, account: R10aAccount): HttpGymSyncApi {
-    val binding = ServiceSessionBinding(transport.origin, account.accountId, R10A_SESSION_GENERATION)
+internal fun roomBackendNewApi(transport: RoomBackendTransport, account: RoomBackendAccount): HttpGymSyncApi {
+    val binding = ServiceSessionBinding(transport.origin, account.accountId, ROOM_BACKEND_SESSION_GENERATION)
     val boundToken = BoundServiceAccessToken(binding, OpaqueToken(account.accessToken))
     val provider = BoundServiceAccessTokenProvider { boundToken }
     return HttpGymSyncApi(binding = binding, tokenProvider = provider, transport = transport.transport)
@@ -116,8 +108,8 @@ internal fun r10aNewApi(transport: R10aTransport, account: R10aAccount): HttpGym
  * Test control calls over the same trusted TLS origin. Secret-bearing setup JSON
  * is never dumped on failure.
  */
-internal suspend fun r10aPostControl(
-    transport: R10aTransport,
+internal suspend fun roomBackendPostControl(
+    transport: RoomBackendTransport,
     port: Int,
     path: String,
     bearer: String?,
@@ -129,26 +121,26 @@ internal suspend fun r10aPostControl(
     transport.client.newCall(requestBuilder.build()).execute().use { response ->
         val body = response.body.string()
         check(response.isSuccessful) {
-            "R10a control $path failed with HTTP ${response.code}"
+            "RoomBackend control $path failed with HTTP ${response.code}"
         }
         body
     }
 }
 
-internal suspend fun r10aMintAccount(transport: R10aTransport, port: Int): R10aAccount {
-    val body = r10aPostControl(transport, port, "/__r10__/account", bearer = null)
+internal suspend fun roomBackendMintAccount(transport: RoomBackendTransport, port: Int): RoomBackendAccount {
+    val body = roomBackendPostControl(transport, port, "/__test__/account", bearer = null)
     val json = JSONObject(body)
-    return R10aAccount(
+    return RoomBackendAccount(
         accountId = json.getString("accountId"),
         accessToken = json.getString("accessToken"),
     )
 }
 
-internal suspend fun r10aLoseNextPush(transport: R10aTransport, port: Int, account: R10aAccount) {
-    r10aPostControl(transport, port, "/__r10__/lose-next-push", bearer = account.accessToken)
+internal suspend fun roomBackendLoseNextPush(transport: RoomBackendTransport, port: Int, account: RoomBackendAccount) {
+    roomBackendPostControl(transport, port, "/__test__/lose-next-push", bearer = account.accessToken)
 }
 
-internal data class R10aStore(
+internal data class RoomBackendStore(
     val database: GymDatabase,
     val session: RepositorySession,
     val owner: PushRunOwner,
@@ -158,19 +150,19 @@ internal data class R10aStore(
 }
 
 /** Isolated file-backed Room store; no asset needed when the graph references only created customs. */
-internal suspend fun r10aOpenStore(context: Context, base: String, accountId: String): R10aStore {
-    val fileName = "r10a-$base-${UUID.randomUUID()}.db"
+internal suspend fun roomBackendOpenStore(context: Context, base: String, accountId: String): RoomBackendStore {
+    val fileName = "roomBackend-$base-${UUID.randomUUID()}.db"
     val database = Room.databaseBuilder(context, GymDatabase::class.java, fileName).build()
-    database.claimSeedDevice(accountId, R10A_SESSION_GENERATION)
-    return R10aStore(
+    database.claimSeedDevice(accountId, ROOM_BACKEND_SESSION_GENERATION)
+    return RoomBackendStore(
         database = database,
-        session = RepositorySession(accountId, R10A_SESSION_GENERATION),
+        session = RepositorySession(accountId, ROOM_BACKEND_SESSION_GENERATION),
         owner = PushRunOwner(),
         fileName = fileName,
     )
 }
 
-internal fun r10aCloseAndDelete(context: Context, store: R10aStore) {
+internal fun roomBackendCloseAndDelete(context: Context, store: RoomBackendStore) {
     try {
         store.database.close()
     } finally {
@@ -180,7 +172,7 @@ internal fun r10aCloseAndDelete(context: Context, store: R10aStore) {
 
 /** Controllable test lease: tracks valid/open, closes exactly once, never touches Room.
  * Close invalidates the lease and rejects a second close; never reuse across publications. */
-internal class R10aTestLease : ProjectionPublicationLease {
+internal class RoomBackendTestLease : ProjectionPublicationLease {
     var closeCount = 0
         private set
     var valid = true
@@ -195,14 +187,14 @@ internal class R10aTestLease : ProjectionPublicationLease {
     }
 
     override fun close() {
-        check(closeCount == 0) { "R10a test lease closed twice" }
+        check(closeCount == 0) { "RoomBackend test lease closed twice" }
         valid = false
         closeCount++
     }
 }
 
-internal class R10aRecordingBarrier(
-    private val lease: R10aTestLease,
+internal class RoomBackendRecordingBarrier(
+    private val lease: RoomBackendTestLease,
     private val onAcquire: (suspend (ProjectionPublicationRequest) -> Unit)? = null,
 ) : ProjectionPublicationBarrier {
     val requests = mutableListOf<ProjectionPublicationRequest>()
@@ -215,7 +207,7 @@ internal class R10aRecordingBarrier(
 }
 
 /** Delegating wrapper: fails push with a typed offline error; other paths delegate to the real API. */
-internal class R10aOfflinePushApi(private val real: GymSyncApi) : GymSyncApi {
+internal class RoomBackendOfflinePushApi(private val real: GymSyncApi) : GymSyncApi {
     override suspend fun push(requests: List<DurableRequestModel>): PushResultModel {
         throw SyncApiException.Transient()
     }
@@ -227,7 +219,7 @@ internal class R10aOfflinePushApi(private val real: GymSyncApi) : GymSyncApi {
 }
 
 /** Delegating wrapper: gates the real pull response behind [gate]; newer local edits land while pending. */
-internal class R10aGatePullApi(
+internal class RoomBackendGatePullApi(
     private val real: GymSyncApi,
     private val gate: CompletableDeferred<Unit>,
 ) : GymSyncApi {
@@ -249,7 +241,7 @@ internal class R10aGatePullApi(
 }
 
 /** Delegating wrapper: fails one pull with explicit retention expiry; never synthesizes data. */
-internal class R10aExpireOncePullApi(private val real: GymSyncApi) : GymSyncApi {
+internal class RoomBackendExpireOncePullApi(private val real: GymSyncApi) : GymSyncApi {
     var expired = false
         private set
 
@@ -268,7 +260,7 @@ internal class R10aExpireOncePullApi(private val real: GymSyncApi) : GymSyncApi 
 }
 
 /** Delegating wrapper: fails the Nth snapshot page deterministically; never synthesizes domain pages. */
-internal class R10aFailOnceSnapshotApi(
+internal class RoomBackendFailOnceSnapshotApi(
     private val real: GymSyncApi,
     private val failure: SyncApiException = SyncApiException.Transient(),
     private val failOnCall: Int = 1,
@@ -292,21 +284,21 @@ internal class R10aFailOnceSnapshotApi(
     }
 }
 
-internal data class R10aCacheRow(
+internal data class RoomBackendCacheRow(
     val baselineComplete: Boolean,
     val cacheEpoch: Long,
     val materializedEpoch: Long,
     val projectionDirty: Boolean,
 )
 
-internal fun GymDatabase.r10aReadCache(accountId: String): R10aCacheRow? {
+internal fun GymDatabase.roomBackendReadCache(accountId: String): RoomBackendCacheRow? {
     openHelper.readableDatabase.query(
         "SELECT baseline_complete, cache_epoch, materialized_epoch, projection_dirty" +
             " FROM sync_account_cache WHERE account_id = ?",
         arrayOf(accountId),
     ).use { cursor ->
         if (!cursor.moveToFirst()) return null
-        return R10aCacheRow(
+        return RoomBackendCacheRow(
             baselineComplete = cursor.getLong(0) == 1L,
             cacheEpoch = cursor.getLong(1),
             materializedEpoch = cursor.getLong(2),
@@ -315,8 +307,8 @@ internal fun GymDatabase.r10aReadCache(accountId: String): R10aCacheRow? {
     }
 }
 
-internal fun r10aAssertOutboxEmpty(database: GymDatabase, accountId: String, label: String) {
-    val count = database.r10aCount(
+internal fun roomBackendAssertOutboxEmpty(database: GymDatabase, accountId: String, label: String) {
+    val count = database.roomBackendCount(
         "SELECT COUNT(*) FROM sync_outbox WHERE account_id = ?",
         arrayOf(accountId),
     )
@@ -324,13 +316,13 @@ internal fun r10aAssertOutboxEmpty(database: GymDatabase, accountId: String, lab
 }
 
 /** Reopen the same file-backed store without reseeding; a new owner simulates a fresh process. */
-internal fun r10aReopen(context: Context, store: R10aStore): R10aStore {
+internal fun roomBackendReopen(context: Context, store: RoomBackendStore): RoomBackendStore {
     store.database.close()
     val database = Room.databaseBuilder(context, GymDatabase::class.java, store.fileName).build()
     return store.copy(database = database, owner = PushRunOwner())
 }
 
-internal data class R10aOutboxRow(
+internal data class RoomBackendOutboxRow(
     val sequence: Long,
     val mutationId: String,
     val payloadVersion: Long,
@@ -344,16 +336,16 @@ internal data class R10aOutboxRow(
 )
 
 /** Exact frozen outbox evidence: sequence/mutation ID/payload version/wrapper UTF-8/generation/state. */
-internal fun GymDatabase.r10aOutboxRows(accountId: String): List<R10aOutboxRow> {
+internal fun GymDatabase.roomBackendOutboxRows(accountId: String): List<RoomBackendOutboxRow> {
     openHelper.readableDatabase.query(
         "SELECT sequence, mutation_id, payload_version, payload_json, local_generation, state," +
             " attempt_count, retry_after_millis, error_code, error_message" +
             " FROM sync_outbox WHERE account_id = ? ORDER BY sequence",
         arrayOf(accountId),
     ).use { cursor ->
-        val rows = mutableListOf<R10aOutboxRow>()
+        val rows = mutableListOf<RoomBackendOutboxRow>()
         while (cursor.moveToNext()) {
-            rows += R10aOutboxRow(
+            rows += RoomBackendOutboxRow(
                 sequence = cursor.getLong(0),
                 mutationId = cursor.getString(1),
                 payloadVersion = cursor.getLong(2),
@@ -370,59 +362,59 @@ internal fun GymDatabase.r10aOutboxRows(accountId: String): List<R10aOutboxRow> 
     }
 }
 
-internal data class R10aSyncStateRow(val cursor: String?, val lastSuccessMillis: Long?)
+internal data class RoomBackendSyncStateRow(val cursor: String?, val lastSuccessMillis: Long?)
 
-internal fun GymDatabase.r10aReadSyncState(accountId: String): R10aSyncStateRow? {
+internal fun GymDatabase.roomBackendReadSyncState(accountId: String): RoomBackendSyncStateRow? {
     openHelper.readableDatabase.query(
         "SELECT cursor, last_success_millis FROM sync_state WHERE account_id = ?",
         arrayOf(accountId),
     ).use { cursor ->
         if (!cursor.moveToFirst()) return null
-        return R10aSyncStateRow(
+        return RoomBackendSyncStateRow(
             cursor = if (cursor.isNull(0)) null else cursor.getString(0),
             lastSuccessMillis = if (cursor.isNull(1)) null else cursor.getLong(1),
         )
     }
 }
 
-internal data class R10aCanonicalRow(val serverRevision: Long?, val canonicalState: String)
+internal data class RoomBackendCanonicalRow(val serverRevision: Long?, val canonicalState: String)
 
-internal fun GymDatabase.r10aReadCanonical(
+internal fun GymDatabase.roomBackendReadCanonical(
     accountId: String,
     aggregateType: String,
     aggregateId: String,
-): R10aCanonicalRow? {
+): RoomBackendCanonicalRow? {
     openHelper.readableDatabase.query(
         "SELECT server_revision, canonical_state FROM sync_canonical_roots" +
             " WHERE account_id = ? AND aggregate_type = ? AND aggregate_id = ?",
         arrayOf(accountId, aggregateType, aggregateId),
     ).use { cursor ->
         if (!cursor.moveToFirst()) return null
-        return R10aCanonicalRow(
+        return RoomBackendCanonicalRow(
             serverRevision = if (cursor.isNull(0)) null else cursor.getLong(0),
             canonicalState = cursor.getString(1),
         )
     }
 }
 
-internal fun GymDatabase.r10aCount(sql: String, args: Array<Any?> = emptyArray()): Int {
+internal fun GymDatabase.roomBackendCount(sql: String, args: Array<Any?> = emptyArray()): Int {
     openHelper.readableDatabase.query(sql, args).use { cursor ->
         cursor.moveToFirst()
         return cursor.getInt(0)
     }
 }
 
-internal fun GymDatabase.r10aStageCount(accountId: String): Int =
-    r10aCount("SELECT COUNT(*) FROM sync_snapshot_stages WHERE account_id = ?", arrayOf(accountId))
+internal fun GymDatabase.roomBackendStageCount(accountId: String): Int =
+    roomBackendCount("SELECT COUNT(*) FROM sync_snapshot_stages WHERE account_id = ?", arrayOf(accountId))
 
-internal fun r10aDurableEpoch(database: GymDatabase, accountId: String): Long =
-    database.r10aReadCache(accountId)?.cacheEpoch ?: 0L
+internal fun roomBackendDurableEpoch(database: GymDatabase, accountId: String): Long =
+    database.roomBackendReadCache(accountId)?.cacheEpoch ?: 0L
 
 /** Frozen-head comparison: immutable wrapper fields unchanged; head index 0 must read
  * state "frozen" (previously pending or already frozen) while untouched successors keep
  * their old state. error_code/error_message are outcome bookkeeping, recorded but not
  * frozen-compared; attempt_count joins the exact post-failure/reopen retention snapshot. */
-internal fun r10aAssertOutboxFrozen(before: List<R10aOutboxRow>, after: List<R10aOutboxRow>, label: String) {
+internal fun roomBackendAssertOutboxFrozen(before: List<RoomBackendOutboxRow>, after: List<RoomBackendOutboxRow>, label: String) {
     assertTrue("$label expected ${before.size} retained rows, got ${after.size}", before.size == after.size)
     before.zip(after).forEachIndexed { index, (oldRow, newRow) ->
         assertTrue("$label row $index sequence unchanged", oldRow.sequence == newRow.sequence)
@@ -448,7 +440,7 @@ internal fun r10aAssertOutboxFrozen(before: List<R10aOutboxRow>, after: List<R10
     }
 }
 
-internal fun GymDatabase.r10aOutboxRetryAfterMax(accountId: String): Long? {
+internal fun GymDatabase.roomBackendOutboxRetryAfterMax(accountId: String): Long? {
     openHelper.readableDatabase.query(
         "SELECT MAX(retry_after_millis) FROM sync_outbox WHERE account_id = ?",
         arrayOf(accountId),
@@ -458,7 +450,7 @@ internal fun GymDatabase.r10aOutboxRetryAfterMax(accountId: String): Long? {
     }
 }
 
-internal fun GymDatabase.r10aReadCanonicalJson(
+internal fun GymDatabase.roomBackendReadCanonicalJson(
     accountId: String,
     aggregateType: String,
     aggregateId: String,
@@ -474,11 +466,11 @@ internal fun GymDatabase.r10aReadCanonicalJson(
 }
 
 /** Mutable injected clock for deterministic backoff tests; no wall-clock waits. */
-internal class R10aMutableNow(var current: Long) {
+internal class RoomBackendMutableNow(var current: Long) {
     fun get(): Long = current
 }
 
-internal fun R10aMutableNow.advanceBeyond(retryAfterMillis: Long?) {
+internal fun RoomBackendMutableNow.advanceBeyond(retryAfterMillis: Long?) {
     if (retryAfterMillis != null && retryAfterMillis >= current) {
         current = retryAfterMillis + 1L
     }
@@ -486,7 +478,7 @@ internal fun R10aMutableNow.advanceBeyond(retryAfterMillis: Long?) {
 
 /** Delegating wrapper: records real push outcomes for duplicate verification.
  * Never synthesizes domain data; every result comes from the real transport. */
-internal class R10aRecordingPushApi(private val real: GymSyncApi) : GymSyncApi {
+internal class RoomBackendRecordingPushApi(private val real: GymSyncApi) : GymSyncApi {
     val pushResults = mutableListOf<PushResultModel>()
 
     override suspend fun push(requests: List<DurableRequestModel>): PushResultModel =
@@ -497,8 +489,8 @@ internal class R10aRecordingPushApi(private val real: GymSyncApi) : GymSyncApi {
     override suspend fun snapshot(pageToken: String?, limit: Int): SnapshotResultModel =
         real.snapshot(pageToken, limit)
 }
-internal fun r10aAssertBaselineComplete(database: GymDatabase, accountId: String, label: String): R10aCacheRow {
-    val cache = checkNotNull(database.r10aReadCache(accountId)) {
+internal fun roomBackendAssertBaselineComplete(database: GymDatabase, accountId: String, label: String): RoomBackendCacheRow {
+    val cache = checkNotNull(database.roomBackendReadCache(accountId)) {
         "$label expected account cache row"
     }
     assertTrue("$label expected complete baseline", cache.baselineComplete)

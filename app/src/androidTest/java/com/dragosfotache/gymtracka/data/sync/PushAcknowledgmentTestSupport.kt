@@ -22,16 +22,11 @@ import com.dragosfotache.gymtracka.data.sync.model.WorkoutRecordModel
 import com.dragosfotache.gymtracka.data.sync.store.ExtraAffectedRoot
 
 /**
- * R06c independent QA fixtures. Hand-written from docs/archive/remaining-work/R06c-task.md,
- * the coordinator's API/harness facts and allowed existing test sources only.
- *
- * Every expected value below is a literal authored here; no production encoder
- * output is used as an oracle. Durable seeding reuses the existing R06a
- * claim/capture helpers; only acknowledgment-specific builders and fixed
- * message literals are new.
+ * Literal accepted-batch fixtures and acknowledgment observations reuse durable claim/capture
+ * helpers. Byte equality checks retained requests without regenerating them.
  */
 
-// Fixed persistence literals from the R06c specification (not production oracles).
+// Fixed persistence literals from the acknowledgment specification (not production oracles).
 internal const val ACK_CONTEXT_CORRUPT_CODE = "ack_context_corrupt"
 internal const val ACK_CONTEXT_CORRUPT_MESSAGE = "Push acknowledgment context was invalid; recovery required."
 internal const val ACK_MISMATCH_MESSAGE = "Accepted outcome does not match push claim"

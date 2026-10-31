@@ -1474,7 +1474,7 @@ internal class RoomSessionAuthority(private val database: GymDatabase) : Session
     }
 
     /**
-     * R13b current-lineage progress advancement. Runs inside the caller's
+     * current-lineage progress advancement. Runs inside the caller's
      * active Room transaction alongside the journal/device write, so the
      * anchor and authority commit atomically. No-op when no migration
      * exists. Requires the stored anchor to equal the expected current

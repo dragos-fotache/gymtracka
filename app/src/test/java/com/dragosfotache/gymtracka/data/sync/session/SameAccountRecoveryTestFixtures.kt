@@ -12,30 +12,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 
 /**
- * R09g independent QA fixtures only. No production declarations.
- *
- * All values derive from docs/archive/remaining-work/R09g-task.md normative API plus
- * QA-owned R04b/R04c/R09b/R09e fixtures (RefreshTestFixtures,
- * SessionRecoveryTestFixtures, SessionPreparationTestFixtures,
- * SessionReauthenticationTestFixtures, VaultTestFixtures, FakeSessionVault).
- * No production source, diffs, Worker work, generated sources, decompiled
- * classes or schema JSON inspected. Coordinator-supplied harness facts used
- * as contracts (read shape, ctor order, inert construction, PushRunOwner
- * internal mutex).
- *
- * Spec-fixed constructors used only:
- * ServiceOrigin.parse, ServiceSessionBinding(origin, accountId, generation),
- * RecoveryIdentity(binding, operationId), RecoveryRoomSnapshot(revision,
- * sessionGeneration, cachedAccountId, phase, identity, baselineComplete),
- * ServiceSession(account, accessToken, accessExpiresAtMillis, refreshToken,
- * refreshExpiresAtMillis), VaultSnapshot(revision, record),
- * VaultSessionRecord(binding, operationId, phase, session, pendingRefresh),
- * VaultPendingRefresh(operationId, attempt),
- * ServiceRefreshAttempt.fromJson(key, body),
- * VaultSupersededSession(sourceRevision, record),
- * VaultSupersededSessions(entries),
- * SameAccountRecoveryCoordinator(origin, authority, vault, runOwner,
- * credentialMutex).
+ * Literal Room/vault/grant bindings and deterministic authority, refresh and file fault doubles
+ * for same-account recovery. Expected identities and bytes are independent of production output.
  */
 internal object SameAccountRecoveryTestFixtures {
     const val ACCOUNT_ID = RefreshTestFixtures.ACCOUNT_ID
@@ -78,14 +56,14 @@ internal object SameAccountRecoveryTestFixtures {
 
     fun freshGrant(accountId: String = ACCOUNT_ID): ServiceSession = session(
         accountId = accountId,
-        accessValue = "access-fresh-r09g",
-        refreshValue = "refresh-fresh-r09g",
+        accessValue = "access-fresh-retained-recovery",
+        refreshValue = "refresh-fresh-retained-recovery",
     )
 
     fun otherGrant(): ServiceSession = session(
         accountId = ACCOUNT_ID,
-        accessValue = "access-other-r09g",
-        refreshValue = "refresh-other-r09g",
+        accessValue = "access-other-retained-recovery",
+        refreshValue = "refresh-other-retained-recovery",
     )
 
     fun signedOut(
@@ -293,7 +271,7 @@ internal object SameAccountRecoveryTestFixtures {
  * Dedicated hand-written SameAccountRecoveryAuthority double. No DAO mocks.
  *
  * Defaults mirror the normative reservation/finalization arithmetic from the
- * R09g spec: check reads only; begin reserves TRANSITIONING at +1/+1 with the
+ * spec: check reads only; begin reserves TRANSITIONING at +1/+1 with the
  * same account/origin and a fresh operation; finish delegates to the existing
  * TRANSITIONING->PREPARING +1 writer. Tests override behaviors, queue faults,
  * flip [hasLocalRoots], or inject commit-then-throw uncertainty.

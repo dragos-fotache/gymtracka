@@ -20,7 +20,7 @@ import java.io.IOException
 
 class HttpFailureCategoriesTest {
 
-    private val accessToken = "r02c-test-access-token"
+    private val accessToken = "failure-test-access-token"
 
     private fun response(statusCode: Int, body: String): SyncHttpResponse {
         return SyncHttpResponse(statusCode, emptyMap(), body)
@@ -397,7 +397,7 @@ class HttpFailureCategoriesTest {
     @Test
     fun transportIOException_isTransientWithoutCause() = runTest {
         val transport = SyncHttpTransport { _, _, _, _, _, _ ->
-            throw IOException("simulated R02c transport failure")
+            throw IOException("simulated failure transport failure")
         }
         val api = HttpGymSyncApi(transport, accessToken)
         try {
@@ -413,7 +413,7 @@ class HttpFailureCategoriesTest {
     // Table: transport cancellation propagates as the original instance.
     @Test
     fun pushCancellation_propagatesOriginalInstance() = runTest {
-        val original = CancellationException("original R02c cancellation")
+        val original = CancellationException("original failure cancellation")
         val transport = SyncHttpTransport { _, _, _, _, _, _ ->
             throw original
         }
@@ -428,7 +428,7 @@ class HttpFailureCategoriesTest {
 
     @Test
     fun pullCancellation_propagatesOriginalInstance() = runTest {
-        val original = CancellationException("original R02c pull cancellation")
+        val original = CancellationException("original failure pull cancellation")
         val transport = SyncHttpTransport { _, _, _, _, _, _ ->
             throw original
         }
@@ -444,7 +444,7 @@ class HttpFailureCategoriesTest {
     // Table: transport cancellation on snapshot propagates as the original instance.
     @Test
     fun snapshotCancellation_propagatesOriginalInstance() = runTest {
-        val original = CancellationException("original R02c snapshot cancellation")
+        val original = CancellationException("original failure snapshot cancellation")
         val transport = SyncHttpTransport { _, _, _, _, _, _ ->
             throw original
         }

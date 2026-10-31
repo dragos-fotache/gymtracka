@@ -51,7 +51,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R02b QA: workout/routine family identity reservations at pure validation boundaries.
+ * workout/routine family identity reservations at pure validation boundaries.
  *
  * Family set = root id + every entry id + every set id across ALL entries. Every member
  * must be distinct across all roles and parents. `exerciseId` (catalogue reference) and

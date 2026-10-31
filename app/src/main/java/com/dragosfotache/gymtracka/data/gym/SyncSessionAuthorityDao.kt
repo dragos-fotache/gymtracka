@@ -7,7 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 
 /**
- * Narrow storage primitives for the inert R09a session-authority journal.
+ * Narrow storage primitives for the inert Room authority session-authority journal.
  * Raw observation queries return open [Cursor] rows so the store can inspect
  * exact SQLite storage types without Room coercion; the caller closes them.
  * Insert/update primitives carry exact expected-row predicates where the store

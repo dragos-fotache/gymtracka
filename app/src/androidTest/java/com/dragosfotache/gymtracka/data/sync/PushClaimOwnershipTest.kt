@@ -26,7 +26,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R06a independent ownership acceptance: single-process mutual exclusion
+ * ownership acceptance: single-process mutual exclusion
  * across caller HTTP, queued cancellation, nested/closed/wrong-run misuse,
  * enclosing Room transactions, structured children, self-cancel discipline
  * and release on every failure path. Real Room, no mocked DAOs, no sleeps.

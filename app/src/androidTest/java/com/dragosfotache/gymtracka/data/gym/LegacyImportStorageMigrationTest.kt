@@ -11,18 +11,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R13a independent QA: additive 12 -> 13 legacy-import storage migration.
- *
- * Derived ONLY from docs/archive/remaining-work/R13a-task.md frozen source/schema13
- * table contract, exported schemas 1-12 column facts and the allowed
- * SessionAuthority/Snapshot storage-migration harness pattern. No production
- * declarations/diffs, new schema13 implementation, Worker work or decompiled
- * classes inspected. Every seeded value is an independent literal.
- *
- * The every-supported-start 1..12 -> 13 loop and copied-asset empty-new-table
- * check live in [GymDatabaseMigrationTest]; here a populated v12
- * migrates to 13 with every prior table byte-identical, sqlite sequence
- * allocation preserved, and the two new legacy tables present but empty.
+ * Checks populated 12 -> 13 migration: prior schema, rows, exact bytes and sequence allocation
+ * survive while the two legacy-import tables start empty. GymDatabaseMigrationTest covers all
+ * supported starts and the copied catalogue asset.
  */
 @RunWith(AndroidJUnit4::class)
 class LegacyImportStorageMigrationTest {

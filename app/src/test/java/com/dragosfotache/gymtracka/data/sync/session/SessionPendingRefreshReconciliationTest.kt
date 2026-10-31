@@ -20,29 +20,9 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R09f independent QA: inert exact-pending-refresh reconciliation before reauthentication.
- *
- * Derived ONLY from docs/archive/remaining-work/R09f-task.md normative API/protocol/fence
- * contracts plus QA-owned fixtures/doubles (SessionReauthenticationTestFixtures,
- * ScriptedReauthenticationAuthority, Refresh/SessionRecovery fixtures,
- * FakeSessionVault, FakeServiceAuthApi). No production declarations, diffs,
- * Worker work, generated sources, decompiled classes or schema JSON inspected.
- * Coordinator-supplied harness facts used as contracts (ctor orders, inert
- * construction, model shapes, SyncApiException ctor shapes, failure set,
- * namespace/seed literals). Literal independent oracles throughout;
- * deterministic gates only (deferred/barrier/fault queues, phase-observed
- * hooks, no sleeps, no DAO mocks, no load/read-count seam oracles).
- *
- * Only the normative external API is referenced: suspend
- * reconcilePendingRefresh(expected, refreshCoordinator) and
- * SettledSessionObservation(room, vaultRevision). Internal helper/
- * compatibility predicate names are never referenced. Clock/UUID providers
- * throw AssertionError by default, proving zero calls in this replay-only
- * operation.
- *
- * Each test proves a distinct new obligation; representative refusal cases are
- * grouped without an exhaustive matrix (existing R04/R09e matrices reused, not
- * duplicated).
+ * Deterministic checks for exact pending-refresh reconciliation before reauthentication.
+ * Clock/UUID providers fail by default to prove replay makes no new attempt. Gates cover
+ * cancellation, stale authority and committed-result delivery.
  */
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class SessionPendingRefreshReconciliationTest {
@@ -71,8 +51,8 @@ class SessionPendingRefreshReconciliationTest {
         auth: FakeServiceAuthApi = FakeServiceAuthApi(),
         runOwner: PushRunOwner = PushRunOwner(),
         credentialMutex: Mutex = Mutex(),
-        clock: () -> Long = { throw AssertionError("R09f replay must not read the clock") },
-        uuids: () -> String = { throw AssertionError("R09f replay must not mint UUIDs") },
+        clock: () -> Long = { throw AssertionError("pending-refresh replay must not read the clock") },
+        uuids: () -> String = { throw AssertionError("pending-refresh replay must not mint UUIDs") },
     ): WrappedSetup {
         val authority = ScriptedReauthenticationAuthority(authoritySnapshot)
         val origin = F.origin()
@@ -103,8 +83,8 @@ class SessionPendingRefreshReconciliationTest {
         auth: FakeServiceAuthApi = FakeServiceAuthApi(),
         runOwner: PushRunOwner = PushRunOwner(),
         credentialMutex: Mutex = Mutex(),
-        clock: () -> Long = { throw AssertionError("R09f replay must not read the clock") },
-        uuids: () -> String = { throw AssertionError("R09f replay must not mint UUIDs") },
+        clock: () -> Long = { throw AssertionError("pending-refresh replay must not read the clock") },
+        uuids: () -> String = { throw AssertionError("pending-refresh replay must not mint UUIDs") },
     ): PairSetup {
         val vault = F.vaultWith(record = vaultRecord, revision = vaultRevision)
         val w = setupOnVault(vault, authoritySnapshot, auth, runOwner, credentialMutex, clock, uuids)
@@ -545,7 +525,7 @@ class SessionPendingRefreshReconciliationTest {
     @Test
     fun strictLegacyReplayThroughActualAdapterRetainsExactPending() = runTest {
         // End-to-end strict decoding through the actual production adapter
-        // over the QA-owned scripted transport: a nonzero sub-millisecond
+        // over the test scripted transport: a nonzero sub-millisecond
         // tail in either instant stays MalformedResponse. A fake that throws
         // MalformedResponse directly cannot prove this strict path.
         val transport = FakeServiceHttpTransport()
@@ -573,8 +553,8 @@ class SessionPendingRefreshReconciliationTest {
             origin = origin,
             vault = delegate,
             authApi = adapter,
-            clockMillis = { throw AssertionError("R09f replay must not read the clock") },
-            uuidProvider = { throw AssertionError("R09f replay must not mint UUIDs") },
+            clockMillis = { throw AssertionError("pending-refresh replay must not read the clock") },
+            uuidProvider = { throw AssertionError("pending-refresh replay must not mint UUIDs") },
             mutex = credentialMutex,
         )
         try {
@@ -640,8 +620,8 @@ class SessionPendingRefreshReconciliationTest {
             origin = origin,
             vault = wrapping,
             authApi = auth,
-            clockMillis = { throw AssertionError("R09f replay must not read the clock") },
-            uuidProvider = { throw AssertionError("R09f replay must not mint UUIDs") },
+            clockMillis = { throw AssertionError("pending-refresh replay must not read the clock") },
+            uuidProvider = { throw AssertionError("pending-refresh replay must not mint UUIDs") },
             mutex = credentialMutex,
         )
         F.assertReauthFailure(SessionReauthenticationFailure.STALE_AUTHORITY) {
@@ -710,8 +690,8 @@ class SessionPendingRefreshReconciliationTest {
             origin = origin,
             vault = wrapping,
             authApi = auth,
-            clockMillis = { throw AssertionError("R09f replay must not read the clock") },
-            uuidProvider = { throw AssertionError("R09f replay must not mint UUIDs") },
+            clockMillis = { throw AssertionError("pending-refresh replay must not read the clock") },
+            uuidProvider = { throw AssertionError("pending-refresh replay must not mint UUIDs") },
             mutex = credentialMutex,
         )
         F.assertReauthFailure(SessionReauthenticationFailure.STALE_AUTHORITY) {
@@ -771,8 +751,8 @@ class SessionPendingRefreshReconciliationTest {
             origin = origin,
             vault = wrapping,
             authApi = auth,
-            clockMillis = { throw AssertionError("R09f replay must not read the clock") },
-            uuidProvider = { throw AssertionError("R09f replay must not mint UUIDs") },
+            clockMillis = { throw AssertionError("pending-refresh replay must not read the clock") },
+            uuidProvider = { throw AssertionError("pending-refresh replay must not mint UUIDs") },
             mutex = credentialMutex,
         )
         F.assertReauthFailure(SessionReauthenticationFailure.IDENTITY_MISMATCH) {
@@ -813,7 +793,7 @@ class SessionPendingRefreshReconciliationTest {
                 assertEquals(0, s.vault.loads)
                 assertEquals(0, s.auth.refreshCalls)
                 assertEquals(0, s.vault.commits)
-                val probe = SessionReauthenticationTestFixtures.ProbeCancellationException("queued-credential-r09f-cancel")
+                val probe = SessionReauthenticationTestFixtures.ProbeCancellationException("queued-credential-pending-refresh-cancel")
                 job.cancel(probe)
                 assertSame(probe, done.await())
                 job.join()
@@ -822,7 +802,7 @@ class SessionPendingRefreshReconciliationTest {
         } finally {
             s.credentialMutex.unlock()
         }
-        // Strict Room UNAVAILABLE maps through the existing R09e mapping to
+        // Strict Room UNAVAILABLE maps through the existing reauthentication mapping to
         // AUTHORITY_UNAVAILABLE: closed surface, no HTTP/CAS. Error-path
         // old-Room checks still run under BOTH owners: the read gate asserts
         // the shared DB owner and credential mutex are both held.
@@ -1011,7 +991,7 @@ class SessionPendingRefreshReconciliationTest {
                 }
             }
             entered.await()
-            val probe = SessionReauthenticationTestFixtures.ProbeCancellationException("http-r09f-cancel")
+            val probe = SessionReauthenticationTestFixtures.ProbeCancellationException("http-pending-refresh-cancel")
             job.cancel(probe)
             release.complete(Unit)
             assertSame(probe, done.await())

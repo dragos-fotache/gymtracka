@@ -18,7 +18,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R03b QA Android smoke: minSdk-compatible construction, strict error parser
+ * tests Android smoke: minSdk-compatible construction, strict error parser
  * including unquoted 1e400 overflow, and a local-TLS endpoint round trip.
  * No backend, no persistence or minimum-API runtime claim.
  */

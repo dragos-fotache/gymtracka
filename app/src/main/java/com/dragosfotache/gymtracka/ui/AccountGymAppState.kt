@@ -35,6 +35,7 @@ import com.dragosfotache.gymtracka.data.sync.store.ProjectionPublicationRequest
 import com.dragosfotache.gymtracka.data.sync.store.ProjectionStore
 import com.dragosfotache.gymtracka.data.sync.store.PushRunOwner
 import com.dragosfotache.gymtracka.data.sync.store.RepositorySession
+import com.dragosfotache.gymtracka.ui.settings.ServerConnectionState
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -49,8 +50,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * R12c scoped account runtime. Explicitly constructed; starts private and performs
- * no HTTP/sync until the caller invokes delivered authority/reconciliation APIs
+ * scoped account runtime. Explicitly constructed; starts private and performs
+ * no HTTP/sync until the caller invokes authority/reconciliation APIs
  * on [sessionCoordinator]. Owns real transition/publication barriers over the
  * currently attached app-state and watches the stable authority state.
  *
@@ -88,7 +89,7 @@ internal class AccountGymAppState(
     private var boundHandle: AppAccountSession? = null
 
     /**
-     * R13d binding-revision signal. Bumped under the state lock on every bound
+     * binding-revision signal. Bumped under the state lock on every bound
      * handle/app-state installation, removal or disposal so event-driven observers can
      * follow the synchronous exact-live selection without polling. Saturates rather
      * than wrapping; values are opaque revisions, never authorities.
@@ -101,7 +102,7 @@ internal class AccountGymAppState(
     }
 
     /**
-     * R13d cold event-driven exact-live binding observation. Re-evaluates
+     * cold event-driven exact-live binding observation. Re-evaluates
      * [visibleBinding] on every binding revision; emits null while no runtime is bound
      * for the current authority (for example ACTIVE before the feature runtime binds).
      * Collectors delegate to the matching handle's committed edits only, ending that
@@ -160,6 +161,9 @@ internal class AccountGymAppState(
 
     internal fun currentHandle(): AppAccountSession? =
         visibleBinding()?.handle
+
+    /** Uses the same wall clock as durable sync retry admission. */
+    internal fun wallTimeMillis(): Long = clock.wallTimeMillis()
 
     internal data class VisibleBinding(
         val app: GymAppState,
@@ -585,7 +589,7 @@ internal class AccountGymAppState(
 }
 
 /**
- * R12c scoped account root. Renders ordinary app content only for the exact
+ * scoped account root. Renders ordinary app content only for the exact
  * current live handle with its repository and shared edits; otherwise renders a
  * generic stable privacy placeholder. Never disposes the runtime-owned app state
  * on hide; the runtime owns final retirement.
@@ -593,8 +597,8 @@ internal class AccountGymAppState(
 @Composable
 internal fun GymApp(
     accountState: AccountGymAppState,
-    accountTab: (@Composable androidx.compose.foundation.layout.RowScope.() -> Unit)? = null,
-    accountDialog: (@Composable () -> Unit)? = null,
+    settingsAccountContent: (@Composable () -> Unit)? = null,
+    serverConnectionState: ServerConnectionState? = null,
 ) {
     // Recompose signal and negative gate only; positive selection stays solely with
     // visibleBinding's synchronous exact-live authority/liveness recheck.
@@ -614,7 +618,11 @@ internal fun GymApp(
                 LocalGymRepositoryOverride provides selected.handle.repository,
                 LocalFiniteEditCoordinator provides selected.app.edits,
             ) {
-                GymAppContent(selected.app, accountTab = accountTab, accountDialog = accountDialog)
+                GymAppContent(
+                    selected.app,
+                    settingsAccountContent = settingsAccountContent,
+                    serverConnectionState = serverConnectionState,
+                )
             }
         }
     } else {

@@ -1156,7 +1156,7 @@ internal class GymRepository(
     }
 
     /**
-     * R12b selected-scope projection observation. Cold stream: the invalidation
+     * selected-scope projection observation. Cold stream: the invalidation
      * flow is registered first and its initial emission drives the first fenced
      * `materialized_epoch` read (0 when absent), so a publication committing in
      * the gap is delivered as a second emission rather than lost. Afterwards only

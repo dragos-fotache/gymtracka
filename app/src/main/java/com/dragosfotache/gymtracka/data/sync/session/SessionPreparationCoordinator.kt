@@ -11,7 +11,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * Inert prepared-session coordinator over one R09a Room authority and one
+ * Inert prepared-session coordinator over one Room authority Room authority and one
  * encrypted session vault. Reserves one private Room preparation, durably
  * writes one returned service grant as PREPARED, and rereads both stores.
  * The two stores share no transaction: every crash boundary either resumes

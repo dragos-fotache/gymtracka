@@ -19,19 +19,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R09a independent QA: durable private account authority core.
- *
- * Derived ONLY from docs/archive/remaining-work/R09a-task.md contract signatures and
- * existing TEST harnesses (GymDatabaseTest in-memory pattern, MigrationTestHelper
- * file-reopen pattern, SessionVaultAndroidTest private-fixture pattern, exported
- * schemas 1-11 column facts). No production declarations, diffs, new schema12,
- * Worker work or decompiled classes inspected, including through LSP.
- *
- * Raw SQL independent literals throughout; no production DAO/entity/encoder
- * output used as oracle. Only contract signatures used:
- * RoomSessionAuthority(database), read/beginPreparation/fencePrivate,
- * RoomSessionAuthorityFailure/Exception, Recovery* models, ServiceOrigin.parse,
- * ServiceSessionBinding(origin, accountId, generation).
+ * Real Room checks for strict private account authority observations, preparation reservation,
+ * generation fencing and retained data preservation.
  */
 @RunWith(AndroidJUnit4::class)
 class RoomSessionAuthorityTest {
@@ -399,7 +388,7 @@ class RoomSessionAuthorityTest {
     @Test
     fun knownOrigin_survivesPrivateFenceAndFileReopen() = runTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val name = "r09a-known-origin-reopen.db"
+        val name = "authority-known-origin-reopen.db"
         context.deleteDatabase(name)
         try {
             val fileDatabase = Room.databaseBuilder(context, GymDatabase::class.java, name).build()
@@ -444,7 +433,7 @@ class RoomSessionAuthorityTest {
         }
     }
 
-    // ---- Obligation 1/5: seeded ACTIVE reader (no ACTIVE writes in R09a) ----
+    // ---- Obligation 1/5: seeded ACTIVE reader (no ACTIVE writes in Room authority) ----
 
     @Test
     fun seededActiveCompleteCache_readerReportsBaselineTrue() = runTest {

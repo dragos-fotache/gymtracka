@@ -19,12 +19,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * R04c independent QA: startup/session-recovery coordination.
- *
- * Observable black-box tests built only from the R04c spec's normative API
- * facts plus QA-owned fixtures. No production source inspected. Deterministic
- * JVM: TestScope/virtual time/deferred gates, no sleeps. Cancellation
- * identity is asserted INSIDE the actual caller.
+ * startup/session-recovery coordination.
  *
  * Covers acceptance cases 1-10 and 15 (startup algorithm, precedence gates,
  * races, validation/redaction). Runtime authority fencing lives in
@@ -265,7 +260,7 @@ class SessionRecoveryCoordinatorTest {
         }
     }
 
-    // ---- Case 6: prepared vault needs future recovery, no promotion ----
+    // ---- Case 6: prepared vault requires explicit recovery, no promotion ----
 
     @Test
     fun matchingPreparedVaultRequiresRecoveryAndExposesNothing() = runTest {
@@ -442,7 +437,7 @@ class SessionRecoveryCoordinatorTest {
             ),
         )
         val q = setup(vaultRecord = seeded)
-        val probe = CancellationException("qa-transport-cancel")
+        val probe = CancellationException("test-transport-cancel")
         q.auth.cancelWith(probe)
         val state = q.coordinator.reconcile()
         assertTrue(state is SessionRecoveryState.Active)
@@ -523,7 +518,7 @@ class SessionRecoveryCoordinatorTest {
     @Test
     fun authorityFailureLocksButPreservesDataForLaterSuccess() = runTest {
         val q = setup()
-        q.authority.failNow(RuntimeException("qa-authority-boom"))
+        q.authority.failNow(RuntimeException("test-authority-boom"))
         val locked = q.coordinator.reconcile()
         assertTrue(locked is SessionRecoveryState.Locked)
         assertEquals(
@@ -538,7 +533,7 @@ class SessionRecoveryCoordinatorTest {
     @Test
     fun injectedCancellationPropagatesIdenticallyAndLeavesPrivacyLocked() = runTest {
         val q = setup()
-        val probe = CancellationException("qa-injected")
+        val probe = CancellationException("test-injected")
         q.authority.failNow(probe)
         var caught: Throwable? = null
         try {
@@ -557,7 +552,7 @@ class SessionRecoveryCoordinatorTest {
         val vault = F.vaultWith(record = F.record(), revision = 1L)
         vault.loadGate = { gate.await() }
         val coordinator = F.coordinator(vault = vault, authority = authority, authApi = F.auth())
-        val probe = CancellationException("qa-caller")
+        val probe = CancellationException("test-caller")
         val outcome = CompletableDeferred<Throwable?>()
         val job = launch {
             try {
@@ -607,7 +602,7 @@ class SessionRecoveryCoordinatorTest {
         assertEquals(SessionRecoveryFailure.STALE_SESSION, dead?.failure)
         assertEquals(loadsBefore, q.vault.loads)
         assertEquals(0, q.auth.refreshCalls)
-        val probe = CancellationException("qa-newer")
+        val probe = CancellationException("test-newer")
         job.cancel(probe)
         advanceUntilIdle()
         assertSame(probe, outcome.await())
@@ -835,7 +830,7 @@ class SessionRecoveryCoordinatorTest {
     @Test
     fun unexpectedAuthorityFaultsAreClosedAsUnavailable() = runTest {
         for (fault in listOf<Throwable>(
-            RuntimeException("qa-boom"),
+            RuntimeException("test-boom"),
             SessionVaultException(VaultFailure.UNREADABLE),
         )) {
             val authority = FakeRecoveryAuthority(F.activeCompleteSnapshot())
@@ -904,7 +899,7 @@ class SessionRecoveryCoordinatorTest {
         runCurrent()
         coordinator.invalidate()
         assertTrue(coordinator.state is SessionRecoveryState.PrivacyLocked)
-        val probe = CancellationException("qa-injected-race")
+        val probe = CancellationException("test-injected-race")
         fault = probe
         gate.complete(Unit)
         advanceUntilIdle()
@@ -939,7 +934,7 @@ class SessionRecoveryCoordinatorTest {
         runCurrent()
         coordinator.invalidate()
         assertTrue(coordinator.state is SessionRecoveryState.PrivacyLocked)
-        val probe = CancellationException("qa-injected-vault-race")
+        val probe = CancellationException("test-injected-vault-race")
         fault = probe
         gate.complete(Unit)
         advanceUntilIdle()
@@ -974,7 +969,7 @@ class SessionRecoveryCoordinatorTest {
         runCurrent()
         val newer = coordinator.reconcile()
         assertTrue(newer is SessionRecoveryState.Active)
-        val probe = CancellationException("qa-injected-newer-race")
+        val probe = CancellationException("test-injected-newer-race")
         fault = probe
         gate.complete(Unit)
         advanceUntilIdle()
@@ -1003,8 +998,8 @@ class SessionRecoveryCoordinatorTest {
             authority = FakeRecoveryAuthority(F.activeCompleteSnapshot(revision = 9L)),
             authApi = F.auth(),
         )
-        val callerProbe = CancellationException("qa-caller-dominates")
-        val injected = CancellationException("qa-injected-masked")
+        val callerProbe = CancellationException("test-caller-dominates")
+        val injected = CancellationException("test-injected-masked")
         val outcome = CompletableDeferred<Throwable?>()
         val job = launch {
             try {
@@ -1024,7 +1019,7 @@ class SessionRecoveryCoordinatorTest {
         assertTrue(coordinator.state is SessionRecoveryState.PrivacyLocked)
     }
 
-    // ---- Strict legacy boundary through the QA-owned HTTP transport ----
+    // ---- Strict legacy boundary through the test HTTP transport ----
 
     @Test
     fun strictLegacyGrantBodyIsMalformedOnRefresh() = runTest {

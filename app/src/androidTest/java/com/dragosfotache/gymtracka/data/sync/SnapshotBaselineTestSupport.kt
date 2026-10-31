@@ -25,20 +25,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.fail
 
 /**
- * R08c independent QA fixtures. Hand-written from docs/archive/remaining-work/R08c-task.md
- * and the coordinator's source-independent API/harness contracts only.
- *
- * Every expected value below is a literal authored here; no production encoder
- * output is used as an oracle and no production source was inspected. Staged
- * pages reuse the vetted R08a builders ([stagePage], [stageWorkoutUpsert],
- * [stageRoutineUpsert], [stageCustomUpsert], [stageDelete]); durable seeding
- * reuses the vetted R06a claim/capture helpers and R05c publication support.
- * Only baseline-specific literals and same-run download/complete orchestration
- * are new.
+ * Literal baseline fixtures reuse whole-page staging, claim/capture and publication helpers. Same-
+ * run download/completion helpers retain the driver's actual issued capabilities.
  */
 
 // Fresh baseline literals: valid lowercase UUIDs, distinct from every
-// CLAIM_*/PULL_*/PD_*/ACK_*/OUTCOME_*/SYNC_*/STAGE_*/DELIVERY_*/R05B_*/R05C_*
+// CLAIM_*/PULL_*/PD_*/ACK_*/OUTCOME_*/SYNC_*/STAGE_*/DELIVERY_*/CANONICAL_*/PROJECTION_*
 // literal and from each other, so cross-scope and collision tests use exact equality.
 internal const val BASE_EPOCH = 0L
 internal const val BASE_NOW_MILLIS = 1_790_258_750_000L
@@ -202,13 +194,13 @@ internal suspend fun GymDatabase.baseAbandonObserved(
     }
 }
 
-/** Raw canonical-ledger field read; column names follow the vetted R05b seeding contract. */
+/** Raw canonical-ledger field read; column names follow the vetted canonical batches seeding contract. */
 internal fun GymDatabase.baseCanonicalField(
     account: String,
     aggregateType: String,
     aggregateId: String,
     column: String,
-): Any? = r05cQuery(
+): Any? = projectionQuery(
     "SELECT $column FROM sync_canonical_roots WHERE account_id = ? AND aggregate_type = ? AND aggregate_id = ?",
     arrayOf(account, aggregateType, aggregateId),
 ).singleOrNull()?.get(column)
@@ -226,10 +218,8 @@ internal fun GymDatabase.baseWatermark(account: String, aggregateType: String, a
     baseCanonicalField(account, aggregateType, aggregateId, "local_generation_watermark") as Long?
 
 /**
- * Rejection oracle for baseline/publication fences whose exact new exception
- * taxonomy is coordinator-owned: the operation must throw (cancellation
- * identity is never swallowed), but no production-derived type is asserted.
- * Every caller pairs this with full durable no-change oracles.
+ * Checks rejection without depending on a particular exception subtype. Cancellation is rethrown
+ * unchanged; callers separately compare complete durable state to prove no mutation.
  */
 internal suspend fun expectBaselineReject(label: String, block: suspend () -> Unit) {
     try {
@@ -251,7 +241,7 @@ internal fun GymDatabase.baseDomainSnapshot(): Map<String, List<String>> =
         "routines", "routine_exercises", "routine_sets",
         "exercises", "exercise_muscle_groups", "exercise_equipment",
         "muscle_groups", "equipment",
-    ).associateWith { r05cDump(it) }
+    ).associateWith { projectionDump(it) }
 
 /** Redaction oracle: no baseline/account/token/body literal may appear in display text. */
 internal fun baseAssertRedacted(text: String, label: String) {

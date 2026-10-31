@@ -1,7 +1,7 @@
 package com.dragosfotache.gymtracka.data.sync.model
 
 /**
- * Shared aggregate shape helpers for the routine and custom-exercise slices.
+ * Shared aggregate shape helpers for the routine and custom-exercise models.
  * Workout logic keeps its own approved helpers; these cover the new aggregates.
  */
 

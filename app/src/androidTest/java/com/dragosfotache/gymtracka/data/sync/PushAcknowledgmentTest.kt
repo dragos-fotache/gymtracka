@@ -35,12 +35,9 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R06c independent acknowledgment acceptance: atomic canonical commit,
- * exact frozen removal, generation-scoped metadata update and dirty
- * marking. Real Room, no mocked DAOs, no sleeps.
- *
- * All expectations are literals authored from docs/archive/remaining-work/R06c-task.md;
- * no production encoder output is used as an oracle.
+ * Real Room checks for atomic canonical application, exact frozen-head removal, generation-scoped
+ * metadata settlement and dirty marking. Expected values are literals rather than regenerated
+ * output.
  */
 class PushAcknowledgmentTest : GymDatabaseTest() {
 
@@ -129,10 +126,10 @@ class PushAcknowledgmentTest : GymDatabaseTest() {
             // Complete row snapshots of untouched tables, taken admitted.
             assertEquals(listOf(ACK_CHILD_ENTRY), database.ackIds("workout_exercises"))
             assertEquals(listOf(ACK_CHILD_SET), database.ackIds("workout_sets"))
-            val childExBefore = database.r05cDump("workout_exercises")
-            val childSetBefore = database.r05cDump("workout_sets")
-            val routinesBefore = database.r05cDump("routines")
-            val exercisesBefore = database.r05cDump("exercises")
+            val childExBefore = database.projectionDump("workout_exercises")
+            val childSetBefore = database.projectionDump("workout_sets")
+            val routinesBefore = database.projectionDump("routines")
+            val exercisesBefore = database.projectionDump("exercises")
             val accepted = run.handleResult(
                 claim,
                 ackAcceptedResult(claim.row.mutationId, batch),
@@ -171,10 +168,10 @@ class PushAcknowledgmentTest : GymDatabaseTest() {
             // Complete business/table preservation: children, tombstone, foreign
             // and local aggregates, cursor and cache epochs. Child and
             // unrelated tables survive byte-for-byte, not just by ID.
-            assertEquals(childExBefore, database.r05cDump("workout_exercises"))
-            assertEquals(childSetBefore, database.r05cDump("workout_sets"))
-            assertEquals(routinesBefore, database.r05cDump("routines"))
-            assertEquals(exercisesBefore, database.r05cDump("exercises"))
+            assertEquals(childExBefore, database.projectionDump("workout_exercises"))
+            assertEquals(childSetBefore, database.projectionDump("workout_sets"))
+            assertEquals(routinesBefore, database.projectionDump("routines"))
+            assertEquals(exercisesBefore, database.projectionDump("exercises"))
             assertEquals(
                 mapOf(
                     "account_id" to CLAIM_ACCOUNT_A,

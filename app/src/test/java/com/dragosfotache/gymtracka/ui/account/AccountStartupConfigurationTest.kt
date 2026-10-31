@@ -8,20 +8,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * R13c independent QA (JVM): build-input configuration seam.
- *
- * Derived ONLY from docs/archive/remaining-work/R13c-task.md configuration/UI section
- * plus the coordinator appendix (strict original HTTPS root-origin parsing via
- * ServiceOrigin; malformed/absent origin yields unavailable without I/O; missing
- * audience disables sign-in only while valid origin still recovers offline).
- * Independent literals only; no production oracles, no I/O, no sleeps.
+ * Checks strict original HTTPS root-origin parsing without I/O. Missing/malformed origin is
+ * unavailable; a missing audience disables sign-in while a valid origin still permits offline
+ * recovery.
  */
 class AccountStartupConfigurationTest {
 
     private companion object {
-        const val VALID_ORIGIN = "https://sync-r13c.example.test"
-        const val OTHER_ORIGIN = "https://other-r13c.example.test"
-        const val AUDIENCE = "r13c-audience-001"
+        const val VALID_ORIGIN = "https://sync-startup.example.test"
+        const val OTHER_ORIGIN = "https://other-startup.example.test"
+        const val AUDIENCE = "startup-audience-001"
     }
 
     @Test
@@ -46,13 +42,13 @@ class AccountStartupConfigurationTest {
     @Test
     fun invalidOrigins_yieldNullWithoutDiscovery() {
         val invalid = listOf(
-            "http://sync-r13c.example.test",
-            "https://sync-r13c.example.test/api",
-            "https://sync-r13c.example.test?x=1",
-            "https://sync-r13c.example.test#frag",
-            "https://user@sync-r13c.example.test",
-            " https://sync-r13c.example.test",
-            "https://sync-r13c.example.test ",
+            "http://sync-startup.example.test",
+            "https://sync-startup.example.test/api",
+            "https://sync-startup.example.test?x=1",
+            "https://sync-startup.example.test#frag",
+            "https://user@sync-startup.example.test",
+            " https://sync-startup.example.test",
+            "https://sync-startup.example.test ",
             "not-a-url",
         )
         for (raw in invalid) {

@@ -27,7 +27,7 @@ import okhttp3.tls.HeldCertificate
 import okhttp3.tls.HandshakeCertificates
 
 /**
- * R03a QA: concrete local-TLS network behaviour with real I/O.
+ * concrete local-TLS network behaviour with real I/O.
  * Bounded latch/server waits only; no sleeps, no backend, no domain logic.
  */
 class ServiceHttpNetworkTest {

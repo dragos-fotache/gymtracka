@@ -52,7 +52,7 @@ from pathlib import Path
 POSTGRES_IMAGE = "postgres:16-alpine"
 DISPOSABLE_DATABASE = "gymtracka_android_test"
 DISPOSABLE_USER = "android_test"
-BUILD_LOCK = "/tmp/gt-backend-task7-build.lock"
+BUILD_LOCK = "/tmp/gymtracka-backend-build.lock"
 
 
 class ConfigExistsError(RuntimeError):

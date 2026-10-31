@@ -30,14 +30,8 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R07a independent pull-checkpoint fence acceptance: session/epoch fences,
- * exact-row admission, baseline loss, foreign/superseded/consumed/closed
- * capabilities, enclosing transactions, same-token concurrency, mid-write
- * cancellation, queued cancellation and shared-owner serialization.
- *
- * Real Room, no mocked DAOs, no sleeps. Every expectation is a literal
- * authored from docs/archive/remaining-work/R07a-task.md; no production source was
- * inspected and no production oracle is used.
+ * Real Room checks for session/epoch and exact-row fences, baseline loss, stale capabilities,
+ * enclosing transactions, concurrency, cancellation and shared-owner serialization.
  */
 class PullCheckpointFenceTest : GymDatabaseTest() {
 
@@ -223,7 +217,7 @@ class PullCheckpointFenceTest : GymDatabaseTest() {
             } catch (_: IllegalStateException) {
             }
         }
-        // Enclosing Room transaction rejects entry, following the R06a
+        // Enclosing Room transaction rejects entry, following the claim
         // precedent of accepting either owned-entry exception shape.
         database.claimExec("DELETE FROM sync_state")
         database.claimExec("DELETE FROM sync_account_cache")

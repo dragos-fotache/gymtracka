@@ -11,10 +11,8 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R06b independent pure-helper acceptance for the durable retry policy.
- * JVM only: deterministic backoff/hint/cap/overflow arithmetic plus
- * fixed safe diagnostics. All expectations are literals derived from
- * docs/archive/remaining-work/R06b-task.md, never from production output.
+ * Deterministic JVM checks for durable retry backoff, hints, caps, overflow and fixed safe
+ * diagnostics using literal expected values.
  */
 class PushRetryPolicyTest {
 

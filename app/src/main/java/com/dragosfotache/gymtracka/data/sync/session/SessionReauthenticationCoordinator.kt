@@ -13,33 +13,18 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * Inert settled occupied-credential reauthentication over one R09e Room
- * authority and one encrypted session vault. Replaces a matching established
- * ACTIVE vault grant with a supplied same-service-account grant, privately
- * reserves a new durable session fence, and recovers every local two-store
- * interruption. Preserves retained domain, canonical cache, queue, frozen
- * requests, checkpoints and stages. Reuses Room12, encrypted vault CAS and
- * the existing private PREPARING engine/completion eligibility.
+ * Settled same-account credential replacement over Room authority and the encrypted vault.
+ * Reserves a new private session generation, installs a fresh matching grant and finalizes
+ * PREPARING while preserving domain/cache/outbox/checkpoint/stage evidence.
  *
- * Returns only advisory nonsecret preparation observations, never application
- * authorization. Performs no app construction/visibility, ordinary repository
- * rebinding, Google/challenge/exchange/logout HTTP, credential freshness
- * scheduling, account switching, sign-out, legacy import/delete/reassignment,
- * projection/publication, completion, schema/migration, backend/configuration
- * or live account/device actions. R09f reconciliation replays an exact pending
- * attempt only through the supplied shared refresh coordinator and clears it
- * only with its complete returned grant. Never rekeys or rebinds an uncertain
- * predecessor; never reads a clock and
- * never adopts another service UUID's retained data.
+ * Pending-refresh reconciliation replays only the exact retained attempt through the shared
+ * refresh coordinator and clears it only with the complete returned grant. No uncertain attempt is
+ * rekeyed. Results are advisory preparation observations; separate engine/completion steps grant
+ * application access.
  *
- * One application owner constructs one coordinator per physical Room/vault
- * pair with the shared [PushRunOwner] and the shared credential-selection
- * mutex. No independent refresh/transition owner is constructed. Lock order
- * is run owner then credential mutex, held continuously through all
- * reads/writes. Must not be called from a held owner/credential slot.
- * Construction is inert and performs no I/O. No cached success/admission
- * exists. Stops at inert PREPARING/PREPARED eligibility; never bootstraps,
- * publishes, promotes or activates.
+ * One application owner supplies the shared physical-database run owner and credential mutex, held
+ * in that order across reads/writes. Construction performs no I/O. Methods do not perform Google
+ * exchange, sign-out, switching, projection publication or account deletion.
  */
 internal class SessionReauthenticationCoordinator(
     private val origin: ServiceOrigin,
@@ -110,11 +95,11 @@ internal class SessionReauthenticationCoordinator(
 
     /**
      * Inert exact-pending-refresh reconciliation over an exact established ACTIVE Room/ACTIVE vault pair,
-     * before a separate R09e supplied-grant replacement. Reconciles a retained exact pending predecessor by
+     * before a separate reauthentication supplied-grant replacement. Reconciles a retained exact pending predecessor by
      * replaying its typed attempt ONCE through the supplied shared refresh coordinator, or proves a settled
      * pair stable with read-only rereads when no pending exists. Performs no Room writes, fresh selection or
      * rotation, clock/UUID calls, retries, adoption, reservation, replacement, or cleanup; expired grants are
-     * preserved as returned. Returns only an advisory settled old-ACTIVE eligibility observation that R09e
+     * preserved as returned. Returns only an advisory settled old-ACTIVE eligibility observation that reauthentication
      * must freshly read/admit again; never access credentials or reusable authority.
      *
      * The supplied refresh coordinator must share this coordinator's configured origin, referentially
@@ -972,7 +957,7 @@ internal class SessionReauthenticationCoordinator(
         expectedRecord: VaultSessionRecord,
     ) = verifyStablePair(fence, expectedRoom, expectedVaultRevision, expectedRecord)
 
-    // Exact R09f preflight under both shared owners: actual Room must equal the full supplied expected
+    // Exact pending-refresh reconciliation preflight under both shared owners: actual Room must equal the full supplied expected
     // snapshot and the vault must hold a positive-revision occupied ACTIVE record with the exact old
     // binding and operation. Missing, empty, PREPARED, foreign, adjacent-generation, or orphan evidence
     // refuses IDENTITY_MISMATCH with no HTTP/CAS. Pending is preserved exactly for replay, never refused
@@ -1009,7 +994,7 @@ internal class SessionReauthenticationCoordinator(
         return source
     }
 
-    // Final R09f proof under both shared owners: the supplied final vault snapshot must be a
+    // Final pending-refresh reconciliation proof under both shared owners: the supplied final vault snapshot must be a
     // positive-revision settled ACTIVE record with the exact old binding/operation and no pending
     // predecessor. Alternating rereads prove the unchanged old Room and the exact installed vault before
     // the advisory return. Never compensates, reinstalls, rekeys, or clears.
@@ -1052,14 +1037,14 @@ internal class SessionReauthenticationCoordinator(
         throw error
     }
 
-    // Closed R09f error mapping running inside both shared owners with caller/fence/Room precedence:
+    // Closed pending-refresh reconciliation error mapping running inside both shared owners with caller/fence/Room precedence:
     // caller cancellation propagates unchanged before any Room reread, then a retired newest fence maps
     // to STALE_OPERATION, then the fenced readAuthority reread must equal the full expected snapshot or
     // map to STALE_AUTHORITY. A failed reread keeps its strict mapped fault instead of the triggering
     // error. With a current fence and unchanged Room, safe SyncApiException failures keep their accepted
     // category/hints with pending retained; refresh STALE_SESSION maps to IDENTITY_MISMATCH, refresh
     // UNAVAILABLE to AUTHORITY_UNAVAILABLE, INVALID_INPUT stays INVALID_INPUT; strict Room and vault
-    // faults reuse the R09e mappings; raw faults map closed with no secret material. A strict Room fault
+    // faults reuse the reauthentication mappings; raw faults map closed with no secret material. A strict Room fault
     // latched at an authorization seam arrives through the failed callback already mapped, so it survives
     // a good reread with strictness intact.
     private suspend fun mapReconciliationErrorLocked(

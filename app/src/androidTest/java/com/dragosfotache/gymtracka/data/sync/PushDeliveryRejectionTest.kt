@@ -25,7 +25,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * R06d driver boundary: rejected/duplicate-rejected, malformed, oversized
+ * driver boundary: rejected/duplicate-rejected, malformed, oversized
  * and unknown permanent failures retain the head and stop successors;
  * auth stays resumable without refresh; unknown codes never leak into
  * string summaries.

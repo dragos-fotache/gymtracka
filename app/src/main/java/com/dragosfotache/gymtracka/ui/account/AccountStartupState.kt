@@ -54,12 +54,14 @@ internal interface AccountStartupOperations {
         operationId: String,
     ): AppSessionState
     suspend fun completeActivation(expected: RecoveryRoomSnapshot, stageId: String): AppSessionState
+    suspend fun completeActivationAfterReconnect(expected: RecoveryRoomSnapshot, stageId: String): AppSessionState =
+        completeActivation(expected, stageId)
     suspend fun observeLegacyImport(): LegacyImportProgress?
     fun observeSyncStatus(session: AppAccountSession): Flow<AccountSyncStatus>
 }
 
 /**
- * R13c mandatory startup controller. Serializes one nonqueueing owned operation
+ * mandatory startup controller. Serializes one nonqueueing owned operation
  * across start/signIn/continuePreparation with synchronous occupation/generation
  * fencing before launch/dispatch. Owned jobs are created lazy and registered
  * before start so cancellation before the body still releases occupation; a lost
@@ -97,6 +99,14 @@ internal class AccountStartupState(
         AccountStartupUiState(error = if (operations == null) AccountStartupError.UNAVAILABLE else null),
     )
     val uiState: StateFlow<AccountStartupUiState> = _uiState.asStateFlow()
+
+    /** Actual later sync supersedes a failed sign-in attempt, but not editor/identity/metadata failures. */
+    fun onSyncSucceeded() {
+        synchronized(lock) {
+            if (disposed || occupied || _uiState.value.error != AccountStartupError.SIGN_IN_FAILED) return
+            _uiState.value = _uiState.value.copy(error = null)
+        }
+    }
 
     /** Idempotent single startup recovery plus authority watching. No HTTP. */
     fun start() {
@@ -360,7 +370,7 @@ internal class AccountStartupState(
     }
 
     /** Explicit single activation over a fresh exact PREPARING observation. */
-    fun continuePreparation() {
+    fun continuePreparation(connectionRestored: Boolean = false) {
         val prepared = synchronized(lock) {
             if (disposed) return
             val ops = operations ?: return
@@ -432,7 +442,7 @@ internal class AccountStartupState(
                 }
                 if (!checkCurrent(gen)) return@launch
                 val after = try {
-                    callActivate(target, expected, stageId)
+                    callActivate(target, expected, stageId, connectionRestored)
                 } catch (e: CancellationException) {
                     settleCancelled(gen)
                     throw e
@@ -477,12 +487,20 @@ internal class AccountStartupState(
      * fresh read-only recovery. Never auto-activates, never clears
      * credential/vault/import/outbox state, and never claims remote rollback.
      * Settles CANCELLED; corrupt import evidence is retained, never cleared to
-     * a fabricated no-migration. Idle cancel is a no-op.
+     * a fabricated no-migration. Idle cancel disarms a deferred activation retry, otherwise is a no-op.
      */
     fun cancel() {
         val prepared = synchronized(lock) {
             if (disposed) return
-            if (currentJob?.isActive != true) return
+            if (currentJob?.isActive != true) {
+                // An idle deferred activation owns no job. Cancel still disarms its foreground retry.
+                if (_uiState.value.error == AccountStartupError.PREPARATION_PAUSED &&
+                    (operations?.state?.value as? AppSessionState.Private)?.retryAtMillis != null
+                ) {
+                    _uiState.value = _uiState.value.copy(error = AccountStartupError.CANCELLED)
+                }
+                return
+            }
             if (!isScopeAlive()) {
                 currentJob?.cancel()
                 currentJob = null
@@ -608,10 +626,14 @@ internal class AccountStartupState(
                 progress != null &&
                 (progress.phase == LegacyImportProgressPhase.CAPTURED ||
                     progress.phase == LegacyImportProgressPhase.SETTLED)
-            if (validPrivateImport) {
-                return ForegroundSignInIntent.PRIVATE_IMPORT_REAUTHENTICATION to freshUuid()
+            val fresh = freshUuid()
+            if (fresh == reserved) {
+                throw AccountStartupException(AccountStartupError.UNAVAILABLE)
             }
-            return ForegroundSignInIntent.SAME_ACCOUNT_REAUTHENTICATION to reserved
+            if (validPrivateImport) {
+                return ForegroundSignInIntent.PRIVATE_IMPORT_REAUTHENTICATION to fresh
+            }
+            return ForegroundSignInIntent.SAME_ACCOUNT_REAUTHENTICATION to fresh
         }
         if (expected.phase == RecoveryRoomPhase.SIGNED_OUT && expected.cachedAccountId != null) {
             if (expected.identity != null) {
@@ -721,9 +743,11 @@ internal class AccountStartupState(
         target: AccountStartupOperations,
         expected: RecoveryRoomSnapshot,
         stageId: String,
+        connectionRestored: Boolean = false,
     ): AppSessionState {
         try {
-            return target.completeActivation(expected, stageId)
+            return if (connectionRestored) target.completeActivationAfterReconnect(expected, stageId)
+            else target.completeActivation(expected, stageId)
         } catch (e: CancellationException) {
             throw e
         } catch (e: AccountStartupException) {

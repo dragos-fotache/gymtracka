@@ -36,16 +36,8 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R07b independent pull-delivery fence acceptance: session/epoch/row/baseline
- * fences during transport (data, empty and failure results), deterministic
- * cancellation, deep ownership before the post-response checkpoint fence, and
- * shared-owner serialization with admitted-run reuse.
- *
- * Real Room, no DAO/PushRun mocks, no sleeps. Every expectation is a literal
- * authored from docs/archive/remaining-work/R07b-task.md and its coordinator
- * clarification (deep ownership immediately after API return + ensureActive,
- * before the suspending post-response checkpoint check); no production source
- * was inspected.
+ * Real Room checks for transport-time session/epoch/row/baseline fences, cancellation, whole-
+ * response ownership before suspending checkpoint checks, and shared-owner admitted-run reuse.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PullDeliveryFenceTest : GymDatabaseTest() {
@@ -480,7 +472,7 @@ class PullDeliveryFenceTest : GymDatabaseTest() {
         val writeSeen = AtomicBoolean(false)
         val fired = AtomicBoolean(false)
         lateinit var runnerJob: kotlinx.coroutines.Job
-        // Test-only real Room query hook, reusing the R07a mid-write
+        // Test-only real Room query hook, reusing the checkpoints mid-write
         // technique: observe the second commit's first write, then cancel
         // the driver Job on the following query. The first page commits
         // before the hook is armed, so only the second commit rolls back.

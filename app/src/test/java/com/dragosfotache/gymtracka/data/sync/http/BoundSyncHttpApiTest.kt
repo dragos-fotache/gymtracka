@@ -30,7 +30,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R03b QA: bound credential selection, frozen push bytes, GET query/limit/page
+ * bound credential selection, frozen push bytes, GET query/limit/page
  * tables, result consistency and actual adapter response mapping.
  *
  * Scripted [Call.Factory] seam only: capture in newCall, response callback ONLY

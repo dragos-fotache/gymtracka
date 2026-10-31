@@ -7,7 +7,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
 /**
- * R09h app-facing account handle. Captures the exact admitted Room
+ * app-facing account handle. Captures the exact admitted Room
  * identity/revision plus one opaque facade fence. Its repository never follows
  * another scope: every scoped transaction rechecks the facade process fence
  * before effects and before return/commit, so a dead handle cannot read or

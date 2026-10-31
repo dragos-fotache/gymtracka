@@ -22,14 +22,9 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R06a independent core-claim acceptance: explicit-head selection, durable
- * freeze-before-transport, exact byte preservation, blocked/deferred/empty
- * classification and entry fences. Real Room, no mocked DAOs, no sleeps.
- *
- * All expectations are literals authored from docs/archive/remaining-work/R06a-task.md
- * and the coordinator's contract facts. Exactness is proven by byte equality
- * of stored rows before and after claiming, never by regenerating bytes with
- * production codecs.
+ * Real Room checks for explicit-head selection, durable freeze before transport, exact-byte
+ * preservation, blocked/deferred/empty results and entry fences. Stored bytes are compared
+ * directly.
  */
 class PushClaimTest : GymDatabaseTest() {
 
@@ -616,7 +611,7 @@ class PushClaimTest : GymDatabaseTest() {
                     "effectUnknownMember" -> {
                         val entry = JSONObject(head.payloadJson)
                             .getJSONArray("affectedRoots").getJSONObject(0)
-                        entry.put("r06aEffectUnknown", 7)
+                        entry.put("claimEffectUnknown", 7)
                         JSONObject(head.payloadJson).apply {
                             put("affectedRoots", org.json.JSONArray().put(entry))
                         }.toString()
@@ -625,7 +620,7 @@ class PushClaimTest : GymDatabaseTest() {
                         val inner = JSONObject(head.payloadJson).getString("requestJson")
                         val withExtra = inner.replaceFirst(
                             "{",
-                            "{\"r06aInnerUnknown\":1,",
+                            "{\"claimInnerUnknown\":1,",
                         )
                         JSONObject(head.payloadJson).apply {
                             put("requestJson", withExtra)
@@ -669,7 +664,7 @@ class PushClaimTest : GymDatabaseTest() {
                     "extraMember" ->
                         JSONObject(head.payloadJson).apply {
                             put("payloadVersion", 2)
-                            put("r06aUnknownField", 7)
+                            put("claimUnknownField", 7)
                         }.toString()
                     else ->
                         JSONObject(head.payloadJson).apply {

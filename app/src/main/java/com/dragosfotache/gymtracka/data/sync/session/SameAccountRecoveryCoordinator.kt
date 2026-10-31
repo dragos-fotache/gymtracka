@@ -17,7 +17,7 @@ import kotlinx.coroutines.sync.withLock
  * with a supplied fresh service-confirmed foreground same-origin/same-UUID
  * grant while atomically retaining and permanently fencing its exact
  * encrypted evidence. Reuses Room12, vault CAS, the shared owner/credential
- * mutex, R09e finalization and R09b/c/d preparation boundaries. Stops at
+ * mutex, reauthentication finalization and preparation/prepared engine/completion preparation boundaries. Stops at
  * advisory private PREPARING/PREPARED eligibility; never bootstraps,
  * publishes, promotes, activates, cleans up, rekeys, replays, rebinds,
  * or performs HTTP, clock/UUID generation, projection or account UI work.

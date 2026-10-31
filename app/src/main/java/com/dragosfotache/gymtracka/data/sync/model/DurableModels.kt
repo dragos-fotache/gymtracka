@@ -23,7 +23,7 @@ data class AffectedRootModel(
 
 /**
  * Frozen validated request with its exact wire text. The decoded envelope and
- * effects are exposed read-only for future engine use; the request text is the
+ * effects are exposed read-only for engine use; the request text is the
  * retry authority and is never regenerated or normalized.
  */
 data class DurableRequestModel(

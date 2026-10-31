@@ -19,20 +19,7 @@ import org.junit.runner.RunWith
 import kotlin.time.Duration.Companion.seconds
 
 /**
- * R09h independent QA: grant handling and transition/drain fencing, real Room.
- *
- * Derived ONLY from docs/remaining-work/R09h-task.md (exact expected
- * snapshots, fresh canonical operation UUIDs, tightened refusal policy,
- * transition pause/drain while the previous handle stays valid, P17
- * superseded-evidence preservation, wrong-origin/account and local-root
- * refusal with no cleanup, failed-drain and invalidation/cancellation
- * fences, delayed-grant staleness) plus QA-owned harness facts (R09c/R09g
- * vault/authority shapes, R04b ServiceRefreshAttempt.fromJson, R05c
- * lease/barrier shapes, raw-SQL journal/vault/outbox oracles,
- * createCustomExercise minimal-edit seam, coordinator-supplied
- * exerciseSummaries fenced-read seam). No production source, diffs, Worker
- * output, LSP or decompiled code inspected. Deterministic only, no sleeps;
- * async coordination awaits entered drain gates/jobs under test timeouts.
+ * grant handling and transition/drain fencing, real Room.
  *
  * Covers risk obligations 4 (same-account preservation; different-UUID and
  * legacy-local refusal unchanged) and 6 (failed drain, drain/network/Room/
@@ -111,7 +98,7 @@ class AppSessionGrantTransitionTest {
     fun sameAccountFreshGrantPreservesPendingDomainAndUncertainEvidence() = runTest(timeout = 90.seconds) {
         val s = stack()
         val handle = s.activate()
-        handle.repository.createCustomExercise("R09h Keep Me", null, emptySet(), null, null, "")
+        handle.repository.createCustomExercise("session Keep Me", null, emptySet(), null, null, "")
         val frozenBefore = harness.frozenIdentity(harness.outboxSnapshot(s.database, AppSessionFixtures.ACCOUNT))
         assertEquals(1, frozenBefore.size)
         // Uncertain encrypted evidence: ACTIVE record carrying an unresolved
@@ -132,7 +119,7 @@ class AppSessionGrantTransitionTest {
         // Pending queue and domain survive with identical frozen identity.
         // The old handle is dead, so domain is proven via the SQL oracle.
         assertEquals(frozenBefore, harness.frozenIdentity(harness.outboxSnapshot(s.database, AppSessionFixtures.ACCOUNT)))
-        assertEquals(listOf("R09h Keep Me"), harness.customNames(s.database, AppSessionFixtures.ACCOUNT))
+        assertEquals(listOf("session Keep Me"), harness.customNames(s.database, AppSessionFixtures.ACCOUNT))
         // Uncertain predecessor evidence is retained and fenced, never dropped.
         val retained = checkNotNull(s.vault.load().record?.supersededSessions)
         assertTrue("superseded evidence must be retained, was $retained", retained.entries.isNotEmpty())
@@ -161,7 +148,7 @@ class AppSessionGrantTransitionTest {
         run {
             val s = stack()
             val handle = s.activate()
-            handle.repository.createCustomExercise("R09h Mine", null, emptySet(), null, null, "")
+            handle.repository.createCustomExercise("session Mine", null, emptySet(), null, null, "")
             val journalBefore = harness.journalRow(s.database)
             val vaultBefore = s.vault.load()
             val frozenBefore = harness.frozenIdentity(harness.outboxSnapshot(s.database, AppSessionFixtures.ACCOUNT))
@@ -173,7 +160,7 @@ class AppSessionGrantTransitionTest {
                 AppSessionFixtures.assertRefusal(e, AppSessionReason.IDENTITY_MISMATCH)
             }
             handle.checkCurrent()
-            assertTrue(summaries(handle).contains("R09h Mine"))
+            assertTrue(summaries(handle).contains("session Mine"))
             assertEquals(journalBefore, harness.journalRow(s.database))
             assertEquals(vaultBefore, s.vault.load())
             assertEquals(frozenBefore, harness.frozenIdentity(harness.outboxSnapshot(s.database, AppSessionFixtures.ACCOUNT)))
@@ -183,7 +170,7 @@ class AppSessionGrantTransitionTest {
         run {
             val s = stack()
             val handle = s.activate()
-            handle.repository.createCustomExercise("R09h Kept", null, emptySet(), null, null, "")
+            handle.repository.createCustomExercise("session Kept", null, emptySet(), null, null, "")
             val expected = readAuthority(s.database)
             val reusedOp = checkNotNull(expected.identity).operationId
             val journalBefore = harness.journalRow(s.database)
@@ -201,7 +188,7 @@ class AppSessionGrantTransitionTest {
                 AppSessionFixtures.assertRefusal(e, AppSessionReason.IDENTITY_MISMATCH)
             }
             handle.checkCurrent()
-            assertTrue(summaries(handle).contains("R09h Kept"))
+            assertTrue(summaries(handle).contains("session Kept"))
             assertEquals(journalBefore, harness.journalRow(s.database))
             assertEquals(vaultBefore, s.vault.load())
             assertEquals(frozenBefore, harness.frozenIdentity(harness.outboxSnapshot(s.database, AppSessionFixtures.ACCOUNT)))
@@ -215,7 +202,7 @@ class AppSessionGrantTransitionTest {
                 database,
                 com.dragosfotache.gymtracka.data.sync.store.RepositorySession.SIGNED_OUT,
             )
-            localRepo.createCustomExercise("R09h Legacy", null, emptySet(), null, null, "")
+            localRepo.createCustomExercise("session Legacy", null, emptySet(), null, null, "")
             assertEquals(emptyList<String?>(), harness.journalRow(database))
             try {
                 s.coordinator.acceptGrant(
@@ -239,12 +226,12 @@ class AppSessionGrantTransitionTest {
     fun failedTransitionDrainRetainsHandleCredentialsAndMakesNoReservation() = runTest(timeout = 90.seconds) {
         val s = stack()
         val handle = s.activate()
-        handle.repository.createCustomExercise("R09h Live Edit", null, emptySet(), null, null, "")
+        handle.repository.createCustomExercise("session Live Edit", null, emptySet(), null, null, "")
         val journalBefore = harness.journalRow(s.database)
         val acquiresBefore = s.transition.acquires
         val vaultBefore = s.vault.load()
         val frozenBefore = harness.frozenIdentity(harness.outboxSnapshot(s.database, AppSessionFixtures.ACCOUNT))
-        s.transition.acquireFaults += RuntimeException("r09h-drain-fault")
+        s.transition.acquireFaults += RuntimeException("session-drain-fault")
         try {
             s.coordinator.acceptGrant(
                 readAuthority(s.database),
@@ -260,7 +247,7 @@ class AppSessionGrantTransitionTest {
         assertEquals(frozenBefore, harness.frozenIdentity(harness.outboxSnapshot(s.database, AppSessionFixtures.ACCOUNT)))
         assertEquals("failed drain acquires once", acquiresBefore + 1, s.transition.acquires)
         handle.checkCurrent()
-        assertTrue(summaries(handle).contains("R09h Live Edit"))
+        assertTrue(summaries(handle).contains("session Live Edit"))
     }
 
     @Test
@@ -314,7 +301,7 @@ class AppSessionGrantTransitionTest {
         val healthyState = s.coordinator.state.value
         assertTrue("expected Active, was $healthyState", healthyState is AppSessionState.Active)
         val healthy = (healthyState as AppSessionState.Active).session
-        healthy.repository.createCustomExercise("R09h Cancel Kept", null, emptySet(), null, null, "")
+        healthy.repository.createCustomExercise("session Cancel Kept", null, emptySet(), null, null, "")
         val journalBefore = harness.journalRow(s.database)
         val vaultBefore = s.vault.load()
         val frozenBefore = harness.frozenIdentity(harness.outboxSnapshot(s.database, AppSessionFixtures.ACCOUNT))
@@ -334,7 +321,7 @@ class AppSessionGrantTransitionTest {
             }
         }
         s.transition.enteredAcquire.await()
-        val probe = kotlinx.coroutines.CancellationException("r09h-caller-cancel")
+        val probe = kotlinx.coroutines.CancellationException("session-caller-cancel")
         job.cancel(probe)
         s.transition.releaseAcquire.complete(Unit)
         job.join()
@@ -346,7 +333,7 @@ class AppSessionGrantTransitionTest {
         assertTrue("cancelled drain must preserve Active, was $state", state is AppSessionState.Active)
         val same = (state as AppSessionState.Active).session
         same.checkCurrent()
-        assertTrue(summaries(same).contains("R09h Cancel Kept"))
+        assertTrue(summaries(same).contains("session Cancel Kept"))
         assertEquals(journalBefore, harness.journalRow(s.database))
         assertEquals(vaultBefore, s.vault.load())
         assertEquals(frozenBefore, harness.frozenIdentity(harness.outboxSnapshot(s.database, AppSessionFixtures.ACCOUNT)))
@@ -371,7 +358,7 @@ class AppSessionGrantTransitionTest {
             s.coordinator.acceptGrant(
                 staleExpected,
                 AppSessionFixtures.OP_STALE,
-                AppSessionFixtures.grant(access = "r09h-access-delayed"),
+                AppSessionFixtures.grant(access = "session-access-delayed"),
             )
             error("delayed grant must throw stale")
         } catch (e: AppSessionStaleException) {

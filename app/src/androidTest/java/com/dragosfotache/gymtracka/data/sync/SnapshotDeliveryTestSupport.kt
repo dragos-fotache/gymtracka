@@ -10,15 +10,8 @@ import com.dragosfotache.gymtracka.data.sync.model.SnapshotResultModel
 import kotlinx.coroutines.CompletableDeferred
 
 /**
- * R08b independent QA fixtures. Hand-written from docs/archive/remaining-work/R08b-task.md
- * and the coordinator's source-independent API/harness facts only.
- *
- * Every expected value below is a literal authored here; no production encoder
- * output is used as an oracle and no production source was inspected. Durable
- * seeding reuses the vetted R06a claim/capture helpers, R06c acknowledgment
- * builders and R08a staging builders ([stagePage], [stageWorkoutUpsert],
- * [stageRoutineUpsert], [stageCustomUpsert], [stageDelete]); only
- * delivery-specific literals and scripted snapshot transports are new.
+ * Literal snapshot pages and scripted transports reuse durable claim, acknowledgment and staging
+ * helpers. Expected values do not come from the production encoder.
  */
 
 // Fresh delivery literals: valid lowercase UUIDs, distinct from every

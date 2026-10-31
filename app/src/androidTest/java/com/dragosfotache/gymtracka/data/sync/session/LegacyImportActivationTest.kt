@@ -38,17 +38,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * R13b independent QA: private import activation/observation seams.
- *
- * Derived ONLY from docs/archive/remaining-work/R13b-task.md (opt-in policy,
- * consent-before-delivery, observe/reauthenticate/private-import contracts)
- * and docs/archive/remaining-work/R13b-harness.md (packages, constructor position,
- * unconfigured-refusal rule, vault namespace/alias patterns), reusing
- * allowed test-only AppSession fixtures (CountingClock/Uuids, scripted
- * barriers/auth/transport, redaction oracles, empty snapshot/pull bodies)
- * and R13a capture shapes. No production declarations/diffs/diagnostics,
- * Worker work or decompiled classes inspected. All IDs are this slice's
- * own literals; byte oracles are exact equality, never substrings.
+ * Real Room checks for private import activation and observation, requiring coherent
+ * receipt/source/authority evidence before account admission.
  */
 @RunWith(AndroidJUnit4::class)
 class LegacyImportActivationTest {
@@ -57,8 +48,8 @@ class LegacyImportActivationTest {
     private val usedNamespaces = mutableListOf<String>()
 
     private companion object {
-        const val ORIGIN = "https://sync-r13b.example.test"
-        const val OTHER_ORIGIN = "https://other-r13b.example.test"
+        const val ORIGIN = "https://sync-import.example.test"
+        const val OTHER_ORIGIN = "https://other-import.example.test"
         const val ACCOUNT = "c13b2001-1111-4111-8111-111111111111"
         const val OPERATION = "d13b2001-1111-4111-8111-111111111111"
         const val NEW_OPERATION = "d13b2002-2222-4222-8222-222222222222"
@@ -124,7 +115,7 @@ class LegacyImportActivationTest {
         clock: CountingClock = CountingClock(),
         uuids: CountingUuids = CountingUuids(),
     ): AppSessionCoordinator {
-        val namespace = "gymtracka-test-r13b-" + UUID.randomUUID()
+        val namespace = "gymtracka-test-import-" + UUID.randomUUID()
         usedNamespaces += namespace
         return AppSessionCoordinator(
             database = database,
@@ -155,9 +146,9 @@ class LegacyImportActivationTest {
     private fun grant(accountId: String = ACCOUNT): ServiceSession =
         ServiceSession(
             ServiceAccountRef(accountId, null),
-            OpaqueToken("r13b-access-001"),
+            OpaqueToken("import-access-001"),
             GRANT_EXPIRY,
-            OpaqueToken("r13b-refresh-001"),
+            OpaqueToken("import-refresh-001"),
             GRANT_EXPIRY + 30L * 24 * 60 * 60 * 1000,
         )
 
@@ -329,7 +320,7 @@ class LegacyImportActivationTest {
         val record = recordFor(aggregateType, aggregateId)
         val batch = JSONObject()
             .put("batchId", batchFor(mutationId))
-            .put("cursor", "r13b-cursor")
+            .put("cursor", "import-cursor")
             .put(
                 "changes",
                 org.json.JSONArray().put(
@@ -362,7 +353,7 @@ class LegacyImportActivationTest {
 
     private fun snapshotBody(changes: List<JSONObject>): String = JSONObject()
         .put("records", org.json.JSONArray(changes))
-        .put("baselineCursor", "r13b-baseline")
+        .put("baselineCursor", "import-baseline")
         .put("nextPageToken", JSONObject.NULL)
         .put("hasMore", false)
         .toString()
@@ -391,10 +382,10 @@ class LegacyImportActivationTest {
         ),
     )
 
-    /** Empty terminal tail on this slice's own baseline checkpoint. */
+    /** Empty terminal tail on test baseline checkpoint. */
     private fun emptyTail(): String = JSONObject()
         .put("batches", org.json.JSONArray())
-        .put("nextCursor", "r13b-baseline")
+        .put("nextCursor", "import-baseline")
         .put("hasMore", false)
         .toString()
 
@@ -931,7 +922,7 @@ class LegacyImportActivationTest {
                 facade.completeActivation(RoomSessionAuthority(database).read(), STAGE)
             }
             entered.await()
-            activation.cancel(CancellationException("r13b-qa-cancel"))
+            activation.cancel(CancellationException("import-test-cancel"))
             release.complete(Unit)
             try {
                 activation.await()
@@ -987,7 +978,7 @@ class LegacyImportActivationTest {
                             JSONObject().put("results", org.json.JSONArray(outcomes)).toString(),
                         )
                     }
-                    else -> AppSessionTransport.Frame(500, """{"error":"r13b-snapshot-down"}""")
+                    else -> AppSessionTransport.Frame(500, """{"error":"import-snapshot-down"}""")
                 }
             }
             val facade = coordinator(
@@ -1027,7 +1018,7 @@ class LegacyImportActivationTest {
             assertTrue("expected Active, was $active", active is AppSessionState.Active)
             val session = (active as AppSessionState.Active).session
             // Ordinary ACTIVE edit legitimately differs from frozen source: no recapture.
-            session.repository.createCustomExercise("R13b Post Live", null, emptySet(), null, null, "")
+            session.repository.createCustomExercise("import Post Live", null, emptySet(), null, null, "")
             assertEquals(1, journalCount())
             val reread = LegacyImportStore(
                 database = database,
@@ -1103,9 +1094,9 @@ class LegacyImportActivationTest {
     private fun freshGrant(): ServiceSession =
         ServiceSession(
             ServiceAccountRef(ACCOUNT, null),
-            OpaqueToken("r13b-access-002"),
+            OpaqueToken("import-access-002"),
             GRANT_EXPIRY,
-            OpaqueToken("r13b-refresh-002"),
+            OpaqueToken("import-refresh-002"),
             GRANT_EXPIRY + 30L * 24 * 60 * 60 * 1000,
         )
 
@@ -1396,7 +1387,7 @@ class LegacyImportActivationTest {
     private var finishedCalls = 0
 
     @Test
-    fun r13bFixtures_selfCheck() {
+    fun legacyImportFixtures_selfCheck() {
         val uuidShape = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
         for (id in listOf(
             ACCOUNT, OPERATION, NEW_OPERATION, STAGE,
@@ -1406,7 +1397,7 @@ class LegacyImportActivationTest {
             assertTrue("canonical UUID <$id>", uuidShape.matches(id))
             assertEquals(id, UUID.fromString(id).toString())
         }
-        val namespace = "gymtracka-test-r13b-" + UUID.randomUUID()
+        val namespace = "gymtracka-test-import-" + UUID.randomUUID()
         assertTrue(namespace.startsWith("gymtracka-test-"))
         assertTrue(namespace.length <= 63)
         assertTrue(Regex("^[a-z][a-z0-9_-]{0,63}$").matches(namespace))
@@ -1432,7 +1423,7 @@ class LegacyImportActivationTest {
         assertEquals(BATCH_A, batch.getJSONObject("batch").getString("batchId"))
         assertTrue(uuidShape.matches(batch.getJSONObject("batch").getString("batchId")))
         val snapshot = JSONObject(minimalSnapshot())
-        assertEquals("r13b-baseline", snapshot.getString("baselineCursor"))
+        assertEquals("import-baseline", snapshot.getString("baselineCursor"))
         assertEquals(2, snapshot.getJSONArray("records").length())
     }
 

@@ -22,7 +22,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * R06d driver boundary: lost-response transient uses failure-time backoff,
+ * driver boundary: lost-response transient uses failure-time backoff,
  * stays deferred without extra calls, survives file reopen with exact
  * identity, then duplicate-accepted settles once before the successor.
  */

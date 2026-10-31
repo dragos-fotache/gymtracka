@@ -26,16 +26,8 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R08a independent frozen-snapshot staging acceptance: initial/terminal
- * stages, multi-page whole-record fidelity, whole-page atomicity, begin
- * admission, foreign isolation, stage exclusion through existing drivers,
- * retained-corruption fail-closed, reopen recovery and redacted displays.
- *
- * Real Room, no mocked DAOs, no sleeps. Every expectation is a literal
- * authored from docs/archive/remaining-work/R08a-task.md; no production encoder
- * output is used as an oracle and no production source was inspected.
- * Malformed-page [SyncModelException] assertions check only the safe type
- * plus redaction (the contextual message is production-owned).
+ * Real Room checks for initial/terminal stages, complete ordered pages, atomic appends, admission,
+ * account isolation, stage exclusion, retained corruption, reopen recovery and redacted displays.
  */
 class SnapshotStageTest : GymDatabaseTest() {
 
@@ -310,7 +302,7 @@ class SnapshotStageTest : GymDatabaseTest() {
             "token-cycle" to stagePage(
                 listOf(stageWorkoutUpsert(id = STAGE_WORKOUT_2)), STAGE_BASELINE_1, STAGE_TOKEN_1, true,
             ),
-            // Owner resolution (R08a): token shape is nonempty, not
+            // Owner resolution (snapshot staging): token shape is nonempty, not
             // nonblank. Whitespace-only nonempty tokens are covered by the
             // dedicated commit-and-preserve test below; empty-string
             // continuations stay rejected and are covered there too.
@@ -374,7 +366,7 @@ class SnapshotStageTest : GymDatabaseTest() {
     @Test
     fun whitespaceNonemptyToken_commitsPreservedExactlyWhileEmptyRejected() = runTest {
         database.stageSeedBaseline()
-        // Owner resolution (R08a): nonempty (not nonblank) opaque tokens are
+        // Owner resolution (snapshot staging): nonempty (not nonblank) opaque tokens are
         // valid and preserved byte-exact; absent/empty continuations reject.
         // The token below is whitespace-ONLY nonempty, so it exercises the
         // authorized correction at the Room boundary (a token containing

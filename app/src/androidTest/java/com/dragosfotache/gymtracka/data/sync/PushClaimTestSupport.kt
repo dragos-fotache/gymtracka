@@ -31,14 +31,8 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 /**
- * R06a independent QA fixtures. Hand-written from docs/archive/remaining-work/R06a-task.md,
- * the coordinator's API/harness facts and the shared backend contract only.
- *
- * Every expected value below is a literal authored here; no production encoder
- * output is used as an oracle. Valid durable rows are produced through the
- * existing test-owned [SyncStore] capture path; byte-exactness is asserted by
- * comparing stored bytes before and after claim/replay, never by regenerating
- * bytes with production codecs.
+ * Literal claim/replay fixtures use SyncStore capture for durable rows. Exactness compares stored
+ * bytes before and after claiming instead of regenerating them through codecs.
  */
 
 internal const val CLAIM_ACCOUNT_A = "account-a"
@@ -194,7 +188,7 @@ internal fun claimWrapperWithDuplicateMember(wrapper: String): String =
 
 /** Inserts a forbidden unknown member at the front of a valid wrapper. */
 internal fun claimWrapperWithForbiddenField(wrapper: String): String =
-    wrapper.replaceFirst("{", "{\"r06aUnknownField\":7,")
+    wrapper.replaceFirst("{", "{\"claimUnknownField\":7,")
 
 /** Re-quotes a valid wrapper with a different wrapper version. Inner bytes are untouched. */
 internal fun claimWrapperWithVersion(wrapper: String, version: Int): String =
@@ -334,11 +328,11 @@ internal class ClaimTestTransport(
     }
 
     override suspend fun pull(cursor: String?, limit: Int): PullResultModel {
-        throw AssertionError("pull must not be called by the R06a claim harness")
+        throw AssertionError("pull must not be called by the claim claim harness")
     }
 
     override suspend fun snapshot(pageToken: String?, limit: Int): SnapshotResultModel {
-        throw AssertionError("snapshot must not be called by the R06a claim harness")
+        throw AssertionError("snapshot must not be called by the claim claim harness")
     }
 }
 
@@ -371,11 +365,11 @@ internal class ClaimAdversarialTransport(
     }
 
     override suspend fun pull(cursor: String?, limit: Int): PullResultModel {
-        throw AssertionError("pull must not be called by the R06a claim harness")
+        throw AssertionError("pull must not be called by the claim claim harness")
     }
 
     override suspend fun snapshot(pageToken: String?, limit: Int): SnapshotResultModel {
-        throw AssertionError("snapshot must not be called by the R06a claim harness")
+        throw AssertionError("snapshot must not be called by the claim claim harness")
     }
 }
 

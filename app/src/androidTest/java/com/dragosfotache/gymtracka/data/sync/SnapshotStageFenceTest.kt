@@ -33,15 +33,9 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 /**
- * R08a independent staging-fence acceptance: session/epoch/source fences,
- * foreign/closed/outside-run/enclosing-transaction rejection, superseded and
- * recovery tokens, trigger rollback, RAISE(IGNORE) count-zero stale,
- * post-write cancellation, same-token concurrency, owner serialization,
- * deep ownership, queued cancellation and abandon/restart protocol.
- *
- * Real Room, no mocked DAOs, no sleeps. Every expectation is a literal
- * authored from docs/archive/remaining-work/R08a-task.md; no production source was
- * inspected and no production oracle is used.
+ * Real Room checks for stage session/epoch/source fences, invalid capability contexts,
+ * trigger/count-zero rollback, cancellation, concurrency, deep ownership and explicit
+ * abandon/restart.
  */
 class SnapshotStageFenceTest : GymDatabaseTest() {
 

@@ -36,8 +36,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 
-// R03c QA network: trusted local TLS over production adapter + actual transport.
-// No production source inspected. Independent raw strings only.
+// tests network: trusted local TLS over production adapter + actual transport.
+// Expected values are independent literal JSON strings.
 
 private const val NET_CHALLENGE_ID = "11111111-1111-1111-1111-111111111111"
 private const val NET_ACCOUNT_ID = "22222222-2222-2222-2222-222222222222"

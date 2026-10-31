@@ -35,22 +35,7 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 
-/**
- * R09h independent QA support only. No production declarations inspected.
- *
- * Derived ONLY from docs/remaining-work/R09h-task.md (normative new-API
- * contract, refusal policy, ownership/fencing, recovery/grant, reconnect
- * rules, 8 risk obligations) plus QA-owned harness facts reused from
- * existing test-only fixtures: R04b refresh fakes, R09b in-memory/file
- * builders and RoomSessionAuthority read shapes, R09c engine auth/transport/
- * lease shapes and journal/device/raw-SQL oracle patterns, R05c lease/
- * barrier shapes, R06a PushRunOwner()/RepositorySession shapes, R07c
- * hasOutstandingLocalWork, ScopedRepositoryTest createCustomExercise
- * minimal-edit seam, and the coordinator-supplied
- * GymRepository.exerciseSummaries fenced-read seam. All literals below are
- * this slice's own valid lowercase-hex IDs/names/bodies; wire bodies are
- * hand-written strings, never production encoder output.
- */
+
 internal object AppSessionFixtures {
     const val ORIGIN_ROOT = "https://sync.example.test"
     const val OTHER_ORIGIN_ROOT = "https://other.example.test"
@@ -62,17 +47,17 @@ internal object AppSessionFixtures {
     const val KEY_FRESH = "c0900001-1111-4111-8111-111111111111"
     const val STAGE = "d0900001-1111-4111-8111-111111111111"
     const val STAGE_OTHER = "d0900002-2222-4222-8222-222222222222"
-    const val ACCESS = "r09h-access-001"
-    const val ACCESS_ROTATED = "r09h-access-002"
-    const val REFRESH = "r09h-refresh-001"
-    const val REFRESH_ROTATED = "r09h-refresh-002"
+    const val ACCESS = "session-access-001"
+    const val ACCESS_ROTATED = "session-access-002"
+    const val REFRESH = "session-refresh-001"
+    const val REFRESH_ROTATED = "session-refresh-002"
 
-    /** Deterministic clock keeping QA grants live unless a test expires them. */
+    /** Deterministic clock keeping tests grants live unless a test expires them. */
     const val FIXED_CLOCK = 1_699_999_900_000L
     const val GRANT_EXPIRY = 1_700_000_000_000L
 
-    const val BASELINE = "r09h-baseline"
-    const val TAIL = "r09h-tail"
+    const val BASELINE = "session-baseline"
+    const val TAIL = "session-tail"
     const val BATCH_1 = "e0900001-1111-4111-8111-111111111111"
     const val BATCH_CHANGE = "e0900011-1111-4111-8111-111111111111"
 
@@ -80,26 +65,26 @@ internal object AppSessionFixtures {
     const val ROUTE_CHANGE = "f0900011-1111-4111-8111-111111111111"
 
     const val EMPTY_SNAPSHOT_BODY =
-        """{"records":[],"baselineCursor":"r09h-baseline","nextPageToken":null,"hasMore":false}"""
+        """{"records":[],"baselineCursor":"session-baseline","nextPageToken":null,"hasMore":false}"""
     const val EMPTY_PULL_BODY =
-        """{"batches":[],"nextCursor":"r09h-baseline","hasMore":false}"""
+        """{"batches":[],"nextCursor":"session-baseline","hasMore":false}"""
     const val TAIL_EMPTY_PULL_BODY =
-        """{"batches":[],"nextCursor":"r09h-tail","hasMore":false}"""
+        """{"batches":[],"nextCursor":"session-tail","hasMore":false}"""
 
     /**
      * Hand-written valid terminal pull carrying one routine upsert change.
-     * Shape mirrors the QA-owned R09c pullRevision2Terminal literal
+     * Shape mirrors the test prepared engine pullRevision2Terminal literal
      * (batchId/cursor/changes/nextCursor/hasMore with an upsert record
      * carrying id/name/isDraft/revision/exercises); all IDs/names are this
-     * slice's own literals, never production encoder output.
+     * test literals, never production encoder output.
      */
     const val PULL_CHANGE_BODY =
-        """{"batches":[{"batchId":"e0900011-1111-4111-8111-111111111111","cursor":"r09h-tail","changes":[""" +
+        """{"batches":[{"batchId":"e0900011-1111-4111-8111-111111111111","cursor":"session-tail","changes":[""" +
             """{"aggregateType":"routine","aggregateId":"f0900011-1111-4111-8111-111111111111","operation":"upsert","revision":1,"record":""" +
-            """{"id":"f0900011-1111-4111-8111-111111111111","name":"R09h Cloud Draft","isDraft":true,"revision":1,"exercises":[]}}]}],""" +
-            """"nextCursor":"r09h-tail","hasMore":false}"""
+            """{"id":"f0900011-1111-4111-8111-111111111111","name":"session Cloud Draft","isDraft":true,"revision":1,"exercises":[]}}]}],""" +
+            """"nextCursor":"session-tail","hasMore":false}"""
 
-    const val PENDING_BODY = """{"refreshToken":"r09h-refresh-001"}"""
+    const val PENDING_BODY = """{"refreshToken":"session-refresh-001"}"""
 
     fun origin(root: String = ORIGIN_ROOT): ServiceOrigin = ServiceOrigin.parse(root)
 
@@ -243,7 +228,7 @@ internal class AppSessionTestLease : ProjectionPublicationLease {
     }
 
     override fun checkValid() {
-        if (!valid) throw IllegalStateException("r09h-lease-invalid")
+        if (!valid) throw IllegalStateException("session-lease-invalid")
     }
 
     override fun close() {
@@ -291,7 +276,7 @@ internal class ScriptedTransitionBarrier(
     }
 }
 
-/** Scripted publication barrier reusing the vetted R05c acquire shape. */
+/** Scripted publication barrier reusing the vetted Projection acquire shape. */
 internal class ScriptedPublicationBarrier(
     private val lease: ProjectionPublicationLease = AppSessionTestLease(),
 ) : ProjectionPublicationBarrier {
@@ -314,7 +299,7 @@ internal class ScriptedPublicationBarrier(
     }
 }
 
-/** Refresh-only scripted ServiceAuthApi mirroring the accepted R04b QA shape. */
+/** Refresh-only scripted ServiceAuthApi mirroring the refresh-test API shape. */
 internal class AppSessionAuthApi : ServiceAuthApi {
     var refreshCalls = 0
         private set
@@ -337,13 +322,13 @@ internal class AppSessionAuthApi : ServiceAuthApi {
     override suspend fun challenge(
         purpose: com.dragosfotache.gymtracka.data.sync.api.GoogleChallengePurpose,
     ): com.dragosfotache.gymtracka.data.sync.api.ServiceChallenge {
-        throw UnsupportedOperationException("R09h uses refresh only")
+        throw UnsupportedOperationException("session uses refresh only")
     }
 
     override suspend fun exchange(
         attempt: com.dragosfotache.gymtracka.data.sync.api.GoogleExchangeAttempt,
     ): ServiceSession {
-        throw UnsupportedOperationException("R09h uses refresh only")
+        throw UnsupportedOperationException("session uses refresh only")
     }
 
     override suspend fun refresh(attempt: ServiceRefreshAttempt): ServiceSession {
@@ -356,7 +341,7 @@ internal class AppSessionAuthApi : ServiceAuthApi {
     }
 
     override suspend fun logout(refreshToken: OpaqueToken) {
-        throw UnsupportedOperationException("R09h uses refresh only")
+        throw UnsupportedOperationException("session uses refresh only")
     }
 }
 
@@ -461,10 +446,10 @@ internal class GatedTransactionExecutor : Executor {
     }
 }
 
-/** Test-owned namespace/vault/database helpers mirroring accepted R09b/R09c QA patterns. */
+/** Test-owned namespace/vault/database helpers mirroring preparation and prepared-engine test patterns. */
 internal class AppSessionHarness(private val suffix: String) {
     val context: Context = ApplicationProvider.getApplicationContext<Context>()
-    private val namespace = "gymtracka-test-r09h-$suffix"
+    private val namespace = "gymtracka-test-session-$suffix"
     private val fileDbs = mutableListOf<String>()
     private val gatedExecutors = mutableListOf<GatedTransactionExecutor>()
 
