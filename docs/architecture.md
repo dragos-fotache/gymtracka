@@ -52,9 +52,12 @@ replacing newer edits. Custom-exercise forms use explicit Save;
 their unsaved drafts, focus, menus, confirmation dialogs, and swipe state remain in the composable. Navigation,
 filters, selection, and countdown state are in memory.
 
-Top-level destinations are Exercises, Workout, History, and Settings (Material gear icon). All four keep bottom
-navigation (88dp at default text size, expanding with system font scale) and, when applicable, the active-workout pill
-with its current countdown. The pill offset follows the navigation height. `showSettings()` only
+Top-level destinations are Exercises, Workout, History, and Settings. All four share `GymBottomNavigation`: equal-width
+icon-only tabs using Material list, dumbbell, history and gear icons with accessible names and selected semantics.
+The selected tab fills its full rectangle with the FigCraft blue (`#404F85`); all icons retain the same muted tint.
+Its 58-unit row, 2-unit top border and 2-unit bottom gap scale from the 448-unit reference independently of the page grid,
+with a 48dp minimum tab height. Android bottom insets are added separately. When applicable, the active-workout pill shows its current countdown above the measured
+navigation height. `showSettings()` only
 changes in-memory navigation; it neither replaces the scoped app nor ends a timer. The pill resumes the active workout.
 
 `SettingsScreen` provides one vertically scrolling surface with Connection, Sync and Account sections. Its title uses
@@ -114,6 +117,29 @@ superseded failed authentication attempt without clearing unrelated editor/ident
 Edge-to-edge rendering is enabled. Full-screen custom top bars apply status-bar padding; their content generally
 consumes scaffold bottom padding. Tab screens consume full scaffold padding. Set tables use the compact
 `BasicTextField` control. Weight uses decimal input, repetitions numeric input, and shared locale-aware formatters.
+
+The application always uses a fixed dark palette, independent of the device theme and wallpaper. The native launch
+background matches Compose, and `MainActivity` explicitly requests light status/navigation-bar icons. Catalogue fields
+and selections use dark-safe theme colors.
+
+The workout landing and active-workout screens follow the dark FigCraft references. `ui/theme/WorkoutDesign.kt` scales their 448-unit
+width to the available width, centering the 402-unit content area. All child offsets use that same scale and origin:
+6-unit grid increments, 48-unit rows, 24-unit spacers, and 20-unit text with a 24-unit line height. These are proportions,
+not physical screen pixels. Android system-bar insets are handled separately, and rows grow in grid steps for larger
+system text. The bundled JetBrains Mono fonts and uniform typography are scoped to these screens, including their nested
+menus/rest dialog; other screens retain normal Material typography. Font files are unmodified JetBrains Mono 2.304;
+the redistribution license is bundled at `assets/licenses/JetBrainsMono-OFL.txt`.
+
+The landing page has a full-width surface-colored title strip, rectangular Start empty workout action, and a Routines
+header with an inline Create action. Its centered 402-unit content uses a 6-unit horizontal / 12-unit vertical grid,
+48-unit rows and 24-unit gaps. Routine cards show a bracketed clickable title leading to read-only detail and an
+independent chevron that toggles inline Edit/Delete actions for that card. Start fills the bottom row; deletion retains
+confirmation. Long names wrap and enlarged text grows rows. Expansion is transient, keyed by routine ID.
+
+The workout table has `#`, `WEIGHT`, `REPS` and completion columns; the unused previous-value placeholder is removed.
+Incomplete rows use outlined compact editors and a blue completion square. Completed rows use the dark surface color,
+borderless editors and a light check, and remain editable. The bottom timer uses rectangular blue −15/+15/Skip controls
+and exposes remaining progress through accessibility semantics. Its lifecycle and persistence remain app-state owned.
 
 ## Domain persistence
 

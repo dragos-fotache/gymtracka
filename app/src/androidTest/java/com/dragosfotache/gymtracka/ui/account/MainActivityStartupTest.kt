@@ -3,8 +3,10 @@ package com.dragosfotache.gymtracka.ui.account
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.core.view.WindowCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.dragosfotache.gymtracka.MainActivity
+import org.junit.Assert.assertFalse
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -26,5 +28,11 @@ class MainActivityStartupTest {
         rule.onNodeWithTag("nav-workout").assertDoesNotExist()
         rule.onNodeWithTag("nav-exercises").assertDoesNotExist()
         rule.onNodeWithTag("nav-history").assertDoesNotExist()
+        rule.runOnIdle {
+            val window = rule.activity.window
+            val bars = WindowCompat.getInsetsController(window, window.decorView)
+            assertFalse(bars.isAppearanceLightStatusBars)
+            assertFalse(bars.isAppearanceLightNavigationBars)
+        }
     }
 }

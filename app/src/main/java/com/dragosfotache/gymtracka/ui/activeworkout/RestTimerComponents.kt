@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,7 +25,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -40,35 +40,45 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.dragosfotache.gymtracka.ui.theme.LocalWorkoutGrid
+import com.dragosfotache.gymtracka.ui.theme.WorkoutActionButton
+import com.dragosfotache.gymtracka.ui.theme.WorkoutGrid
 import com.dragosfotache.gymtracka.ui.ActiveRestTimer
 import com.dragosfotache.gymtracka.ui.util.formatCountdown
 import com.dragosfotache.gymtracka.ui.util.formatRestDuration
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 @Composable
 internal fun RestDurationRow(restSeconds: Int, onClick: () -> Unit) {
+    val grid = LocalWorkoutGrid.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (grid != null) Modifier.heightIn(min = grid.line) else Modifier)
             .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
+            .padding(vertical = if (grid == null) 4.dp else 0.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             Icons.Filled.Timer,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(28.dp),
+            modifier = Modifier.size(grid?.space(18) ?: 28.dp),
         )
         Text(
             "Rest Timer: ${formatRestDuration(restSeconds)}",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 12.dp),
+            fontWeight = if (grid != null) FontWeight.SemiBold else FontWeight.Medium,
+            modifier = Modifier.padding(start = grid?.space(6) ?: 12.dp),
         )
     }
 }
@@ -223,62 +233,46 @@ internal fun RestTimerBar(
     onSkip: () -> Unit,
     onDurationAdjusted: (Int) -> Unit,
 ) {
-    Surface(shadowElevation = 8.dp) {
-        Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(
-                            (remainingSeconds.toFloat() / timer.durationSeconds.coerceAtLeast(1))
-                                .coerceIn(0f, 1f),
-                        )
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.primary),
-                )
-            }
-            Box(
-                modifier = Modifier.fillMaxWidth().height(76.dp).padding(horizontal = 16.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RestTimerAdjustmentButton("−15", "rest-timer-minus") { onDurationAdjusted(-15) }
-                    Spacer(Modifier.width(8.dp))
-                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        Text(
-                            formatCountdown(remainingSeconds),
-                            style = MaterialTheme.typography.displaySmall,
-                            textAlign = TextAlign.Center,
-                        )
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    RestTimerAdjustmentButton("+15", "rest-timer-plus") { onDurationAdjusted(15) }
-                    Spacer(Modifier.width(24.dp))
-                    Button(onClick = onSkip, modifier = Modifier.testTag("rest-timer-skip")) { Text("Skip") }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun RestTimerAdjustmentButton(text: String, tag: String, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier.width(56.dp).height(44.dp).testTag(tag),
-        shape = RoundedCornerShape(14.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-        ),
-        contentPadding = PaddingValues(0.dp),
+    val grid = LocalWorkoutGrid.current ?: WorkoutGrid()
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
-        Text(text, style = MaterialTheme.typography.titleMedium)
+        Row(
+            modifier = Modifier.fillMaxWidth().navigationBarsPadding()
+                .semantics {
+                    progressBarRangeInfo = ProgressBarRangeInfo(
+                        (remainingSeconds.toFloat() / timer.durationSeconds.coerceAtLeast(1)).coerceIn(0f, 1f),
+                        0f..1f,
+                    )
+                }
+                .heightIn(min = grid.line + grid.space(24))
+                .padding(start = grid.space(18), end = grid.space(28), top = grid.space(12), bottom = grid.space(12)),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            WorkoutActionButton(
+                "−15", { onDurationAdjusted(-15) },
+                Modifier.width(grid.space(60)).testTag("rest-timer-minus"),
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.width(grid.space(24)))
+            Text(
+                formatCountdown(remainingSeconds),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.width(grid.space((60 * grid.fontScale).roundToInt())),
+                maxLines = 1,
+            )
+            Spacer(Modifier.width(grid.space(24)))
+            WorkoutActionButton(
+                "+15", { onDurationAdjusted(15) },
+                Modifier.width(grid.space(60)).testTag("rest-timer-plus"),
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.weight(1f))
+            WorkoutActionButton(
+                "Skip", onSkip,
+                Modifier.width(grid.space(108)).testTag("rest-timer-skip"),
+            )
+        }
     }
 }

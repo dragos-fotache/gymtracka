@@ -207,7 +207,7 @@ class AppFlowTest : AppFlowTestSupport() {
         }
         composeRule.onNodeWithText("Discard").performClick()
         waitForUi("clone-discarded") {
-            composeRule.onAllNodesWithText("New routine").fetchSemanticsNodes().isNotEmpty() &&
+            composeRule.onAllNodesWithTag("create-routine").fetchSemanticsNodes().isNotEmpty() &&
                 composeRule.onAllNodesWithTag("active-workout-pill").fetchSemanticsNodes().isEmpty() &&
                 runBlocking {
                     repository.activeWorkout() == null && repository.workoutDetails(clone.id) == null
@@ -241,9 +241,9 @@ class AppFlowTest : AppFlowTestSupport() {
         setUpGymApp()
 
         waitForUi("workout-home") {
-            composeRule.onAllNodesWithText("New routine").fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithTag("create-routine").fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithText("New routine").performClick()
+        composeRule.onNodeWithTag("create-routine").performClick()
         waitForUi("routine-draft-created") {
             val routineId = editingRoutineId()
             routineId != null &&
@@ -394,7 +394,7 @@ class AppFlowTest : AppFlowTestSupport() {
         waitForUi("workout-name-persisted") {
             runBlocking { repository.activeWorkout()?.name == "Flow Strength" }
         }
-        composeRule.onNodeWithText("Add Exercise").performClick()
+        composeRule.onNodeWithText("Add Exercise", ignoreCase = true).performClick()
         waitForUi("exercise-picker-open") {
             composeRule.onAllNodesWithTag("exercise-search").fetchSemanticsNodes().isNotEmpty() &&
                 composeRule.onAllNodesWithTag("exercise-row-flow-press").fetchSemanticsNodes().isNotEmpty()
@@ -443,7 +443,7 @@ class AppFlowTest : AppFlowTestSupport() {
             }
         }
 
-        composeRule.onNodeWithText("Add Set").performClick()
+        composeRule.onNodeWithText("Add Set", ignoreCase = true).performClick()
         waitForUi("second-set-added") {
             runBlocking {
                 repository.workoutDetails(workoutId)?.exercises?.singleOrNull()?.sets?.size == 2
@@ -617,7 +617,7 @@ class AppFlowTest : AppFlowTestSupport() {
         }
         val activeWorkout = runBlocking { repository.activeWorkout() }
         assertNotNull(activeWorkout)
-        composeRule.onNodeWithText("Add Exercise").performClick()
+        composeRule.onNodeWithText("Add Exercise", ignoreCase = true).performClick()
         waitForUi("exercise-picker-open") {
             composeRule.onAllNodesWithTag("exercise-search").fetchSemanticsNodes().isNotEmpty()
         }
@@ -683,7 +683,7 @@ class AppFlowTest : AppFlowTestSupport() {
                 composeRule.onAllNodes(progressIndicatorNode).fetchSemanticsNodes().isEmpty()
         }
         composeRule.onNodeWithTag("nav-history").assertIsDisplayed()
-        composeRule.onAllNodesWithText("History").assertCountEquals(2)
+        composeRule.onNodeWithText("History").assertIsDisplayed()
         composeRule.onNodeWithTag("nav-history").assertIsSelected()
         composeRule.onAllNodes(progressIndicatorNode).assertCountEquals(0)
         composeRule.onAllNodes(historyCardNode).assertCountEquals(0)
@@ -715,9 +715,9 @@ class AppFlowTest : AppFlowTestSupport() {
 
         composeRule.onNodeWithContentDescription("Collapse workout").performClick()
         waitForUi("workout-collapsed-for-routine") {
-            composeRule.onAllNodesWithText("New routine").fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithTag("create-routine").fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithText("New routine").performClick()
+        composeRule.onNodeWithTag("create-routine").performClick()
         waitForUi("draft-routine-loaded") {
             val draftId = editingRoutineId()
             draftId != null &&

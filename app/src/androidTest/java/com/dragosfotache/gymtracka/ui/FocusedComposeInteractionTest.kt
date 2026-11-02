@@ -417,7 +417,7 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
             composeRule.waitForIdle()
             composeRule.onNodeWithContentDescription("Routine options for Temporary plan").assertIsDisplayed()
             composeRule.onNodeWithContentDescription("Routine options for Temporary plan").performClick()
-            composeRule.onNodeWithText("Delete routine").performClick()
+            composeRule.onNodeWithText("[Delete]").performClick()
             composeRule.onNodeWithText("Delete routine?").assertIsDisplayed()
             composeRule.onNodeWithText("Delete routine").performClick()
             composeRule.waitUntil { runBlocking { repository.routineDetails("routine-delete") == null } }

@@ -28,6 +28,8 @@ without it, default device tests do not contain the external Room/service journe
 | Feature state | Validation, locale input, autosave order/failures, accepted drafts, late loads, filters and naming |
 | App and timer | Active discovery/replacement, shared finite admission, transition/publication drains, terminal at-most-once writes, clocks and hardware |
 | Compose/app flows | Catalogue/picker/custom/routine/set/history controls, Settings selection/sections/large-text scrolling, startup/privacy, actual feature factories, focus/dialog preservation and timer/editor barriers |
+| Workout presentation | Four-column layout, editing completed sets, timer actions at narrow widths and enlarged text, reference screenshots from real in-memory Room fixtures |
+| Workout landing | Title/detail navigation, independent inline routine actions, starting from a template, shared icon navigation and 320dp/double-text controls |
 | Wire and HTTP | Duplicate raw keys, family identity, exact durable bytes, auth scalar/expiry rules, origin/TLS/redirect/retry refusal, framing/UTF-8/cancellation |
 | Canonical/outbox | Watermarks, frozen-head replay, outcomes/retry, atomic acknowledgment, newer intent, strict retained evidence, transaction rollback and reopen |
 | Pull and snapshots | Complete checkpoint transactions, opaque progress, budgets, frozen stages, terminal issuance, absence, explicit restart, stale capabilities and durable recovery |
@@ -68,6 +70,11 @@ Run from the repository root:
 ```
 
 The connected task needs an available emulator/device. Select a test device explicitly when several are attached.
+`WorkoutAppearanceTest` checks workout editing and timer controls at normal/narrow widths and 150% text. It writes
+PNG captures under the target application's private `files/workout-appearance/` directory for visual review; these
+captures are verification artifacts rather than golden-image assertions.
+`WorkoutLandingTest` checks the landing-page title, chevrons, edit/start/create routing and shared navigation, including
+320dp width with 200% text. It writes collapsed, expanded and enlarged-text PNGs under `files/workout-landing/`.
 Focused examples:
 
 ```sh

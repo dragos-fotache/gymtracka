@@ -54,9 +54,9 @@ class AppFiniteEditGateTest : AppFlowTestSupport() {
         setUpGymApp()
 
         waitForUi("workout-home") {
-            composeRule.onAllNodesWithText("New routine").fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithTag("create-routine").fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithText("New routine").performClick()
+        composeRule.onNodeWithTag("create-routine").performClick()
         waitForUi("routine-draft-created") {
             val routineId = editingRoutineId()
             routineId != null &&
@@ -111,9 +111,9 @@ class AppFiniteEditGateTest : AppFlowTestSupport() {
         setUpGymApp()
 
         waitForUi("workout-home") {
-            composeRule.onAllNodesWithText("New routine").fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithTag("create-routine").fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithText("New routine").performClick()
+        composeRule.onNodeWithTag("create-routine").performClick()
         waitForUi("routine-draft-created") {
             val routineId = editingRoutineId()
             routineId != null &&

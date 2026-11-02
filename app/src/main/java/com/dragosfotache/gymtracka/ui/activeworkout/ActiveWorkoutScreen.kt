@@ -1,18 +1,20 @@
 package com.dragosfotache.gymtracka.ui.activeworkout
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,15 +23,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,32 +41,39 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.dragosfotache.gymtracka.ui.theme.LocalWorkoutGrid
+import com.dragosfotache.gymtracka.ui.theme.WorkoutActionButton
+import com.dragosfotache.gymtracka.ui.theme.WorkoutCancel
+import com.dragosfotache.gymtracka.ui.theme.WorkoutScreenStyle
+import com.dragosfotache.gymtracka.ui.theme.WorkoutSeparator
 import com.dragosfotache.gymtracka.data.gym.ActiveWorkoutStateRepository
-import com.dragosfotache.gymtracka.data.sync.store.StaleSessionException
-import com.dragosfotache.gymtracka.ui.util.reconcileStringField
-import com.dragosfotache.gymtracka.ui.FiniteEditCoordinator
-import com.dragosfotache.gymtracka.ui.rememberFiniteEditCoordinator
-import com.dragosfotache.gymtracka.ui.rememberGymRepository
 import com.dragosfotache.gymtracka.data.gym.WorkoutDetails
 import com.dragosfotache.gymtracka.data.gym.WorkoutEntity
 import com.dragosfotache.gymtracka.data.gym.WorkoutExerciseDetails
 import com.dragosfotache.gymtracka.data.gym.WorkoutSetEntity
+import com.dragosfotache.gymtracka.data.sync.store.StaleSessionException
 import com.dragosfotache.gymtracka.ui.ActiveRestTimer
+import com.dragosfotache.gymtracka.ui.FiniteEditCoordinator
+import com.dragosfotache.gymtracka.ui.rememberFiniteEditCoordinator
+import com.dragosfotache.gymtracka.ui.rememberGymRepository
 import com.dragosfotache.gymtracka.ui.util.formatCountdown
 import com.dragosfotache.gymtracka.ui.util.formatElapsedTime
+import com.dragosfotache.gymtracka.ui.util.reconcileStringField
 import com.dragosfotache.gymtracka.ui.util.totalVolumeKg
-import kotlinx.coroutines.CoroutineScope
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlin.time.Duration.Companion.seconds
 
 internal class ActiveWorkoutState(
     private val workoutId: String,
@@ -406,87 +412,85 @@ internal fun ActiveWorkoutScreen(
         }
     }
 
-    Scaffold(
-        modifier = modifier,
-        topBar = {
-            WorkoutTopBar(
-                elapsedSeconds = state.elapsedSeconds,
-                totalVolumeKg = state.details?.totalVolumeKg() ?: "0 kg",
-                onCollapse = onCollapse,
-                onFinish = onFinishWorkout,
-            )
-        },
-        bottomBar = {
-            activeRestTimer?.let { timer ->
-                RestTimerBar(
-                    timer = timer,
-                    remainingSeconds = restTimerRemainingSeconds,
-                    onSkip = { onRestTimerEnded(timer) },
-                    onDurationAdjusted = { onRestTimerAdjusted(timer, it) },
+    WorkoutScreenStyle {
+        val grid = LocalWorkoutGrid.current!!
+        Scaffold(
+            modifier = modifier,
+            topBar = {
+                WorkoutTopBar(
+                    elapsedSeconds = state.elapsedSeconds,
+                    totalVolumeKg = state.details?.totalVolumeKg() ?: "0 kg",
+                    onCollapse = onCollapse,
+                    onFinish = onFinishWorkout,
                 )
-            }
-        },
-    ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            state.details?.workout?.let { workout ->
+            },
+            bottomBar = {
+                activeRestTimer?.let { timer ->
+                    RestTimerBar(
+                        timer = timer,
+                        remainingSeconds = restTimerRemainingSeconds,
+                        onSkip = { onRestTimerEnded(timer) },
+                        onDurationAdjusted = { onRestTimerAdjusted(timer, it) },
+                    )
+                }
+            },
+        ) { innerPadding ->
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(innerPadding),
+                contentPadding = PaddingValues(horizontal = grid.space(23), vertical = 0.dp),
+            ) {
+                state.details?.workout?.let { workout ->
+                    item {
+                        WorkoutNameField(
+                            workoutId = workout.id,
+                            initialName = workout.name,
+                            onNameChanged = { name ->
+                                // The app-shell name callback runs only for accepted edits; refused
+                                // edits change neither the local draft nor the pill state.
+                                if (state.updateWorkoutName(name) != null) {
+                                    onWorkoutNameChanged(name)
+                                    true
+                                } else {
+                                    false
+                                }
+                            },
+                        )
+                    }
+                }
+                state.details?.exercises?.let { exercises ->
+                    items(exercises, key = { it.workoutExercise.id }) { exercise ->
+                        WorkoutSeparator()
+                        WorkoutExerciseCard(
+                            exercise = exercise,
+                            onNotesChanged = { id, notes -> state.updateNotes(id, notes) != null },
+                            onRestDurationChanged = { id, seconds ->
+                                state.updateRestDuration(id, seconds) != null
+                            },
+                            onSetAdded = { state.addSet(exercise) },
+                            onSetChanged = { set, afterUpdate ->
+                                state.updateSet(set, afterUpdate) != null
+                            },
+                            onSetDeleted = { set -> state.deleteSet(set) != null },
+                            onExerciseDeleted = { state.deleteExercise(exercise) != null },
+                            onExerciseReplacementRequested = onExerciseReplacementRequested,
+                            onRestStarted = onRestTimerStarted,
+                            onRestCancelled = onRestTimerCancelled,
+                        )
+                    }
+                }
                 item {
-                    WorkoutNameField(
-                        workoutId = workout.id,
-                        initialName = workout.name,
-                        onNameChanged = { name ->
-                            // The app-shell name callback runs only for accepted edits; refused
-                            // edits change neither the local draft nor the pill state.
-                            if (state.updateWorkoutName(name) != null) {
-                                onWorkoutNameChanged(name)
-                                true
-                            } else {
-                                false
-                            }
-                        },
-                    )
+                    Spacer(Modifier.height(grid.space(24)))
+                    WorkoutActionButton("Add exercise", onAddExercise, Modifier.fillMaxWidth())
                 }
-            }
-            state.details?.exercises?.let { exercises ->
-                items(exercises, key = { it.workoutExercise.id }) { exercise ->
-                    WorkoutExerciseCard(
-                        exercise = exercise,
-                        onNotesChanged = { id, notes -> state.updateNotes(id, notes) != null },
-                        onRestDurationChanged = { id, seconds ->
-                            state.updateRestDuration(id, seconds) != null
-                        },
-                        onSetAdded = { state.addSet(exercise) },
-                        onSetChanged = { set, afterUpdate ->
-                            state.updateSet(set, afterUpdate) != null
-                        },
-                        onSetDeleted = { set -> state.deleteSet(set) != null },
-                        onExerciseDeleted = { state.deleteExercise(exercise) != null },
-                        onExerciseReplacementRequested = onExerciseReplacementRequested,
-                        onRestStarted = onRestTimerStarted,
-                        onRestCancelled = onRestTimerCancelled,
-                    )
-                }
-            }
-            item {
-                TextButton(
-                    onClick = onAddExercise,
-                    modifier = Modifier.padding(horizontal = 4.dp).fillMaxWidth(),
-                    colors = ButtonDefaults.textButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    Icon(Icons.Filled.Add, contentDescription = null)
-                    Text("Add Exercise", modifier = Modifier.padding(start = 8.dp))
-                }
-            }
-            item {
-                TextButton(onClick = onCancelWorkout, modifier = Modifier.fillMaxWidth()) {
-                    Text("Cancel workout", color = MaterialTheme.colorScheme.error)
+                item {
+                    Spacer(Modifier.height(grid.space(24)))
+                    Box(
+                        Modifier.fillMaxWidth().heightIn(min = grid.line).clickable(onClick = onCancelWorkout),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("Cancel workout", color = WorkoutCancel)
+                    }
+                    Spacer(Modifier.height(grid.space(24)))
                 }
             }
         }
@@ -507,20 +511,24 @@ private fun WorkoutNameField(
     LaunchedEffect(workoutId, initialName) {
         name = reconcileStringField(name, initialName)
     }
-    BasicTextField(
-        value = name,
-        onValueChange = {
-            // The local draft follows only accepted edits; refused keystrokes while paused
-            // never alter domain-like drafts.
-            if (onNameChanged(it)) name = it
-        },
-        singleLine = true,
-        textStyle = MaterialTheme.typography.titleLarge.copy(
-            color = MaterialTheme.colorScheme.onBackground,
-            fontWeight = FontWeight.Bold,
-        ),
-        modifier = Modifier.fillMaxWidth().testTag("workout-name-input"),
-    )
+    val grid = LocalWorkoutGrid.current!!
+    Box(Modifier.fillMaxWidth().heightIn(min = grid.line), contentAlignment = Alignment.CenterStart) {
+        BasicTextField(
+            value = name,
+            onValueChange = {
+                if (onNameChanged(it)) name = it
+            },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                color = MaterialTheme.colorScheme.onBackground,
+                fontWeight = FontWeight.ExtraBold,
+            ),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            modifier = Modifier.fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .testTag("workout-name-input"),
+        )
+    }
 }
 
 @Composable
@@ -530,42 +538,67 @@ private fun WorkoutTopBar(
     onCollapse: () -> Unit,
     onFinish: () -> Unit,
 ) {
-    Surface(modifier = Modifier.statusBarsPadding(), shadowElevation = 3.dp) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 64.dp)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-        ) {
-            Row(
-                modifier = Modifier.align(Alignment.CenterStart),
-                verticalAlignment = Alignment.CenterVertically,
+    val grid = LocalWorkoutGrid.current!!
+    Box(
+        Modifier.fillMaxWidth().statusBarsPadding()
+            .padding(top = grid.space(24), start = grid.space(23), end = grid.space(23)),
+    ) {
+        if (grid.fontScale > 1.2f) {
+            Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    WorkoutCollapseButton(onCollapse)
+                    Text(formatElapsedTime(elapsedSeconds), modifier = Modifier.weight(1f))
+                    WorkoutActionButton(
+                        "Finish", onFinish,
+                        Modifier.padding(end = grid.space(18)).width(grid.space(144)),
+                    )
+                }
+                Box(Modifier.fillMaxWidth().heightIn(min = grid.line), contentAlignment = Alignment.Center) {
+                    Text(totalVolumeKg)
+                }
+            }
+        } else {
+            Box(
+                Modifier.fillMaxWidth().heightIn(min = grid.line)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
             ) {
-                IconButton(
-                    onClick = onCollapse,
-                    modifier = Modifier.size(36.dp).offset(x = (-6).dp),
-                ) {
-                    Icon(
-                        Icons.Filled.KeyboardArrowDown,
-                        contentDescription = "Collapse workout",
-                        modifier = Modifier.size(26.dp),
+                Row(Modifier.align(Alignment.CenterStart), verticalAlignment = Alignment.CenterVertically) {
+                    WorkoutCollapseButton(onCollapse)
+                    Text(
+                        formatElapsedTime(elapsedSeconds),
+                        modifier = Modifier.padding(start = grid.space(12)).width(grid.space(84)),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 Text(
-                    formatElapsedTime(elapsedSeconds),
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(start = 4.dp),
+                    totalVolumeKg,
+                    modifier = Modifier.align(Alignment.Center).width(grid.space(144)),
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                WorkoutActionButton(
+                    "Finish", onFinish,
+                    Modifier.align(Alignment.CenterEnd).padding(end = grid.space(18)).width(grid.space(96)),
                 )
             }
-            Text(
-                totalVolumeKg,
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.align(Alignment.Center),
-            )
-            Button(onClick = onFinish, modifier = Modifier.align(Alignment.CenterEnd)) {
-                Text("Finish")
-            }
         }
+    }
+}
+
+@Composable
+private fun WorkoutCollapseButton(onCollapse: () -> Unit) {
+    val grid = LocalWorkoutGrid.current!!
+    Box(
+        Modifier.size(grid.line).clickable(onClick = onCollapse),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            Icons.Filled.KeyboardArrowDown,
+            contentDescription = "Collapse workout",
+            modifier = Modifier.size(grid.space(24)),
+        )
     }
 }
 

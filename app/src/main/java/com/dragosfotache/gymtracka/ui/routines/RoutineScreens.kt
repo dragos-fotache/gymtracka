@@ -2,6 +2,7 @@ package com.dragosfotache.gymtracka.ui.routines
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,6 +27,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -56,6 +60,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -73,6 +81,10 @@ import com.dragosfotache.gymtracka.data.gym.RoutineExerciseDetails
 import com.dragosfotache.gymtracka.data.gym.RoutineSetEntity
 import com.dragosfotache.gymtracka.ui.activeworkout.RestDurationDialog
 import com.dragosfotache.gymtracka.ui.activeworkout.RestDurationRow
+import com.dragosfotache.gymtracka.ui.theme.LocalWorkoutGrid
+import com.dragosfotache.gymtracka.ui.theme.WorkoutActionButton
+import com.dragosfotache.gymtracka.ui.theme.WorkoutGrid
+import com.dragosfotache.gymtracka.ui.theme.WorkoutGridLabel
 import com.dragosfotache.gymtracka.ui.util.formatKilograms
 import com.dragosfotache.gymtracka.ui.util.parseKilograms
 import com.dragosfotache.gymtracka.ui.util.formatRestDuration
@@ -80,6 +92,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.math.ceil
 
 internal class RoutineListState(
     private val repository: RoutineStateRepository,
@@ -498,23 +511,29 @@ internal fun RoutineSection(
     onStartRoutine: (String) -> Unit,
     state: RoutineListState = rememberRoutineListState(),
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(
-            "Routines",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-        )
-        Button(onClick = onNewRoutine, modifier = Modifier.fillMaxWidth()) {
-            Text("New routine")
+    val grid = LocalWorkoutGrid.current ?: WorkoutGrid()
+    Column(verticalArrangement = Arrangement.spacedBy(grid.space(24))) {
+        Row(
+            Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            WorkoutGridLabel("Routines", Modifier.weight(1f))
+            WorkoutActionButton(
+                "Create", onNewRoutine,
+                Modifier.width(grid.space(36 + ceil(72 * grid.fontScale / 6).toInt() * 6))
+                    .testTag("create-routine"),
+            )
         }
         state.routines.orEmpty().forEach { routine ->
-            RoutineCard(
-                details = routine,
-                onOpenDetails = { onRoutineSelected(routine.routine.id) },
-                onEdit = { onEditRoutine(routine.routine.id) },
-                onStart = { onStartRoutine(routine.routine.id) },
-                onDelete = { state.requestDelete(routine) },
-            )
+            key(routine.routine.id) {
+                RoutineCard(
+                    details = routine,
+                    onOpenDetails = { onRoutineSelected(routine.routine.id) },
+                    onEdit = { onEditRoutine(routine.routine.id) },
+                    onStart = { onStartRoutine(routine.routine.id) },
+                    onDelete = { state.requestDelete(routine) },
+                )
+            }
         }
     }
 
@@ -543,79 +562,71 @@ private fun RoutineCard(
     onStart: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    var menuExpanded by remember { mutableStateOf(false) }
-    val exerciseNames = details.exercises.joinToString(", ") { it.routineExercise.exerciseName }
-
-    Card(
+    val grid = LocalWorkoutGrid.current ?: WorkoutGrid()
+    var actionsExpanded by remember { mutableStateOf(false) }
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .testTag("routine-card-${details.routine.id}")
-            .clickable(onClick = onOpenDetails),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-        ),
+            .border(grid.space(2), MaterialTheme.colorScheme.outline),
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    details.routine.name,
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Box {
-                    IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(36.dp)) {
-                        Icon(
-                            Icons.Filled.MoreVert,
-                            contentDescription = "Routine options for ${details.routine.name}",
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false },
-                        modifier = Modifier.width(128.dp),
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Edit") },
-                            onClick = {
-                                menuExpanded = false
-                                onEdit()
-                            },
-                            modifier = Modifier.height(40.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp),
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Delete routine", color = MaterialTheme.colorScheme.error) },
-                            onClick = {
-                                menuExpanded = false
-                                onDelete()
-                            },
-                            modifier = Modifier.height(40.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp),
-                        )
-                    }
-                }
-            }
-            Text(
-                exerciseNames,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            WorkoutGridLabel(
+                "[${details.routine.name}]",
+                modifier = Modifier.weight(1f)
+                    .testTag("routine-open-${details.routine.id}")
+                    .clickable(role = Role.Button, onClickLabel = "Open routine details", onClick = onOpenDetails),
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold,
             )
-            Button(
-                onClick = onStart,
-                modifier = Modifier.fillMaxWidth().testTag("routine-start-${details.routine.id}"),
+            Box(
+                Modifier.width(grid.space(48)).heightIn(min = grid.line)
+                    .testTag("routine-options-${details.routine.id}")
+                    .semantics {
+                        contentDescription = "Routine options for ${details.routine.name}"
+                        stateDescription = if (actionsExpanded) "Expanded" else "Collapsed"
+                    }
+                    .clickable(role = Role.Button) { actionsExpanded = !actionsExpanded },
+                contentAlignment = Alignment.Center,
             ) {
-                Text("Start routine")
+                Icon(
+                    if (actionsExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(grid.space(24)),
+                )
             }
         }
+        if (actionsExpanded) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                RoutineAction("Edit", details.routine.name, onEdit)
+                RoutineAction("Delete", details.routine.name, onDelete, destructive = true)
+            }
+        }
+        WorkoutActionButton(
+            "Start", onStart,
+            Modifier.fillMaxWidth().testTag("routine-start-${details.routine.id}"),
+        )
     }
+}
+
+@Composable
+private fun RoutineAction(
+    label: String,
+    routineName: String,
+    onClick: () -> Unit,
+    destructive: Boolean = false,
+) {
+    WorkoutGridLabel(
+        "[$label]",
+        modifier = Modifier
+            .semantics { contentDescription = "$label routine $routineName" }
+            .clickable(role = Role.Button, onClick = onClick),
+        color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+    )
 }
 
 @Composable

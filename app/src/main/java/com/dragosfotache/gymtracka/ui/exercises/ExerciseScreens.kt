@@ -1161,7 +1161,7 @@ private fun ExerciseCreationTextField(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = Color(0xFFF1F2F5),
+        color = MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(14.dp),
     ) {
         Column(
@@ -1199,7 +1199,7 @@ private fun ExerciseCreationSelectionButton(
             .clip(RoundedCornerShape(14.dp))
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(14.dp),
-        color = Color(0xFFF1F2F5),
+        color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
@@ -1237,7 +1237,7 @@ private fun ExerciseListItem(
             .testTag("exercise-row-${summary.exercise.id}")
             .then(onClick?.let { Modifier.clickable(onClick = it) } ?: Modifier),
         colors = CardDefaults.cardColors(
-            containerColor = if (selected) Color(0xFFE8F5E9) else MaterialTheme.colorScheme.background,
+            containerColor = if (selected) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.background,
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
@@ -1258,13 +1258,13 @@ private fun ExerciseListItem(
                             .align(Alignment.CenterEnd)
                             .size(28.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF43A047)),
+                            .background(MaterialTheme.colorScheme.tertiary),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             Icons.Filled.Check,
                             contentDescription = "Selected",
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onTertiary,
                             modifier = Modifier.size(18.dp),
                         )
                     }
@@ -1353,7 +1353,7 @@ private fun ExerciseSearchField(
             .fillMaxWidth()
             .height(40.dp)
             .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFFF1F2F5))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(start = 16.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1390,7 +1390,7 @@ private fun ExerciseSearchField(
                 modifier = Modifier
                     .size(20.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFE4E6EB))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                     .clickable { onQueryChanged("") },
                 contentAlignment = Alignment.Center,
             ) {
@@ -1506,7 +1506,7 @@ private fun ExerciseFilterButton(
         modifier = modifier.height(44.dp),
         shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) Color(0xFFE8F5E9) else Color(0xFFF1F2F5),
+            containerColor = if (selected) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceVariant,
             contentColor = MaterialTheme.colorScheme.onSurface,
         ),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
@@ -1519,7 +1519,7 @@ private fun ExerciseFilterButton(
                     .padding(start = 6.dp)
                     .size(24.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFFD5EBD9))
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                     .clickable(onClick = clear),
                 contentAlignment = Alignment.Center,
             ) {
@@ -1582,7 +1582,7 @@ private fun ExerciseFilterDialog(
                                 }
                             },
                         color = if (option.id in pendingSelectedIds) {
-                            Color(0xFFE8F5E9)
+                            MaterialTheme.colorScheme.tertiaryContainer
                         } else {
                             MaterialTheme.colorScheme.surface
                         },
@@ -1610,7 +1610,7 @@ private fun ExerciseFilterDialog(
         dismissButton = {
             TextButton(onClick = { pendingSelectedIds = emptySet() }) { Text(clearText) }
         },
-        containerColor = Color(0xFFECEFF1),
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
     )
 }
 
