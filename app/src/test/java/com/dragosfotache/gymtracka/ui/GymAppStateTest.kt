@@ -28,6 +28,37 @@ import kotlin.time.Duration.Companion.seconds
 @OptIn(ExperimentalCoroutinesApi::class)
 class GymAppStateTest {
     @Test
+    fun exerciseHistoryReturnsToTheActiveWorkoutWithoutChangingItsTimer() = runTest {
+        val repository = FakeGymAppStateRepository().apply {
+            active = WorkoutEntity("active", "Current", 500L)
+        }
+        val state = state(repository)
+        runCurrent()
+        state.resumeWorkout()
+        state.startRestTimer(WorkoutSetEntity("set", "entry", 0), 30)
+        runCurrent()
+        val timer = state.activeRestTimer
+        state.showExerciseHistory("press")
+        advanceTimeBy(2_100)
+        runCurrent()
+        assertEquals(Destination.ExerciseHistory, state.destination)
+        assertEquals("press", state.selectedHistoryExerciseId)
+        assertEquals(timer, state.activeRestTimer)
+        assertEquals(28, state.restTimerRemainingSeconds)
+        state.closeExerciseHistory()
+        assertEquals(Destination.ActiveWorkout, state.destination)
+        assertEquals("active", state.activeWorkout?.id)
+        assertNull(state.selectedHistoryExerciseId)
+        assertTrue(repository.restUpdates.isEmpty())
+
+        state.showExerciseHistory("press")
+        repository.active = null
+        state.refreshProjection()
+        assertEquals(Destination.Workout, state.destination)
+        assertNull(state.selectedHistoryExerciseId)
+    }
+
+    @Test
     fun discoversActiveWorkoutAndKeepsNavigationTransitionsInMemory() = runTest {
         val repository = FakeGymAppStateRepository().apply {
             active = WorkoutEntity("active", "Current", 500L)

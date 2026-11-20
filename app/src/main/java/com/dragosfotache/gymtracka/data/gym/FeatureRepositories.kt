@@ -117,3 +117,8 @@ internal interface WorkoutHistoryStateRepository : ProjectionObservationReposito
     suspend fun deleteWorkout(workoutId: String)
     suspend fun saveWorkoutAsRoutine(workoutId: String, routineName: String): RoutineEntity?
 }
+
+/** Read-only history for one visible catalogue exercise in the selected account. */
+internal interface ExerciseHistoryStateRepository : ProjectionObservationRepository {
+    suspend fun exerciseHistory(exerciseId: String): ExerciseHistory?
+}

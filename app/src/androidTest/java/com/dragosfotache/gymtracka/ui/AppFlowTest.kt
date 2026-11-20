@@ -6,6 +6,9 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -111,13 +114,13 @@ class AppFlowTest : AppFlowTestSupport() {
         }
 
         composeRule.onNodeWithContentDescription("Workout options for Previous Day").performClick()
-        composeRule.onNodeWithText("Perform again").performClick()
+        composeRule.onNodeWithText("[Perform]").performClick()
         val replacePrompt = "Discard the current workout and start a new one?"
         waitForUi("replace-workout-confirmation") {
             composeRule.onAllNodesWithText(replacePrompt).fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithText(replacePrompt).assertIsDisplayed()
-        composeRule.onNodeWithText("Cancel").performClick()
+        composeRule.onNodeWithText("[Cancel]").performClick()
         waitForUi("replacement-cancelled") {
             composeRule.onAllNodesWithText(replacePrompt).fetchSemanticsNodes().isEmpty() &&
                 runBlocking {
@@ -130,11 +133,11 @@ class AppFlowTest : AppFlowTestSupport() {
         assertEquals(sourceBefore, runBlocking { repository.workoutDetails("flow-history") })
 
         composeRule.onNodeWithContentDescription("Workout options for Previous Day").performClick()
-        composeRule.onNodeWithText("Perform again").performClick()
+        composeRule.onNodeWithText("[Perform]").performClick()
         waitForUi("replacement-confirmation-reopened") {
             composeRule.onAllNodesWithText(replacePrompt).fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithText("Yes").performClick()
+        composeRule.onNodeWithText("[Yes]").performClick()
         waitForUi("replacement-workout-started") {
             composeRule.onAllNodesWithTag("workout-name-input").fetchSemanticsNodes().isNotEmpty() &&
                 runBlocking {
@@ -190,7 +193,7 @@ class AppFlowTest : AppFlowTestSupport() {
             composeRule.onAllNodesWithText(discardPrompt).fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithText(discardPrompt).assertIsDisplayed()
-        composeRule.onNodeWithText("Cancel").performClick()
+        composeRule.onNodeWithText("[Cancel]").performClick()
         waitForUi("pill-discard-cancelled") {
             composeRule.onAllNodesWithText(discardPrompt).fetchSemanticsNodes().isEmpty() &&
                 runBlocking {
@@ -205,7 +208,7 @@ class AppFlowTest : AppFlowTestSupport() {
         waitForUi("pill-discard-confirmation-reopened") {
             composeRule.onAllNodesWithText(discardPrompt).fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithText("Discard").performClick()
+        composeRule.onNode(hasText("[Discard]") and hasAnyAncestor(isDialog())).performClick()
         waitForUi("clone-discarded") {
             composeRule.onAllNodesWithTag("create-routine").fetchSemanticsNodes().isNotEmpty() &&
                 composeRule.onAllNodesWithTag("active-workout-pill").fetchSemanticsNodes().isEmpty() &&
@@ -261,7 +264,7 @@ class AppFlowTest : AppFlowTestSupport() {
         waitForUi("routine-name-persisted") {
             runBlocking { repository.routineDetails(routineId!!)?.routine?.name == "Flow Leg Plan" }
         }
-        composeRule.onNodeWithText("Add Exercise").performClick()
+        composeRule.onNodeWithText("Add exercise").performClick()
         waitForUi("routine-exercise-picker-open") {
             composeRule.onAllNodesWithTag("exercise-search").fetchSemanticsNodes().isNotEmpty() &&
                 composeRule.onAllNodesWithTag("exercise-row-flow-squat").fetchSemanticsNodes().isNotEmpty()
@@ -466,7 +469,7 @@ class AppFlowTest : AppFlowTestSupport() {
             composeRule.onAllNodesWithText(finishPrompt).fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithText(finishPrompt).assertIsDisplayed()
-        composeRule.onNodeWithText("Yes").performClick()
+        composeRule.onNodeWithText("[Yes]").performClick()
 
         waitForUi("workout-finished") {
             composeRule.onAllNodesWithText("Workout complete").fetchSemanticsNodes().isNotEmpty() &&
@@ -501,29 +504,30 @@ class AppFlowTest : AppFlowTestSupport() {
         assertTrue(retainedSet.isCompleted)
         assertFalse(finishedEntry.sets.any { it.id == unfinishedSetId })
 
-        composeRule.onNodeWithText("Done").performClick()
+        composeRule.onNodeWithText("[Done]").performClick()
         composeRule.onNodeWithTag("nav-history").performClick()
         val historyCardTag = "history-workout-$workoutId"
         waitForUi("finished-workout-history-card") {
             composeRule.onAllNodesWithTag(historyCardTag).fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithTag(historyCardTag).assertIsDisplayed()
-        composeRule.onNodeWithText("Flow Strength").assertIsDisplayed()
+        composeRule.onNodeWithText("[Flow Strength]").assertIsDisplayed()
         composeRule.onNodeWithText("1 × Press").assertIsDisplayed()
         val formattedBestSet = "${formatKilograms(50.0)} kg × 8"
-        composeRule.onNodeWithText(formattedBestSet).assertIsDisplayed()
-        composeRule.onNodeWithText("400 kg").assertIsDisplayed()
+        composeRule.onNodeWithText("Best set: $formattedBestSet").assertIsDisplayed()
+        composeRule.onNodeWithText("Volume: 400 kg").assertIsDisplayed()
 
         composeRule.onNodeWithTag(historyCardTag).performClick()
+        val formattedWeight = "${formatKilograms(50.0)} kg"
         waitForUi("finished-workout-history-detail") {
             composeRule.onAllNodesWithText("Flow Strength").fetchSemanticsNodes().isNotEmpty() &&
-                composeRule.onAllNodesWithText(formattedBestSet).fetchSemanticsNodes().isNotEmpty() &&
-                composeRule.onAllNodesWithText("400 kg").fetchSemanticsNodes().isNotEmpty()
+                composeRule.onAllNodesWithText(formattedWeight).fetchSemanticsNodes().isNotEmpty() &&
+                composeRule.onAllNodesWithText("Volume: 400 kg").fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithText("Flow Strength").assertIsDisplayed()
         composeRule.onNodeWithText("Press").assertIsDisplayed()
-        composeRule.onNodeWithText(formattedBestSet).assertIsDisplayed()
-        composeRule.onNodeWithText("400 kg").assertIsDisplayed()
+        composeRule.onNodeWithText(formattedWeight).assertIsDisplayed()
+        composeRule.onNodeWithText("Volume: 400 kg").assertIsDisplayed()
     }
 
     @Test
@@ -545,7 +549,7 @@ class AppFlowTest : AppFlowTestSupport() {
             composeRule.onAllNodesWithTag("exercise-row-flow-press").fetchSemanticsNodes().isNotEmpty() &&
                 composeRule.onAllNodesWithTag("exercise-row-flow-squat").fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithText("Create new").performClick()
+        composeRule.onNodeWithText("Create").performClick()
         waitForUi("custom-exercise-create-form") {
             composeRule.onAllNodesWithTag("exercise-field-name").fetchSemanticsNodes().isNotEmpty() &&
                 composeRule.onAllNodesWithTag("exercise-field-instructions").fetchSemanticsNodes().isNotEmpty()
@@ -556,7 +560,7 @@ class AppFlowTest : AppFlowTestSupport() {
         composeRule.onNodeWithText("Save").performClick()
 
         waitForUi("custom-exercise-created") {
-            composeRule.onAllNodesWithText("Flow Custom Press").fetchSemanticsNodes().isNotEmpty() &&
+            composeRule.onAllNodesWithText("[Flow Custom Press]").fetchSemanticsNodes().isNotEmpty() &&
                 runBlocking {
                     repository.exerciseSummaries().any {
                         it.exercise.isUserCreated && it.exercise.name == "Flow Custom Press"
@@ -571,7 +575,7 @@ class AppFlowTest : AppFlowTestSupport() {
         assertTrue(exerciseId.isNotBlank())
         composeRule.onNodeWithTag("exercise-row-$exerciseId").assertIsDisplayed()
 
-        composeRule.onNodeWithTag("exercise-row-$exerciseId").performClick()
+        composeRule.onNodeWithText("[Flow Custom Press]").performClick()
         waitForUi("custom-exercise-detail") {
             composeRule.onAllNodesWithText("Flow Custom Press").fetchSemanticsNodes().isNotEmpty() &&
                 composeRule.onAllNodesWithContentDescription("Exercise options")

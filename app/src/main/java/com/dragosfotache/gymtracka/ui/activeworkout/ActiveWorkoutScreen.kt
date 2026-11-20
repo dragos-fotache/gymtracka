@@ -11,20 +11,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -39,10 +36,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,7 +50,6 @@ import com.dragosfotache.gymtracka.ui.theme.WorkoutScreenStyle
 import com.dragosfotache.gymtracka.ui.theme.WorkoutSeparator
 import com.dragosfotache.gymtracka.data.gym.ActiveWorkoutStateRepository
 import com.dragosfotache.gymtracka.data.gym.WorkoutDetails
-import com.dragosfotache.gymtracka.data.gym.WorkoutEntity
 import com.dragosfotache.gymtracka.data.gym.WorkoutExerciseDetails
 import com.dragosfotache.gymtracka.data.gym.WorkoutSetEntity
 import com.dragosfotache.gymtracka.data.sync.store.StaleSessionException
@@ -62,7 +57,6 @@ import com.dragosfotache.gymtracka.ui.ActiveRestTimer
 import com.dragosfotache.gymtracka.ui.FiniteEditCoordinator
 import com.dragosfotache.gymtracka.ui.rememberFiniteEditCoordinator
 import com.dragosfotache.gymtracka.ui.rememberGymRepository
-import com.dragosfotache.gymtracka.ui.util.formatCountdown
 import com.dragosfotache.gymtracka.ui.util.formatElapsedTime
 import com.dragosfotache.gymtracka.ui.util.reconcileStringField
 import com.dragosfotache.gymtracka.ui.util.totalVolumeKg
@@ -396,6 +390,7 @@ internal fun ActiveWorkoutScreen(
     onRestTimerAdjusted: (ActiveRestTimer, Int) -> Unit,
     onRestTimerCancelled: (String) -> Unit = {},
     onExerciseReplacementRequested: (String) -> Unit,
+    onExerciseHistoryRequested: (String) -> Unit = {},
     onRegisterFinishDrain: (workoutId: String, owner: Any, drain: suspend () -> Unit) -> Unit = { _, _, _ -> },
     onUnregisterFinishDrain: (workoutId: String, owner: Any) -> Unit = { _, _ -> },
     state: ActiveWorkoutState = rememberActiveWorkoutState(workoutId, workoutStartMillis),
@@ -441,6 +436,7 @@ internal fun ActiveWorkoutScreen(
             ) {
                 state.details?.workout?.let { workout ->
                     item {
+                        Spacer(Modifier.height(grid.space(24)))
                         WorkoutNameField(
                             workoutId = workout.id,
                             initialName = workout.name,
@@ -473,6 +469,7 @@ internal fun ActiveWorkoutScreen(
                             onSetDeleted = { set -> state.deleteSet(set) != null },
                             onExerciseDeleted = { state.deleteExercise(exercise) != null },
                             onExerciseReplacementRequested = onExerciseReplacementRequested,
+                            onExerciseHistoryRequested = onExerciseHistoryRequested,
                             onRestStarted = onRestTimerStarted,
                             onRestCancelled = onRestTimerCancelled,
                         )
@@ -485,10 +482,11 @@ internal fun ActiveWorkoutScreen(
                 item {
                     Spacer(Modifier.height(grid.space(24)))
                     Box(
-                        Modifier.fillMaxWidth().heightIn(min = grid.line).clickable(onClick = onCancelWorkout),
+                        Modifier.fillMaxWidth().heightIn(min = grid.line)
+                            .clickable(role = Role.Button, onClick = onCancelWorkout),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("Cancel workout", color = WorkoutCancel)
+                        Text("[Cancel workout]", color = WorkoutCancel)
                     }
                     Spacer(Modifier.height(grid.space(24)))
                 }
@@ -512,7 +510,12 @@ private fun WorkoutNameField(
         name = reconcileStringField(name, initialName)
     }
     val grid = LocalWorkoutGrid.current!!
-    Box(Modifier.fillMaxWidth().heightIn(min = grid.line), contentAlignment = Alignment.CenterStart) {
+    Box(
+        Modifier.fillMaxWidth().height(grid.line)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = grid.space(12)),
+        contentAlignment = Alignment.CenterStart,
+    ) {
         BasicTextField(
             value = name,
             onValueChange = {
@@ -524,9 +527,7 @@ private fun WorkoutNameField(
                 fontWeight = FontWeight.ExtraBold,
             ),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            modifier = Modifier.fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .testTag("workout-name-input"),
+            modifier = Modifier.fillMaxWidth().testTag("workout-name-input"),
         )
     }
 }
@@ -541,7 +542,9 @@ private fun WorkoutTopBar(
     val grid = LocalWorkoutGrid.current!!
     Box(
         Modifier.fillMaxWidth().statusBarsPadding()
-            .padding(top = grid.space(24), start = grid.space(23), end = grid.space(23)),
+            .padding(top = grid.space(24))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = grid.space(23)),
     ) {
         if (grid.fontScale > 1.2f) {
             Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant)) {
@@ -550,7 +553,7 @@ private fun WorkoutTopBar(
                     Text(formatElapsedTime(elapsedSeconds), modifier = Modifier.weight(1f))
                     WorkoutActionButton(
                         "Finish", onFinish,
-                        Modifier.padding(end = grid.space(18)).width(grid.space(144)),
+                        Modifier.width(grid.space(144)),
                     )
                 }
                 Box(Modifier.fillMaxWidth().heightIn(min = grid.line), contentAlignment = Alignment.Center) {
@@ -562,11 +565,15 @@ private fun WorkoutTopBar(
                 Modifier.fillMaxWidth().heightIn(min = grid.line)
                     .background(MaterialTheme.colorScheme.surfaceVariant),
             ) {
-                Row(Modifier.align(Alignment.CenterStart), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.align(Alignment.CenterStart).offset(x = -grid.space(6))) {
                     WorkoutCollapseButton(onCollapse)
+                }
+                Box(
+                    Modifier.align(Alignment.CenterStart).padding(start = grid.space(60)),
+                ) {
                     Text(
                         formatElapsedTime(elapsedSeconds),
-                        modifier = Modifier.padding(start = grid.space(12)).width(grid.space(84)),
+                        modifier = Modifier.width(grid.space(84)),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -580,7 +587,7 @@ private fun WorkoutTopBar(
                 )
                 WorkoutActionButton(
                     "Finish", onFinish,
-                    Modifier.align(Alignment.CenterEnd).padding(end = grid.space(18)).width(grid.space(96)),
+                    Modifier.align(Alignment.CenterEnd).width(grid.space(96)),
                 )
             }
         }
@@ -591,84 +598,14 @@ private fun WorkoutTopBar(
 private fun WorkoutCollapseButton(onCollapse: () -> Unit) {
     val grid = LocalWorkoutGrid.current!!
     Box(
-        Modifier.size(grid.line).clickable(onClick = onCollapse),
+        Modifier.size(grid.line).clickable(role = Role.Button, onClick = onCollapse),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            Icons.Filled.KeyboardArrowDown,
+            Icons.Filled.ExpandMore,
             contentDescription = "Collapse workout",
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(grid.space(24)),
         )
-    }
-}
-
-@Composable
-internal fun ActiveWorkoutPill(
-    workout: WorkoutEntity,
-    restTimerRemainingSeconds: Int?,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-    onDiscard: () -> Unit,
-) {
-    var elapsedSeconds by remember(workout.id, workout.startedAtMillis) {
-        mutableLongStateOf((System.currentTimeMillis() - workout.startedAtMillis).coerceAtLeast(0L) / 1_000)
-    }
-    LaunchedEffect(workout.id, workout.startedAtMillis) {
-        while (true) {
-            elapsedSeconds = (System.currentTimeMillis() - workout.startedAtMillis) / 1_000
-            delay(1.seconds)
-        }
-    }
-    val shape = RoundedCornerShape(50)
-    Surface(
-        modifier = modifier
-            .testTag("active-workout-pill")
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .shadow(
-                elevation = 24.dp,
-                shape = shape,
-                ambientColor = Color.Black.copy(alpha = 0.42f),
-                spotColor = Color.Black.copy(alpha = 0.5f),
-            )
-            .clickable(onClick = onClick),
-        shape = shape,
-        color = MaterialTheme.colorScheme.surfaceVariant,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        workout.name,
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.titleSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        formatElapsedTime(elapsedSeconds),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(start = 12.dp),
-                    )
-                }
-                restTimerRemainingSeconds?.let {
-                    Text(
-                        "Rest ${formatCountdown(it)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-            IconButton(onClick = onDiscard) {
-                Icon(
-                    Icons.Filled.Delete,
-                    contentDescription = "Discard current workout",
-                    tint = MaterialTheme.colorScheme.error,
-                )
-            }
-        }
     }
 }

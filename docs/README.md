@@ -6,6 +6,7 @@ These documents describe the checked-in Android application. Each topic has one 
 |---|---|
 | Features, setup, build configuration | [Project README](../README.md) |
 | UI structure, state, domain persistence, schema, timers | [Architecture](architecture.md) |
+| App-owned modal inventory, triggers, actions and shared styling | [Dialogs](dialogs.md) |
 | Launcher artwork and generated icon assets | [Launcher icons](launcher-icons.md) |
 | Sync capabilities and application integration | [Sync overview](sync/README.md) |
 | Capture, outbox, canonical storage, snapshots, publication | [Sync storage](sync/storage.md) |
@@ -31,3 +32,11 @@ Detailed Android work plans live in `implementation/`. Each plan records its app
 planned behavior is not evidence of the checked-in implementation.
 
 - [Settings tab and account/server status](implementation/settings-tab.md) — All four slices complete and verified.
+
+## Design references
+
+Design references describe the target interface and approved visual decisions. They do not establish Android
+implementation or verification status; remaining work is tracked in [future improvements](future-improvements.md).
+
+- [GymTracka redesign](design/redesign.md) — Current Figcraft frames, color styles, layout measurements, control
+  conventions, and interaction states, with exported previews.

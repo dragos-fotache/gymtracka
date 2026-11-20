@@ -13,16 +13,23 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -41,6 +48,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -54,6 +62,8 @@ class WorkoutAppearanceTest : GymDatabaseTest() {
     private var screenScope: CoroutineScope? = null
     private val timer = mutableStateOf<ActiveRestTimer?>(null)
     private val adjustments = mutableListOf<Int>()
+    private val replacements = mutableListOf<String>()
+    private val historyRequests = mutableListOf<String>()
 
     @After
     fun cancelScreenScope() {
@@ -77,6 +87,40 @@ class WorkoutAppearanceTest : GymDatabaseTest() {
     }
 
     @Test
+    fun inlineExerciseActionsKeepTheWorkoutEditable() {
+        seedWorkout()
+        showWorkout()
+        val options = composeRule.onNodeWithContentDescription("Options for Incline Dumbbell Press")
+        options.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Collapsed"))
+        composeRule.onNodeWithText("[Replace]").assertDoesNotExist()
+        options.performClick()
+        options.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Expanded"))
+        composeRule.onNodeWithText("[Replace]").assertIsDisplayed()
+        composeRule.onNodeWithText("[History]").assertIsDisplayed()
+        composeRule.onNodeWithText("[Delete]").assertIsDisplayed()
+        composeRule.onNodeWithText("Add notes...").assertIsDisplayed()
+        composeRule.onNodeWithText("[Rest Timer: 2min]").assertIsDisplayed()
+        composeRule.onNodeWithTag("workout-set-weight-set-1").assertIsDisplayed()
+        capture("workout-menu-expanded")
+
+        options.performClick()
+        composeRule.onNodeWithText("[Replace]").assertDoesNotExist()
+        options.performClick()
+        composeRule.onNodeWithText("[History]").performClick()
+        assertEquals(listOf(runBlocking { repository.workoutDetails("appearance")!!.exercises.single().workoutExercise.exerciseId }), historyRequests)
+        options.performClick()
+        composeRule.onNodeWithText("[Replace]").performClick()
+        assertEquals(listOf("entry-1"), replacements)
+        options.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Collapsed"))
+
+        options.performClick()
+        composeRule.onNodeWithText("[Delete]").performClick()
+        composeRule.onNodeWithText("Delete exercise?").assertIsDisplayed()
+        composeRule.onNodeWithText("[Cancel]").performClick()
+        assertEquals(2, runBlocking { repository.workoutDetails("appearance")!!.exercises.single().sets.size })
+    }
+
+    @Test
     fun narrowWorkoutKeepsTimerControlsAvailable() {
         seedWorkout(twoExercises = true)
         timer.value = ActiveRestTimer("set-2", 120, 0, 1)
@@ -89,7 +133,7 @@ class WorkoutAppearanceTest : GymDatabaseTest() {
     fun enlargedTextKeepsTimerControlsAvailable() {
         seedWorkout(twoExercises = true)
         timer.value = ActiveRestTimer("set-2", 120, 0, 1)
-        showWorkout(fontScale = 1.5f)
+        showWorkout(width = 320.dp, fontScale = 1.5f)
         checkTimerActions()
         capture("workout-timer-large-text")
     }
@@ -109,6 +153,12 @@ class WorkoutAppearanceTest : GymDatabaseTest() {
         composeRule.onNodeWithTag("rest-timer-plus").assertIsDisplayed().performClick()
         composeRule.onNodeWithTag("rest-timer-skip").assertIsDisplayed()
         assertEquals(listOf(-15, 15), adjustments)
+        val countdownLayouts = mutableListOf<TextLayoutResult>()
+        composeRule.onNodeWithText("01:25").performSemanticsAction(SemanticsActions.GetTextLayoutResult) {
+            it(countdownLayouts)
+        }
+        val countdown = countdownLayouts.single()
+        assertTrue("The complete countdown must fit", countdown.getLineRight(0) <= countdown.size.width + 1f)
     }
 
     private fun seedWorkout(twoExercises: Boolean = false) = runBlocking {
@@ -151,7 +201,8 @@ class WorkoutAppearanceTest : GymDatabaseTest() {
                                 onFinishWorkout = {}, onCancelWorkout = {}, onRestTimerStarted = { _, _ -> },
                                 onRestTimerEnded = { timer.value = null },
                                 onRestTimerAdjusted = { _, delta -> adjustments += delta },
-                                onExerciseReplacementRequested = {},
+                                onExerciseReplacementRequested = { replacements += it },
+                                onExerciseHistoryRequested = { historyRequests += it },
                                 state = state,
                             )
                         }

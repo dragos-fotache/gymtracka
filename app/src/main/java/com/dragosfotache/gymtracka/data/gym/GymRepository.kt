@@ -39,7 +39,8 @@ internal class GymRepository(
     GymAppStateRepository,
     ActiveWorkoutStateRepository,
     RoutineStateRepository,
-    WorkoutHistoryStateRepository {
+    WorkoutHistoryStateRepository,
+    ExerciseHistoryStateRepository {
     /**
      * Legacy construction path with the original defaults and no process
      * guard. Kept separate from the guarded primary so trailing lambdas
@@ -368,6 +369,25 @@ internal class GymRepository(
 
     override suspend fun finishedWorkoutSummaries() = store.withFencedTransaction {
         database.workoutDao().getScopedFinishedWorkoutSummaries(session.accountId)
+    }
+
+    override suspend fun exerciseHistory(exerciseId: String): ExerciseHistory? = store.withFencedTransaction {
+        val exercise = database.exerciseDao().getScopedById(exerciseId, session.accountId)
+            ?: return@withFencedTransaction null
+        val rows = database.workoutDao().getScopedExerciseHistorySets(exerciseId, session.accountId)
+        ExerciseHistory(
+            exerciseId = exercise.id,
+            exerciseName = exercise.name,
+            workouts = rows.groupBy { it.workoutId }.map { (workoutId, sets) ->
+                ExerciseHistoryWorkout(
+                    workoutId = workoutId,
+                    workoutName = sets.first().workoutName,
+                    performedAtMillis = sets.first().performedAtMillis,
+                    notes = sets.distinctBy { it.entryId }.map { it.notes }.filter { it.isNotBlank() },
+                    sets = sets.map { ExerciseHistorySet(it.setId, it.weightKg, it.repetitions) },
+                )
+            },
+        )
     }
 
     override suspend fun createRoutineDraft(): RoutineEntity = store.withFencedTransaction { transaction ->

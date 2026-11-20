@@ -4,6 +4,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsNotSelected
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsDisplayed
@@ -120,18 +124,91 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
         composeRule.waitUntil { composeRule.onAllNodesWithTag("exercise-row-$pressId").fetchSemanticsNodes().isNotEmpty() }
 
         composeRule.onNodeWithTag("exercise-search").performTextInput("Alpha")
-        composeRule.onNodeWithText("Alpha Press").assertIsDisplayed()
-        composeRule.onAllNodesWithText("Beta Row").assertCountEquals(0)
+        composeRule.onNodeWithText("[Alpha Press]").assertIsDisplayed()
+        composeRule.onAllNodesWithText("[Beta Row]").assertCountEquals(0)
         composeRule.onNodeWithContentDescription("Clear search").performClick()
         composeRule.onNodeWithTag("filter-equipment").performClick()
         composeRule.onNodeWithTag("filter-option-barbell").performClick()
         composeRule.runOnIdle { assertTrue(state.selectedEquipmentIds.isEmpty()) }
-        composeRule.onNodeWithText("Show results").performClick()
+        composeRule.onNodeWithText("[Show]").performClick()
         composeRule.waitForIdle()
 
         composeRule.runOnIdle { assertEquals(setOf("barbell"), state.selectedEquipmentIds) }
-        composeRule.onNodeWithText("Alpha Press").assertIsDisplayed()
-        composeRule.onAllNodesWithText("Beta Row").assertCountEquals(0)
+        composeRule.onNodeWithText("[Alpha Press]").assertIsDisplayed()
+        composeRule.onAllNodesWithText("[Beta Row]").assertCountEquals(0)
+        assertTrue(pressId.isNotBlank())
+        assertTrue(rowId.isNotBlank())
+    }
+
+    @Test
+    fun inlineCatalogueFiltersDiscardDraftsAndApplyBothCategories() = runTest {
+        insertMuscleGroups(
+            com.dragosfotache.gymtracka.data.gym.MuscleGroupEntity("chest", "chest", "Chest"),
+            com.dragosfotache.gymtracka.data.gym.MuscleGroupEntity("legs", "legs", "Legs"),
+        )
+        insertEquipment(
+            equipmentFixture("barbell", "Barbell", "weight"),
+            equipmentFixture("machine", "Machine", "weight"),
+        )
+        val pressId = repository.createCustomExercise(
+            name = "Alpha Press",
+            primaryMuscleGroupId = "chest",
+            secondaryMuscleGroupIds = emptySet(),
+            equipmentId = "barbell",
+            category = "strength",
+            instructions = "",
+        )
+        val rowId = repository.createCustomExercise(
+            name = "Beta Row",
+            primaryMuscleGroupId = "legs",
+            secondaryMuscleGroupIds = emptySet(),
+            equipmentId = "machine",
+            category = "strength",
+            instructions = "",
+        )
+        lateinit var state: ExerciseCatalogueState
+
+        composeRule.setContent {
+            val scope = trackScope(rememberCoroutineScope())
+            MaterialTheme {
+                state = remember { ExerciseCatalogueState(repository, scope) }
+                com.dragosfotache.gymtracka.ui.exercises.CatalogueDesignScreen(
+                    state = state,
+                    listState = androidx.compose.foundation.lazy.rememberLazyListState(),
+                    modifier = androidx.compose.ui.Modifier,
+                    onCreate = {},
+                    onExerciseSelected = {},
+                    onEdit = {},
+                )
+            }
+        }
+        composeRule.waitUntil { composeRule.onAllNodesWithTag("exercise-row-$pressId").fetchSemanticsNodes().isNotEmpty() }
+
+        composeRule.onNodeWithTag("exercise-search").performTextInput("Alpha")
+        composeRule.onNodeWithText("[Alpha Press]").assertIsDisplayed()
+        composeRule.onAllNodesWithText("[Beta Row]").assertCountEquals(0)
+        composeRule.onNodeWithContentDescription("Clear search").performClick()
+        composeRule.onNodeWithTag("filter-equipment").performClick()
+        composeRule.onNodeWithTag("filter-option-barbell").performClick()
+        composeRule.runOnIdle { assertTrue(state.selectedEquipmentIds.isEmpty()) }
+        // Closing and reopening discards the unapplied draft.
+        composeRule.onNodeWithTag("filter-equipment").performClick()
+        composeRule.onNodeWithTag("filter-equipment").performClick()
+        composeRule.onNodeWithTag("filter-option-barbell").assertIsOff()
+        composeRule.onNodeWithText("[Clear]").performClick()
+        composeRule.onNodeWithTag("filter-option-barbell").performClick()
+        composeRule.onNodeWithText("[Show]").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle { assertEquals(setOf("barbell"), state.selectedEquipmentIds) }
+        composeRule.onNodeWithText("[Alpha Press]").assertIsDisplayed()
+        composeRule.onAllNodesWithText("[Beta Row]").assertCountEquals(0)
+        composeRule.onNodeWithTag("filter-muscles").performClick()
+        composeRule.onNodeWithTag("filter-option-legs").performClick()
+        composeRule.runOnIdle { assertTrue(state.selectedMuscleGroupIds.isEmpty()) }
+        composeRule.onNodeWithText("[Show]").performClick()
+        composeRule.runOnIdle { assertEquals(setOf("legs"), state.selectedMuscleGroupIds) }
+        composeRule.onNodeWithText("No exercises found").assertIsDisplayed()
         assertTrue(pressId.isNotBlank())
         assertTrue(rowId.isNotBlank())
     }
@@ -157,8 +234,12 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
             }
         }
         composeRule.waitUntil { composeRule.onAllNodesWithTag("exercise-row-$firstExerciseId").fetchSemanticsNodes().isNotEmpty() }
-        composeRule.onNodeWithTag("exercise-row-$firstExerciseId").performClick()
-        composeRule.onNodeWithTag("exercise-row-$secondExerciseId").performClick()
+        composeRule.onNodeWithText("Add selected (0)").assertIsNotEnabled()
+        composeRule.onNodeWithTag("exercise-row-$firstExerciseId").performClick().assertIsOn()
+        composeRule.onNodeWithTag("exercise-row-$firstExerciseId").performClick().assertIsOff()
+        composeRule.onNodeWithTag("exercise-row-$firstExerciseId").performClick().assertIsOn()
+        composeRule.onNodeWithTag("exercise-row-$secondExerciseId").performClick().assertIsOn()
+        assertTrue(repository.workoutDetails("picker-workout")!!.exercises.isEmpty())
         composeRule.onNodeWithText("Add selected (2)").performClick()
         composeRule.waitUntil {
             addedCount.get() == 1 &&
@@ -249,7 +330,10 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
             }
         }
         composeRule.waitUntil { composeRule.onAllNodesWithTag("exercise-row-$secondExerciseId").fetchSemanticsNodes().isNotEmpty() }
-        composeRule.onNodeWithTag("exercise-row-$secondExerciseId").performClick()
+        composeRule.onNodeWithText("Replace").assertIsNotEnabled()
+        composeRule.onNodeWithTag("exercise-row-$oldExerciseId").performClick().assertIsSelected()
+        composeRule.onNodeWithTag("exercise-row-$secondExerciseId").performClick().assertIsSelected()
+        composeRule.onNodeWithTag("exercise-row-$oldExerciseId").assertIsNotSelected()
         composeRule.onNodeWithText("Replace").performClick()
         composeRule.waitUntil {
             replacedCount.get() == 1 && runBlocking {
@@ -296,18 +380,18 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
         composeRule.onNodeWithText("Exercise name required").assertIsDisplayed()
         composeRule.runOnIdle { assertEquals(0, savedCount.get()) }
         assertTrue(repository.exercises().none { it.isUserCreated })
-        composeRule.onNodeWithText("OK").performClick()
+        composeRule.onNodeWithText("[OK]").performClick()
         composeRule.onNodeWithTag("exercise-field-name").performTextInput("Custom Press")
         composeRule.onNodeWithContentDescription("Back to exercises").performClick()
         composeRule.onNodeWithText("Discard exercise?").assertIsDisplayed()
-        composeRule.onNodeWithText("Cancel").performClick()
+        composeRule.onNodeWithText("[Cancel]").performClick()
         composeRule.onNodeWithTag("exercise-field-name").assertTextEquals("Custom Press")
         composeRule.runOnIdle {
             assertEquals(0, backCount.get())
             assertEquals(0, savedCount.get())
         }
         composeRule.onNodeWithContentDescription("Back to exercises").performClick()
-        composeRule.onNodeWithText("Discard").performClick()
+        composeRule.onNodeWithText("[Discard]").performClick()
         composeRule.runOnIdle {
             assertEquals(1, backCount.get())
             assertEquals(0, savedCount.get())
@@ -349,12 +433,12 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
             composeRule.onNodeWithText("Routine name required").assertIsDisplayed()
             composeRule.runOnIdle { assertEquals(0, savedCount.get()) }
             assertTrue(runBlocking { repository.routineDetails("routine-ui")!!.routine.isDraft })
-            composeRule.onNodeWithText("OK").performClick()
+            composeRule.onNodeWithText("[OK]").performClick()
             composeRule.onNodeWithTag("routine-name-input").performTextInput("Leg day revised")
-            composeRule.onNodeWithText("Add Exercise").performClick()
+            composeRule.onNodeWithText("Add exercise").performClick()
             composeRule.runOnIdle { assertEquals(1, addExerciseCount.get()) }
 
-            composeRule.onNodeWithText("Add Set").performClick()
+            composeRule.onNodeWithText("Add set").performClick()
             composeRule.waitUntil { runBlocking { repository.routineDetails("routine-ui")?.exercises?.single()?.sets?.size == 2 } }
             val afterAdd = runBlocking { repository.routineDetails("routine-ui")!! }
             val addedSets = afterAdd.exercises.single().sets
@@ -363,7 +447,7 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
                 assertEquals(60.0, set.weightKg!!, 0.0)
                 assertEquals(8, set.repetitions)
             }
-            composeRule.onNodeWithTag("routine-delete-set-routine-set").performClick()
+            composeRule.onNodeWithTag("routine-set-row-routine-set").performTouchInput { swipeLeft() }
             composeRule.waitUntil {
                 runBlocking {
                     val details = repository.routineDetails("routine-ui")
@@ -419,7 +503,7 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
             composeRule.onNodeWithContentDescription("Routine options for Temporary plan").performClick()
             composeRule.onNodeWithText("[Delete]").performClick()
             composeRule.onNodeWithText("Delete routine?").assertIsDisplayed()
-            composeRule.onNodeWithText("Delete routine").performClick()
+            composeRule.onNodeWithText("[Delete routine]").performClick()
             composeRule.waitUntil { runBlocking { repository.routineDetails("routine-delete") == null } }
             assertTrue(runBlocking { repository.savedRoutineDetails().isEmpty() })
         } finally {
@@ -474,9 +558,9 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
         composeRule.runOnIdle { assertEquals(listOf("active-set" to 30), restStartPayloads) }
 
         composeRule.onNodeWithContentDescription("Options for Bench Press").performClick()
-        composeRule.onNodeWithText("Delete").performClick()
+        composeRule.onNodeWithText("[Delete]").performClick()
         composeRule.onNodeWithText("Delete exercise?").assertIsDisplayed()
-        composeRule.onNodeWithText("Cancel").performClick()
+        composeRule.onNodeWithText("[Cancel]").performClick()
         val afterCancel = repository.workoutDetails("active-ui")!!
         val retainedEntry = afterCancel.exercises.single()
         assertEquals("active-entry", retainedEntry.workoutExercise.id)
@@ -486,8 +570,8 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
         assertEquals(6, retainedSet.repetitions)
         assertTrue(retainedSet.isCompleted)
         composeRule.onNodeWithContentDescription("Options for Bench Press").performClick()
-        composeRule.onNodeWithText("Delete").performClick()
-        composeRule.onNodeWithText("Delete").performClick()
+        composeRule.onNodeWithText("[Delete]").performClick()
+        composeRule.onNodeWithText("[Delete]").performClick()
         composeRule.waitUntil { runBlocking { repository.workoutDetails("active-ui")!!.exercises.isEmpty() } }
         assertTrue(database.workoutDao().getWorkoutSets("active-entry").isEmpty())
     }
@@ -672,9 +756,9 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
             composeRule.runOnIdle { assertEquals(listOf("history-ui"), selectedIds) }
 
             composeRule.onNodeWithContentDescription("Workout options for Push day").performClick()
-            composeRule.onNodeWithText("Save as routine").performClick()
+            composeRule.onNodeWithText("[Save]").performClick()
             composeRule.onAllNodesWithTag("history-routine-name-input").assertCountEquals(1)
-            composeRule.onNodeWithText("Save").performClick()
+            composeRule.onNodeWithText("[Save]").performClick()
             composeRule.waitUntil { runBlocking { repository.savedRoutineDetails().singleOrNull()?.routine?.name == "Push day" } }
             val savedRoutine = runBlocking { repository.savedRoutineDetails().single() }
             assertEquals("Push day", savedRoutine.routine.name)
@@ -691,15 +775,17 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
             assertEquals(8, savedRoutineSet.repetitions)
             assertTrue(savedRoutineExercise.routineExercise.id != "history-entry")
             assertTrue(savedRoutineSet.id != "history-set")
+            composeRule.waitUntil { state.savedRoutineName != null }
+            composeRule.onNodeWithText("[Done]").performClick()
 
             composeRule.onNodeWithContentDescription("Workout options for Push day").performClick()
-            composeRule.onNodeWithText("Perform again").performClick()
+            composeRule.onNodeWithText("[Perform]").performClick()
             composeRule.runOnIdle { assertEquals(listOf("history-ui"), performedAgainIds) }
 
             composeRule.onNodeWithContentDescription("Workout options for Push day").performClick()
-            composeRule.onNodeWithText("Delete").performClick()
+            composeRule.onNodeWithText("[Delete]").performClick()
             composeRule.onNodeWithText("Delete workout?").assertIsDisplayed()
-            composeRule.onNodeWithText("Cancel").performClick()
+            composeRule.onNodeWithText("[Cancel]").performClick()
             val retainedWorkout = runBlocking { repository.workoutDetails("history-ui")!! }
             assertEquals("history-ui", retainedWorkout.workout.id)
             val retainedEntry = retainedWorkout.exercises.single()
@@ -710,8 +796,8 @@ class FocusedComposeInteractionTest : GymDatabaseTest() {
             assertEquals(50.0, retainedSet.weightKg!!, 0.0)
             assertEquals(8, retainedSet.repetitions)
             composeRule.onNodeWithContentDescription("Workout options for Push day").performClick()
-            composeRule.onNodeWithText("Delete").performClick()
-            composeRule.onNodeWithText("Delete").performClick()
+            composeRule.onNodeWithText("[Delete]").performClick()
+            composeRule.onNodeWithText("[Delete]").performClick()
             composeRule.waitUntil { runBlocking { repository.workoutDetails("history-ui") == null } }
             composeRule.waitUntil { state.workouts?.isEmpty() == true }
             assertTrue(runBlocking { database.workoutDao().getWorkoutExercises("history-ui").isEmpty() })

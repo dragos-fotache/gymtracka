@@ -1,7 +1,6 @@
 package com.dragosfotache.gymtracka.ui.routines
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,30 +21,17 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.LaunchedEffect
@@ -57,7 +44,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -66,11 +52,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.sp
 import com.dragosfotache.gymtracka.data.gym.RoutineDetails
 import com.dragosfotache.gymtracka.data.gym.RoutineStateRepository
 import com.dragosfotache.gymtracka.data.sync.store.StaleSessionException
+import com.dragosfotache.gymtracka.ui.components.GymDialog
+import com.dragosfotache.gymtracka.ui.components.GymDialogAction
 import com.dragosfotache.gymtracka.ui.util.reconcileRepetitionsText
 import com.dragosfotache.gymtracka.ui.util.reconcileWeightText
 import kotlinx.coroutines.CancellationException
@@ -79,12 +67,20 @@ import com.dragosfotache.gymtracka.ui.rememberFiniteEditCoordinator
 import com.dragosfotache.gymtracka.ui.rememberGymRepository
 import com.dragosfotache.gymtracka.data.gym.RoutineExerciseDetails
 import com.dragosfotache.gymtracka.data.gym.RoutineSetEntity
+import com.dragosfotache.gymtracka.ui.history.HistorySetRow
+import com.dragosfotache.gymtracka.ui.history.HistorySetTable
+import com.dragosfotache.gymtracka.ui.history.historySetColumnWidths
+import com.dragosfotache.gymtracka.ui.components.CompactSetTextField
+import com.dragosfotache.gymtracka.ui.components.SwipeToDeleteSetRow
 import com.dragosfotache.gymtracka.ui.activeworkout.RestDurationDialog
 import com.dragosfotache.gymtracka.ui.activeworkout.RestDurationRow
 import com.dragosfotache.gymtracka.ui.theme.LocalWorkoutGrid
 import com.dragosfotache.gymtracka.ui.theme.WorkoutActionButton
 import com.dragosfotache.gymtracka.ui.theme.WorkoutGrid
 import com.dragosfotache.gymtracka.ui.theme.WorkoutGridLabel
+import com.dragosfotache.gymtracka.ui.theme.WorkoutMuted
+import com.dragosfotache.gymtracka.ui.theme.WorkoutScreenStyle
+import com.dragosfotache.gymtracka.ui.theme.WorkoutSeparator
 import com.dragosfotache.gymtracka.ui.util.formatKilograms
 import com.dragosfotache.gymtracka.ui.util.parseKilograms
 import com.dragosfotache.gymtracka.ui.util.formatRestDuration
@@ -538,18 +534,19 @@ internal fun RoutineSection(
     }
 
     state.routineToDelete?.let { routine ->
-        AlertDialog(
+        GymDialog(
             onDismissRequest = state::dismissDelete,
-            title = { Text("Delete routine?") },
+            title = "Delete routine?",
             text = { Text("This will permanently delete ${routine.routine.name}.") },
-            confirmButton = {
-                TextButton(onClick = state::confirmDelete) {
-                    Text("Delete routine", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = state::dismissDelete) { Text("Cancel") }
-            },
+            confirmAction = GymDialogAction(
+                text = "Delete routine",
+                onClick = state::confirmDelete,
+                destructive = true,
+            ),
+            dismissAction = GymDialogAction(
+                text = "Cancel",
+                onClick = state::dismissDelete,
+            ),
         )
     }
 }
@@ -638,66 +635,100 @@ internal fun RoutineDetailScreen(
     state: RoutineDetailState = rememberRoutineDetailState(routineId),
 ) {
     BackHandler(onBack = onBack)
-    val details = state.details
-    if (details == null) {
-        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
+    WorkoutScreenStyle {
+        val grid = LocalWorkoutGrid.current!!
+        val details = state.details
+        val setsByExercise = details?.exercises.orEmpty().associate { exercise ->
+            exercise.routineExercise.id to exercise.sets.map { set ->
+                HistorySetRow(
+                    id = set.id,
+                    weight = set.weightKg?.let { "${formatKilograms(it)} kg" } ?: "—",
+                    repetitions = set.repetitions?.toString() ?: "—",
+                )
+            }
         }
-        return
+        val columnWidths = historySetColumnWidths(setsByExercise.values.flatten())
+        Scaffold(
+            modifier = modifier.testTag("routine-details-screen"),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            topBar = {
+                Box(Modifier.fillMaxWidth().statusBarsPadding().padding(top = grid.space(24))) {
+                    Row(
+                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(horizontal = grid.space(23)).heightIn(min = grid.line),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(onClick = onBack, modifier = Modifier.size(grid.line)) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back to workouts",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(grid.space(24)).offset(x = -grid.space(3)),
+                            )
+                        }
+                        WorkoutGridLabel(
+                            "Routine details", Modifier.weight(1f),
+                            fontWeight = FontWeight.Bold, horizontalPadding = 0,
+                        )
+                    }
+                }
+            },
+            bottomBar = {
+                if (details != null) {
+                    Box(
+                        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant)
+                            .padding(horizontal = grid.space(23), vertical = grid.space(12)),
+                    ) {
+                        WorkoutActionButton(
+                            "Start routine", { onStartRoutine(details.routine.id) },
+                            Modifier.fillMaxWidth().testTag("routine-details-start"),
+                        )
+                    }
+                }
+            },
+        ) { innerPadding ->
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(innerPadding).testTag("routine-details-list"),
+                contentPadding = PaddingValues(horizontal = grid.space(23), vertical = grid.space(24)),
+                verticalArrangement = Arrangement.spacedBy(grid.space(24)),
+            ) {
+                if (details == null) {
+                    item {
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    }
+                } else {
+                    item {
+                        WorkoutGridLabel(details.routine.name, fontWeight = FontWeight.Bold, horizontalPadding = 0)
+                    }
+                    items(details.exercises, key = { it.routineExercise.id }) { exercise ->
+                        RoutineDetailExercisePanel(
+                            exercise, setsByExercise.getValue(exercise.routineExercise.id), columnWidths,
+                        )
+                    }
+                }
+            }
+        }
     }
+}
 
-    LazyColumn(
-        modifier = modifier.fillMaxSize().statusBarsPadding(),
-        contentPadding = PaddingValues(start = 34.dp, end = 34.dp, bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+@Composable
+private fun RoutineDetailExercisePanel(
+    exercise: RoutineExerciseDetails,
+    sets: List<HistorySetRow>,
+    columnWidths: List<Dp>,
+) {
+    val grid = LocalWorkoutGrid.current!!
+    Column(
+        Modifier.fillMaxWidth().testTag("routine-details-exercise-${exercise.routineExercise.id}")
+            .border(grid.space(2), MaterialTheme.colorScheme.outline).padding(vertical = grid.space(12)),
     ) {
-        item {
-            Row(
-                modifier = Modifier.offset(x = (-8).dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier.size(36.dp),
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back to workouts",
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-                Text(
-                    details.routine.name,
-                    modifier = Modifier.padding(start = 8.dp),
-                    style = MaterialTheme.typography.titleLarge,
-                )
-            }
-        }
-        item {
-            Button(
-                onClick = { onStartRoutine(details.routine.id) },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Start routine")
-            }
-        }
-        items(details.exercises, key = { it.routineExercise.id }) { exercise ->
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(exercise.routineExercise.exerciseName, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Rest Timer: ${formatRestDuration(exercise.routineExercise.restDurationSeconds)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                exercise.sets.forEachIndexed { index, set ->
-                    Text(
-                        "${index + 1}. ${set.weightKg?.let(::formatKilograms) ?: "–"} kg × ${set.repetitions ?: "–"}",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
+        WorkoutGridLabel(exercise.routineExercise.exerciseName, fontWeight = FontWeight.SemiBold, compact = true)
+        WorkoutGridLabel(
+            "Rest Timer: ${formatRestDuration(exercise.routineExercise.restDurationSeconds)}",
+            color = WorkoutMuted, compact = true,
+        )
+        Spacer(Modifier.height(grid.space(24)))
+        HistorySetTable(sets, "routine-details-set", columnWidths)
     }
 }
 
@@ -712,111 +743,97 @@ internal fun RoutineEditorScreen(
 ) {
     val details = state.details
     if (details == null) {
-        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
+        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
-
-    Scaffold(
-        modifier = modifier,
-        topBar = {
-            Surface(modifier = Modifier.statusBarsPadding(), shadowElevation = 3.dp) {
+    WorkoutScreenStyle {
+        val grid = LocalWorkoutGrid.current!!
+        Scaffold(
+            modifier = modifier,
+            topBar = {
                 Row(
-                    modifier = Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 16.dp),
+                    Modifier.fillMaxWidth().statusBarsPadding().padding(top = grid.space(24))
+                        .background(MaterialTheme.colorScheme.surfaceVariant).padding(horizontal = grid.space(23)),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TextButton(onClick = { onCancel(details.routine.isDraft) }) { Text("Cancel") }
-                    Spacer(Modifier.weight(1f))
-                    Button(
-                        onClick = { state.requestSave(onSaved) },
+                    WorkoutGridLabel(
+                        "Cancel",
+                        Modifier.weight(1f).clickable(role = Role.Button) { onCancel(details.routine.isDraft) },
+                        color = MaterialTheme.colorScheme.primary,
+                        horizontalPadding = 0,
+                    )
+                    WorkoutActionButton(
+                        "Save", { state.requestSave(onSaved) }, Modifier.width(grid.space(96)),
                         enabled = details.exercises.isNotEmpty(),
-                    ) {
-                        Text("Save")
-                    }
+                    )
                 }
-            }
-        },
-    ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            item {
-                RoutineNameField(
-                    name = state.name,
-                    onNameChanged = { state.updateName(it) != null },
-                )
-            }
-            items(details.exercises, key = { it.routineExercise.id }) { exercise ->
-                RoutineExerciseCard(
-                    exercise = exercise,
-                    onRestDurationChanged = { id, seconds ->
-                        state.updateRestDuration(id, seconds) != null
-                    },
-                    onSetAdded = { state.addSet(exercise) },
-                    onSetChanged = { set -> state.updateSet(set) != null },
-                    onSetDeleted = state::deleteSet,
-                    onExerciseDeleted = { state.deleteExercise(exercise) },
-                )
-            }
-            item {
-                TextButton(
-                    onClick = onAddExercise,
-                    modifier = Modifier.padding(horizontal = 4.dp).fillMaxWidth(),
-                    colors = ButtonDefaults.textButtonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    Icon(Icons.Filled.Add, contentDescription = null)
-                    Text("Add Exercise", modifier = Modifier.padding(start = 8.dp))
+            },
+        ) { innerPadding ->
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(innerPadding).testTag("routine-editor-list"),
+                contentPadding = PaddingValues(horizontal = grid.space(23)),
+            ) {
+                item {
+                    Spacer(Modifier.height(grid.space(24)))
+                    RoutineNameField(state.name, onNameChanged = { state.updateName(it) != null })
+                }
+                items(details.exercises, key = { it.routineExercise.id }) { exercise ->
+                    WorkoutSeparator()
+                    RoutineExerciseCard(
+                        exercise = exercise,
+                        onRestDurationChanged = { id, seconds -> state.updateRestDuration(id, seconds) != null },
+                        onSetAdded = { state.addSet(exercise) },
+                        onSetChanged = { state.updateSet(it) != null },
+                        onSetDeleted = { state.deleteSet(it) != null },
+                        onExerciseDeleted = { state.deleteExercise(exercise) != null },
+                    )
+                }
+                item {
+                    Spacer(Modifier.height(grid.space(24)))
+                    WorkoutActionButton("Add exercise", onAddExercise, Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(grid.space(24)))
                 }
             }
         }
-    }
-
-    if (state.showNameRequiredDialog) {
-        AlertDialog(
-            onDismissRequest = state::dismissNameRequiredDialog,
-            title = { Text("Routine name required") },
-            text = { Text("Enter a name before saving this routine.") },
-            confirmButton = {
-                TextButton(onClick = state::dismissNameRequiredDialog) { Text("OK") }
-            },
-        )
+        if (state.showNameRequiredDialog) {
+            GymDialog(
+                onDismissRequest = state::dismissNameRequiredDialog,
+                title = "Routine name required",
+                text = { Text("Enter a name before saving this routine.") },
+                confirmAction = GymDialogAction(
+                    text = "OK",
+                    onClick = state::dismissNameRequiredDialog,
+                ),
+            )
+        }
     }
 }
 
 @Composable
 private fun RoutineNameField(name: String, onNameChanged: (String) -> Boolean) {
-    BasicTextField(
-        value = name,
-        // The field value is driven by accepted state; refused input while paused leaves it
-        // unchanged without altering the draft.
-        onValueChange = { onNameChanged(it) },
-        modifier = Modifier.fillMaxWidth().testTag("routine-name-input"),
-        singleLine = true,
-        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-        textStyle = MaterialTheme.typography.titleLarge.copy(
-            color = MaterialTheme.colorScheme.onBackground,
-            fontWeight = FontWeight.Bold,
-        ),
-        decorationBox = { innerTextField ->
-            Box {
-                if (name.isEmpty()) {
-                    Text(
-                        "Routine name",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+    val grid = LocalWorkoutGrid.current!!
+    Box(
+        Modifier.fillMaxWidth().height(grid.line).background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = grid.space(12)),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        BasicTextField(
+            value = name,
+            onValueChange = { onNameChanged(it) },
+            modifier = Modifier.fillMaxWidth().testTag("routine-name-input"),
+            singleLine = true,
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.ExtraBold,
+            ),
+            decorationBox = { field ->
+                Box {
+                    if (name.isEmpty()) Text("Routine name", color = WorkoutMuted, fontWeight = FontWeight.ExtraBold)
+                    field()
                 }
-                innerTextField()
-            }
-        },
-    )
+            },
+        )
+    }
 }
 
 @Composable
@@ -825,80 +842,64 @@ private fun RoutineExerciseCard(
     onRestDurationChanged: (String, Int) -> Boolean,
     onSetAdded: () -> Unit,
     onSetChanged: (RoutineSetEntity) -> Boolean,
-    onSetDeleted: (RoutineSetEntity) -> Unit,
-    onExerciseDeleted: () -> Unit,
+    onSetDeleted: (RoutineSetEntity) -> Boolean,
+    onExerciseDeleted: () -> Boolean,
 ) {
-    var menuExpanded by remember { mutableStateOf(false) }
+    val grid = LocalWorkoutGrid.current!!
+    var confirmDelete by remember { mutableStateOf(false) }
     var restDialogVisible by remember { mutableStateOf(false) }
     var restSeconds by remember(exercise.routineExercise.id) {
         mutableIntStateOf(exercise.routineExercise.restDurationSeconds)
     }
-    // Same-ID projection refresh adopts the latest committed rest without
-    // recreating focus nodes or resetting menu/dialog state.
     LaunchedEffect(exercise.routineExercise.id, exercise.routineExercise.restDurationSeconds) {
         restSeconds = exercise.routineExercise.restDurationSeconds
     }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    exercise.routineExercise.exerciseName,
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Box {
-                    IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "Exercise options")
-                    }
-                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                        DropdownMenuItem(
-                            text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                            onClick = {
-                                menuExpanded = false
-                                onExerciseDeleted()
-                            },
-                        )
-                    }
-                }
-            }
-            RestDurationRow(restSeconds = restSeconds, onClick = { restDialogVisible = true })
-            RoutineSetTableHeader()
-            exercise.sets.forEach { set ->
-                // Stable row identity by set ID: an earlier remote insert/remove
-                // reshuffles positional slots, so without this the focused set's
-                // focus and raw draft state could move or drop even when its ID
-                // survives. Never keyed by epoch.
-                key(set.id) {
-                    RoutineSetRow(set, onSetChanged, onSetDeleted)
-                }
-            }
-            TextButton(
-                onClick = onSetAdded,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.textButtonColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                ),
-                shape = RoundedCornerShape(16.dp),
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null)
-                Text("Add Set", modifier = Modifier.padding(start = 8.dp))
-            }
+    Column(Modifier.fillMaxWidth().testTag("routine-exercise-${exercise.routineExercise.id}")) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            WorkoutGridLabel(exercise.routineExercise.exerciseName, Modifier.weight(1f), horizontalPadding = 0)
+            WorkoutGridLabel(
+                "[Delete]",
+                Modifier.semantics { contentDescription = "Delete ${exercise.routineExercise.exerciseName} from routine" }
+                    .clickable(role = Role.Button) { confirmDelete = true },
+                color = MaterialTheme.colorScheme.error,
+                horizontalPadding = 0,
+            )
         }
+        RestDurationRow(restSeconds, onClick = { restDialogVisible = true })
+        Box {
+            RoutineSetColumns(
+                number = { Text("#", color = WorkoutMuted) },
+                weight = { Text("WEIGHT", color = WorkoutMuted, fontWeight = FontWeight.Bold) },
+                repetitions = { Text("REPS", color = WorkoutMuted, fontWeight = FontWeight.Bold) },
+            )
+            Box(
+                Modifier.align(Alignment.BottomStart).fillMaxWidth().height(grid.space(4))
+                    .background(MaterialTheme.colorScheme.outline),
+            )
+        }
+        exercise.sets.forEach { set ->
+            key(set.id) { RoutineSetRow(set, onSetChanged, onSetDeleted) }
+        }
+        WorkoutActionButton("Add set", onSetAdded, Modifier.fillMaxWidth())
     }
-
+    if (confirmDelete) {
+        GymDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = "Delete exercise?",
+            text = { Text("Remove ${exercise.routineExercise.exerciseName} and all its sets from this routine?") },
+            confirmAction = GymDialogAction(
+                text = "Delete",
+                onClick = { if (onExerciseDeleted()) confirmDelete = false },
+                destructive = true,
+            ),
+            dismissAction = GymDialogAction(
+                text = "Cancel",
+                onClick = { confirmDelete = false },
+            ),
+        )
+    }
     if (restDialogVisible) {
-        // Snapshot the dialog entry value while open: a same-ID publication
-        // refresh must not rewrite the unconfirmed dialog draft. The snapshot
-        // resets only on dialog close/reopen or true entry replacement.
+        // Keep the entry snapshot through same-ID publication while the dialog is open.
         val dialogInitialRest = remember(exercise.routineExercise.id) { restSeconds }
         RestDurationDialog(
             initialRestSeconds = dialogInitialRest,
@@ -914,15 +915,25 @@ private fun RoutineExerciseCard(
 }
 
 @Composable
-private fun RoutineSetTableHeader() {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text("SET", modifier = Modifier.weight(0.55f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall)
-        Spacer(Modifier.width(8.dp))
-        Text("WEIGHT", modifier = Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall)
-        Spacer(Modifier.width(8.dp))
-        Text("REPS", modifier = Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall)
-        Spacer(Modifier.width(8.dp))
-        Spacer(Modifier.size(36.dp))
+private fun RoutineSetColumns(
+    number: @Composable () -> Unit,
+    weight: @Composable () -> Unit,
+    repetitions: @Composable () -> Unit,
+) {
+    val grid = LocalWorkoutGrid.current!!
+    Box(Modifier.fillMaxWidth().heightIn(min = grid.line)) {
+        Box(
+            Modifier.align(Alignment.CenterStart).width(grid.space(if (grid.fontScale > 1.2f) 48 else 36)),
+            contentAlignment = Alignment.Center,
+        ) { number() }
+        Box(
+            Modifier.align(Alignment.CenterStart).offset(x = grid.space(60)).width(grid.space(156)),
+            contentAlignment = Alignment.Center,
+        ) { weight() }
+        Box(
+            Modifier.align(Alignment.CenterStart).offset(x = grid.space(240)).width(grid.space(156)),
+            contentAlignment = Alignment.Center,
+        ) { repetitions() }
     }
 }
 
@@ -930,86 +941,51 @@ private fun RoutineSetTableHeader() {
 private fun RoutineSetRow(
     set: RoutineSetEntity,
     onSetChanged: (RoutineSetEntity) -> Boolean,
-    onSetDeleted: (RoutineSetEntity) -> Unit,
+    onSetDeleted: (RoutineSetEntity) -> Boolean,
 ) {
+    val grid = LocalWorkoutGrid.current!!
     var weightText by remember(set.id) { mutableStateOf(set.weightKg?.let(::formatKilograms).orEmpty()) }
     var repetitionsText by remember(set.id) { mutableStateOf(set.repetitions?.toString().orEmpty()) }
-    // Same-ID projection refresh: retain accepted raw numeric text when the
-    // incoming value sanitizes equal (for example `12.00`), replace genuinely
-    // different persisted values without clearing focus.
-    LaunchedEffect(set.id, set.weightKg) {
-        weightText = reconcileWeightText(weightText, set.weightKg)
-    }
-    LaunchedEffect(set.id, set.repetitions) {
-        repetitionsText = reconcileRepetitionsText(repetitionsText, set.repetitions)
-    }
-    fun editedSet() = set.copy(
-        weightKg = parseKilograms(weightText),
-        repetitions = repetitionsText.toIntOrNull(),
-    )
-
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier.weight(0.55f).size(36.dp).clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("${set.position + 1}", style = MaterialTheme.typography.titleMedium)
-        }
-        Spacer(Modifier.width(8.dp))
-        RoutineSetTextField(
-            value = weightText,
-            onValueChange = {
-                val candidate = set.copy(
-                    weightKg = parseKilograms(it),
-                    repetitions = repetitionsText.toIntOrNull(),
-                )
-                if (onSetChanged(candidate)) weightText = it
+    LaunchedEffect(set.id, set.weightKg) { weightText = reconcileWeightText(weightText, set.weightKg) }
+    LaunchedEffect(set.id, set.repetitions) { repetitionsText = reconcileRepetitionsText(repetitionsText, set.repetitions) }
+    SwipeToDeleteSetRow(
+        setId = set.id,
+        onDelete = { onSetDeleted(set) },
+        modifier = Modifier.testTag("routine-set-row-${set.id}"),
+        deleteDescription = "Delete set ${set.position + 1}",
+    ) {
+        RoutineSetColumns(
+            number = {
+                Box(Modifier.size(grid.input).background(MaterialTheme.colorScheme.outline), contentAlignment = Alignment.Center) {
+                    Text("${set.position + 1}", fontSize = (18 * grid.scale).sp)
+                }
             },
-            modifier = Modifier.weight(1f).testTag("routine-set-weight-${set.id}"),
-            keyboardType = KeyboardType.Decimal,
-        )
-        Spacer(Modifier.width(8.dp))
-        RoutineSetTextField(
-            value = repetitionsText,
-            onValueChange = {
-                val candidate = set.copy(
-                    weightKg = parseKilograms(weightText),
-                    repetitions = it.toIntOrNull(),
+            weight = {
+                CompactSetTextField(
+                    value = weightText,
+                    onValueChange = {
+                        val candidate = set.copy(weightKg = parseKilograms(it), repetitions = repetitionsText.toIntOrNull())
+                        if (onSetChanged(candidate)) weightText = it
+                    },
+                    modifier = Modifier.width(grid.space(if (grid.fontScale > 1.2f) 144 else 84))
+                        .testTag("routine-set-weight-${set.id}"),
+                    showBorder = true,
+                    keyboardType = KeyboardType.Decimal,
                 )
-                if (onSetChanged(candidate)) repetitionsText = it
             },
-            modifier = Modifier.weight(1f).testTag("routine-set-reps-${set.id}"),
-            keyboardType = KeyboardType.Number,
+            repetitions = {
+                CompactSetTextField(
+                    value = repetitionsText,
+                    onValueChange = {
+                        val candidate = set.copy(weightKg = parseKilograms(weightText), repetitions = it.toIntOrNull())
+                        if (onSetChanged(candidate)) repetitionsText = it
+                    },
+                    modifier = Modifier.width(grid.space(if (grid.fontScale > 1.2f) 96 else 60))
+                        .testTag("routine-set-reps-${set.id}"),
+                    showBorder = true,
+                    keyboardType = KeyboardType.Number,
+                )
+            },
         )
-        Spacer(Modifier.width(8.dp))
-        IconButton(
-            onClick = { onSetDeleted(set) },
-            modifier = Modifier.size(36.dp).testTag("routine-delete-set-${set.id}"),
-        ) {
-            Icon(Icons.Filled.Delete, contentDescription = "Delete set", tint = MaterialTheme.colorScheme.error)
-        }
     }
-}
-
-@Composable
-private fun RoutineSetTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    modifier: Modifier,
-    keyboardType: KeyboardType,
-) {
-    BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier.height(36.dp).clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 4.dp, vertical = 8.dp),
-        singleLine = true,
-        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = keyboardType),
-        textStyle = MaterialTheme.typography.bodyMedium.copy(
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center,
-        ),
-    )
 }

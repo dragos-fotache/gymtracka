@@ -40,7 +40,7 @@ internal fun WorkoutScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
                     start = grid.space(23), end = grid.space(23),
-                    top = grid.space(24), bottom = grid.space(120),
+                    top = grid.space(24), bottom = grid.space(24),
                 ),
                 verticalArrangement = Arrangement.spacedBy(grid.space(24)),
             ) {

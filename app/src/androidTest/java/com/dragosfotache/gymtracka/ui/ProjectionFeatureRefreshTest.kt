@@ -10,9 +10,6 @@ import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.hasAnyAncestor
-import androidx.compose.ui.test.hasScrollAction
-import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -593,17 +590,16 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
                 }
             }
         }
-        composeRule.waitUntil { composeRule.onAllNodesWithText("Rest Timer: 30s").fetchSemanticsNodes().isNotEmpty() }
-        composeRule.onNodeWithText("Rest Timer: 30s").performClick()
+        composeRule.waitUntil { composeRule.onAllNodesWithText("[Rest Timer: 30s]").fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithText("[Rest Timer: 30s]").performClick()
         composeRule.onNodeWithText("Rest timer").assertIsDisplayed()
         composeRule.onNodeWithText("Minutes").assertIsDisplayed()
         composeRule.onNodeWithText("Seconds").assertIsDisplayed()
-        composeRule.onNodeWithText("Done").assertIsDisplayed()
+        composeRule.onNodeWithText("[Done]").assertIsDisplayed()
 
-        // User wheel interaction: Seconds column (last) offers 0..55 in 5s steps;
+        // User wheel interaction: Seconds offers 0..55 in 5s steps;
         // index 9 selects 45s. Strict idle settles the corrected wheel.
-        val dialogScrollLists = composeRule.onAllNodes(hasScrollAction() and hasAnyAncestor(isDialog()))
-        dialogScrollLists[1].performScrollToIndex(9)
+        composeRule.onNodeWithTag("rest-picker-seconds").performScrollToIndex(9)
         composeRule.waitForIdle()
 
         // Genuinely changed persisted rest commits while the dialog stays open.
@@ -612,13 +608,13 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
         composeRule.waitUntil(5_000) { state.details?.exercises?.single()?.workoutExercise?.restDurationSeconds == 60 }
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Rest timer").assertIsDisplayed()
-        composeRule.onNodeWithText("Done").assertIsDisplayed()
+        composeRule.onNodeWithText("[Done]").assertIsDisplayed()
 
         // Done confirms the pre-publication user-selected 45s draft, not the
         // newer persisted 60s value.
-        composeRule.onNodeWithText("Done").performClick()
+        composeRule.onNodeWithText("[Done]").performClick()
         composeRule.waitUntil { runBlocking { repository.workoutDetails(CANONICAL_WORKOUT_A)?.exercises?.single()?.workoutExercise?.restDurationSeconds == 45 } }
-        composeRule.waitUntil { composeRule.onAllNodesWithText("Rest Timer: 45s").fetchSemanticsNodes().isNotEmpty() }
+        composeRule.waitUntil { composeRule.onAllNodesWithText("[Rest Timer: 45s]").fetchSemanticsNodes().isNotEmpty() }
         composeRule.onAllNodesWithText("Rest timer").assertCountEquals(0)
         composeRule.waitForIdle()
         assertTrue(restStarts.isEmpty())
@@ -673,21 +669,21 @@ class ProjectionFeatureRefreshTest : GymDatabaseTest() {
                 }
             }
         }
-        composeRule.waitUntil { composeRule.onAllNodesWithText("Rest Timer: 30s").fetchSemanticsNodes().isNotEmpty() }
-        composeRule.onNodeWithText("Rest Timer: 30s").performClick()
+        composeRule.waitUntil { composeRule.onAllNodesWithText("[Rest Timer: 30s]").fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithText("[Rest Timer: 30s]").performClick()
         composeRule.onNodeWithText("Rest timer").assertIsDisplayed()
-        composeRule.onNodeWithText("Done").assertIsDisplayed()
+        composeRule.onNodeWithText("[Done]").assertIsDisplayed()
 
         publishLiveUpdate(1L, routineRestUpdatePull(restSeconds = 60), shared)
         assertEquals(60, runBlocking { repository.routineDetails(CANONICAL_ROUTINE_B)!!.exercises.single().routineExercise.restDurationSeconds })
         composeRule.waitUntil(5_000) { state.details?.exercises?.single()?.routineExercise?.restDurationSeconds == 60 }
         composeRule.waitForIdle()
         composeRule.onNodeWithText("Rest timer").assertIsDisplayed()
-        composeRule.onNodeWithText("Done").assertIsDisplayed()
+        composeRule.onNodeWithText("[Done]").assertIsDisplayed()
 
-        composeRule.onNodeWithText("Done").performClick()
+        composeRule.onNodeWithText("[Done]").performClick()
         composeRule.waitUntil { runBlocking { repository.routineDetails(CANONICAL_ROUTINE_B)?.exercises?.single()?.routineExercise?.restDurationSeconds == 30 } }
-        composeRule.waitUntil { composeRule.onAllNodesWithText("Rest Timer: 30s").fetchSemanticsNodes().isNotEmpty() }
+        composeRule.waitUntil { composeRule.onAllNodesWithText("[Rest Timer: 30s]").fetchSemanticsNodes().isNotEmpty() }
         composeRule.onAllNodesWithText("Rest timer").assertCountEquals(0)
         composeRule.waitForIdle()
     }

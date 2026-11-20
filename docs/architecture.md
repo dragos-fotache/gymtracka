@@ -18,6 +18,8 @@ Paths in this table are relative to `app/src/main/java/com/dragosfotache/gymtrac
 | `ui/settings/` | Settings layout, advisory server-check state/lifecycle and manual network-action availability |
 | `ui/exercises/` | Catalogue, detail, custom editor, exercise pickers and their state |
 | `ui/workouts/` | Workout landing, history and finished-workout detail |
+| `ui/history/` | Shared read-only set table for exercise history, workout summaries and routine details |
+| `ui/components/` | Shared compact set inputs and swipe-to-delete set rows |
 | `ui/routines/` | Routine list, detail and editor |
 | `ui/activeworkout/` | Active workout, compact set controls, timer presentation |
 | `ui/util/` | Locale-aware input/formatting, derived values, projection-refresh helpers |
@@ -56,14 +58,21 @@ Top-level destinations are Exercises, Workout, History, and Settings. All four s
 icon-only tabs using Material list, dumbbell, history and gear icons with accessible names and selected semantics.
 The selected tab fills its full rectangle with the FigCraft blue (`#404F85`); all icons retain the same muted tint.
 Its 58-unit row, 2-unit top border and 2-unit bottom gap scale from the 448-unit reference independently of the page grid,
-with a 48dp minimum tab height. Android bottom insets are added separately. When applicable, the active-workout pill shows its current countdown above the measured
-navigation height. `showSettings()` only
-changes in-memory navigation; it neither replaces the scoped app nor ends a timer. The pill resumes the active workout.
+with a 48dp minimum tab height. Android bottom insets are added separately. When applicable, the active-workout pill
+appears above navigation as a square outlined Surface panel aligned to the shared 23-unit gutters. Its bracketed
+workout name wraps, with live elapsed time, optional rest countdown and a red `[Discard]` action beneath. Metrics and
+actions stack when enlarged text needs more space. `WorkoutContentStyle` supplies the shared monospaced grid without
+a screen-sized container. The root scaffold reserves the panel's actual height so it cannot cover tab content.
+`showSettings()` only changes in-memory navigation; it neither replaces the scoped app nor ends a timer.
+Tapping the panel resumes the active workout; Discard retains its confirmation.
 
-`SettingsScreen` provides one vertically scrolling surface with Connection, Sync and Account sections. Its title uses
-the same `titleLarge` typography as the Exercises tab; section headings use bold `titleMedium`. Light dividers precede
-each section at 16dp horizontal insets, while text retains 24dp insets. It consumes full scaffold padding and leaves
-trailing scroll space for the overlaid active-workout pill. The account root supplies the Sync and Account sections,
+`SettingsScreen` uses the shared monospaced grid, a fixed Surface title strip, and vertically scrolling Connection,
+Sync and Account panels. Square 2-unit outlines, 23-unit gutters, 12-unit text insets, 48-unit rows and 24-unit panel
+gaps match the history screens. Labels and timestamps wrap on shared text edges; bracketed text actions replace
+the old icon buttons. Busy operations use thin square-ended progress bars, and recovery warnings/actions retain
+their inline presentation. `SettingsComponents.kt` supplies shared labels, enabled/destructive actions and progress;
+connection controls keep Material typography when reused by private activation. Settings consumes full
+scaffold padding, including the measured collapsed-workout panel. The account root supplies the Sync and Account sections,
 including the existing status, sync, reauthentication, cancellation and recovery controls, through
 `settingsAccountContent`; it retains session/controller/lifecycle ownership. Import consent remains a root-owned dialog.
 The former Account navigation item/status dialog is removed. Local/test compatibility roots show Settings with an
@@ -122,13 +131,47 @@ The application always uses a fixed dark palette, independent of the device them
 background matches Compose, and `MainActivity` explicitly requests light status/navigation-bar icons. Catalogue fields
 and selections use dark-safe theme colors.
 
-The workout landing and active-workout screens follow the dark FigCraft references. `ui/theme/WorkoutDesign.kt` scales their 448-unit
+The exercise catalogue, custom-exercise editor, workout landing, history, Settings and active-workout screens follow the dark design system. `ui/theme/WorkoutDesign.kt` scales their 448-unit
 width to the available width, centering the 402-unit content area. All child offsets use that same scale and origin:
 6-unit grid increments, 48-unit rows, 24-unit spacers, and 20-unit text with a 24-unit line height. These are proportions,
 not physical screen pixels. Android system-bar insets are handled separately, and rows grow in grid steps for larger
 system text. The bundled JetBrains Mono fonts and uniform typography are scoped to these screens, including their nested
-menus/rest dialog; other screens retain normal Material typography. Font files are unmodified JetBrains Mono 2.304;
+menus and all app-owned dialogs; other screens retain normal Material typography. Font files are unmodified JetBrains Mono 2.304;
 the redistribution license is bundled at `assets/licenses/JetBrainsMono-OFL.txt`.
+`WorkoutGridLabel` places centered text blocks at the nearest six-unit horizontal position; wrapped lines share a
+start edge. Grid action buttons use explicit grid row heights rather than Material's font-dependent content padding.
+
+`ui/components/GymDialog.kt` supplies every app-owned modal with a square outlined surface and bracketed text actions.
+Dismiss/clear actions align left, confirm actions right; a single action aligns right. Actions stack when their combined
+width no longer fits, and the body scrolls without hiding the footer. `WorkoutContentStyle` shares the grid typography
+without requiring a screen-sized container. Feature composables retain their callbacks, draft state, enabled flags and
+confirmation ownership. See the complete [dialog inventory](dialogs.md).
+
+The Exercises tab uses a surface title strip with Create, an outlined search field, bracketed Equipment/Muscles
+controls and outlined three-line catalogue panels. Titles open detail; custom exercise menus retain edit/delete
+and confirmation. Equipment and muscle selectors expand as an overlay beneath the controls, with two-column
+scrolling options and fixed Clear/Show actions. Selecting options changes only a transient draft; Show applies it.
+Closing, switching categories or Back discards the draft. Applied categories use the selected blue surface and accent
+border while retaining stable bracketed names; accessibility state includes the selection count. Matching remains OR
+within each category and AND between categories. The panel is capped at the reference's 492-unit height, leaving
+Clear/Show outside its scrolling options. Category controls stack and options use one column when enlarged text no
+longer fits two columns. Option heights follow the grid and grow for wrapped labels; they do not request intrinsic
+measurement from subcomposed layouts. Opening a category clears search focus to dismiss its keyboard.
+`ExerciseCatalogueContent` shares the search, inline filters and outlined panels between the Exercises tab and the
+workout-add, routine-add and replacement pickers. It receives values and callbacks; draft filter state stays local.
+Picker panels make the entire row selectable, using a blue surface, accent border and check for selection, with
+checkbox semantics for adding and radio-button semantics for replacement. Selection survives search/filter changes.
+Pickers share a monospaced title strip with Cancel and a rectangular confirmation action, disabled without a valid
+selection; only confirmation commits the selection. Back dismisses an open filter draft before leaving the picker.
+Custom-editor selection dialogs use the same modal surface and square outlined option cards; selected cards use the
+navigation-selection blue. Clear selection changes the draft and Done applies it. Search and applied filters/list
+position still survive tab navigation.
+
+Custom-exercise creation and editing share the monospaced grid, flat surface toolbar and rectangular Save action.
+Square outlined panels contain muted field labels, editable name/instructions and bracketed blue selector values.
+Focused text panels use the accent outline. Labels and selected values wrap as needed;
+the form scrolls above the keyboard while Save remains in the toolbar. Explicit Save, name validation, selector drafts
+and discard confirmation retain their existing state-holder paths.
 
 The landing page has a full-width surface-colored title strip, rectangular Start empty workout action, and a Routines
 header with an inline Create action. Its centered 402-unit content uses a 6-unit horizontal / 12-unit vertical grid,
@@ -136,10 +179,69 @@ header with an inline Create action. Its centered 402-unit content uses a 6-unit
 independent chevron that toggles inline Edit/Delete actions for that card. Start fills the bottom row; deletion retains
 confirmation. Long names wrap and enlarged text grows rows. Expansion is transient, keyed by routine ID.
 
+The active workout uses a full-width surface toolbar, with Finish aligned to the content edge and a blue collapse
+chevron aligned with the inset title text. A 24-unit gap precedes the 48-unit surface title field. Each exercise's
+blue chevron toggles an inline action row with `[Replace]` flush left, `[History]` centered and `[Delete]` flush right,
+without hiding its notes, configured rest or sets; expansion
+is transient and keyed by entry ID. Delete retains its confirmation. Configured rest uses a bracketed text action
+without a timer icon, and `[Cancel workout]` uses the shared destructive color.
+If enlarged action labels no longer fit across the row, they stack while retaining their left/center/right alignment.
+Workout and history actions share `WorkoutInlineActions`, including accessible action names and destructive color.
+
+Routine creation and editing use the workout screen's monospaced grid, surface toolbar and name field, separators,
+bracketed rest action, rectangular Add set/Add exercise buttons and compact outlined inputs. Cancel and Save remain
+in the fixed toolbar; Save is disabled without exercises and a blank name still prompts. Exercise sections expose
+one red `[Delete]` action with confirmation. The three-column set table uses `# / WEIGHT / REPS`, with no trailing
+delete button or completion control. Its fields stay centered under their headings and use the workout's compact
+widths: 84/60 units for weight/repetitions, growing to 144/96 with enlarged text.
+Name, configured rest and set values retain their existing autosave paths;
+Cancel preserves edits to saved routines and deletes a new draft through the app state.
+
+Read-only routine details follow the workout summary layout: a fixed surface toolbar, bold routine name, outlined
+exercise panels with compact rows, and a fixed rectangular Start routine action. The back arrow optically aligns with
+panel text. Configured rest remains a muted exercise-level label; routine sets use the shared `# / WEIGHT / REPS`
+table with one grid-snapped column plan across panels. Starting retains the existing app-state replacement flow.
+
 The workout table has `#`, `WEIGHT`, `REPS` and completion columns; the unused previous-value placeholder is removed.
-Incomplete rows use outlined compact editors and a blue completion square. Completed rows use the dark surface color,
-borderless editors and a light check, and remain editable. The bottom timer uses rectangular blue −15/+15/Skip controls
-and exposes remaining progress through accessibility semantics. Its lifecycle and persistence remain app-state owned.
+Incomplete rows use outlined compact editors and a blue completion square containing a dark check. Completed rows use
+the dark surface color, borderless editors and a light check, and remain editable. Number badges are 36-unit squares
+with 18-unit text; numeric columns and checks retain the same centers in both states. Completion has a minimum 48dp
+touch target around its compact visual. The bottom timer aligns rectangular blue -15/+15/Skip controls to the content
+gutters and exposes remaining progress through accessibility semantics. Its lifecycle and persistence remain app-state owned.
+Workout and routine sets share `SwipeToDeleteSetRow`: swiping left reveals a red area, crossing half the width gives
+haptic feedback, and releasing beyond it requests deletion. Short/cancelled swipes and refused edit admission restore
+the row. Rows keep their set identity through refreshes, use the latest deletion callback and offer an accessibility
+delete action. `CompactSetTextField` is shared by both editors and remains a `BasicTextField`.
+
+`[History]` opens the selected catalogue exercise's read-only history through `GymAppState`, then returns to the
+same active workout with toolbar or system Back. The app-owned rest timer continues during browsing. The screen uses
+the catalogue's square outlined panels and monospaced grid, with compact 24-unit rows and 12-unit vertical panel
+insets and an extra 24-unit gap before the set-table header. Rows grow for wrapped or enlarged text.
+Each panel shows a workout name, local completion date
+(start date for legacy rows without a finish timestamp), nonblank exercise notes and numbered weight/repetition rows.
+Workouts appear newest first; repeated occurrences of the exercise share a panel, with sets in entry/set order.
+Only completed sets in visible, finished workouts belonging to the selected account are included. Weight is labeled
+in kilograms. Empty, unavailable and retryable-error states are explicit.
+
+The History tab uses the same surface heading, centered 402-unit content, square 2-unit outlined panels and 24-unit
+panel gaps. Each workout keeps its detail-opening card action and bracketed title. A blue chevron independently
+toggles `[Save]`, `[Perform]` and `[Delete]` beneath the title; these retain save-as-routine, perform-again and confirmed
+deletion behavior. Expansion is transient and keyed by workout ID. Completion date and time occupy separate compact
+rows. Each exercise has a full-width `count × name` row followed by `Best set: weight × reps`; long names wrap.
+Duration and volume also use separate labeled rows. Content rows use the exercise-history panel's compact spacing,
+with 24-unit section gaps; labels and actions grow for enlarged text. Scaffold padding reserves the active-workout panel.
+
+Opening a workout from History shows a read-only Workout summary with the exercise-history screen's surface toolbar,
+monospaced grid and compact outlined panels. Completion date/time and duration/volume use separate rows. Each exercise
+panel contains its name, optional notes and a `# / WEIGHT / REPS / REST` table. Rest is recorded elapsed time, with a dash
+when absent; each exercise's final set has a blank rest cell, including single-set exercises. This does not change
+stored rest values. A fixed rectangular Perform again action retains the existing cloning/navigation behavior.
+Both history toolbars optically align the back arrow's visible edge with the text inside their outlined panels.
+`ui/history/HistorySetTable.kt` supplies the aligned set tables for both history screens; the exercise history keeps
+its three columns. Each screen computes one shared column plan across all its panels. Widths grow in six-unit steps
+for long values and enlarged text, with left-aligned headings and values at identical column starts; compact rows
+retain the twelve-unit vertical rhythm. Tables scroll horizontally when more width is needed. The summary's Perform
+again button uses the shared grid action layout. Toolbar and system Back return to the History tab.
 
 ## Domain persistence
 
@@ -182,6 +284,11 @@ Failures preserve the previous active workout and presentation.
 Replacing an exercise changes only its catalogue reference. Entry ID, notes, rest configuration, sets, and timer
 association survive. Entry/set removal and sibling renumbering are transactional. History summaries use two fixed DAO
 queries; full details load on demand.
+
+Exercise history uses `ExerciseHistoryStateRepository.exerciseHistory` and one joined set query after validating the
+catalogue reference, all inside the repository's fenced read transaction. It does not load unrelated workout graphs.
+The state holder observes projection epochs, ignores older reads and clears visible history on session revocation.
+The read adds no schema or sync storage and does not mutate the active workout.
 
 ### Routines
 

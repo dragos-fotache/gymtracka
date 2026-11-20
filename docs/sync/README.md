@@ -59,7 +59,8 @@ journal protocol rather than a cross-store transaction.
 The Settings tab's Sync section contains pending/last-success metadata, Sync now and current sync/recovery messages.
 Ordinary upload/download failures display Sync failed; deferred uploads show a countdown and retry
 at their durable deadline while foregrounded. The Account section contains Signed in, Reauthenticate
-with an account icon, and conditional authentication messages.
+as a bracketed text action, and conditional authentication messages. Settings uses shared outlined grid panels;
+busy operations use thin progress bars and enabled/destructive states keep their established meanings.
 Actionable authentication errors appear beside Reauthenticate; sync and recovery controls show their own current
 explanation. Resolve rejected changes appears only for advisory validated definitive ordinary rejection, and preparation
 rechecks eligibility before issuing a captured discard warning. A clean queue does not produce a recovery error.

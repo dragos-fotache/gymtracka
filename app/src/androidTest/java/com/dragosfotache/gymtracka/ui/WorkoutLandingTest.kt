@@ -18,6 +18,7 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -72,6 +73,10 @@ class WorkoutLandingTest : GymDatabaseTest() {
         composeRule.onNodeWithTag("routine-name-input").assertDoesNotExist()
         composeRule.runOnIdle { assertEquals(Destination.RoutineDetail, appState.destination) }
         assertNull(runBlocking { repository.activeWorkout() })
+        capture("routine-details")
+        composeRule.onNodeWithText("Start routine").performClick()
+        composeRule.waitUntil { composeRule.onAllNodesWithTag("workout-name-input").fetchSemanticsNodes().isNotEmpty() }
+        assertEquals("Friday - Upper B", runBlocking { repository.activeWorkout()!!.name })
     }
 
     @Test
@@ -116,6 +121,13 @@ class WorkoutLandingTest : GymDatabaseTest() {
         composeRule.onNodeWithTag("nav-exercises").performClick().assertIsSelected()
         composeRule.onNodeWithTag("nav-history").performClick().assertIsSelected()
         composeRule.onNodeWithTag("nav-workout").performClick().assertIsSelected()
+        composeRule.onNodeWithTag("routine-open-upper").performScrollTo().performClick()
+        composeRule.waitUntil {
+            composeRule.onAllNodesWithTag("routine-details-set-set-upper").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText("Start routine").assertIsDisplayed()
+        capture("routine-details-large-text")
+        composeRule.onNodeWithContentDescription("Back to workouts").performClick()
         composeRule.onNodeWithTag("create-routine").performClick()
         composeRule.onNodeWithTag("routine-name-input").assertIsDisplayed()
     }

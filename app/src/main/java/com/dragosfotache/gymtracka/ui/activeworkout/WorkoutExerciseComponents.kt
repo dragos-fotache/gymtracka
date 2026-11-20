@@ -1,11 +1,9 @@
 package com.dragosfotache.gymtracka.ui.activeworkout
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,54 +12,52 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.Constraints
+import com.dragosfotache.gymtracka.ui.components.CompactSetTextField
+import com.dragosfotache.gymtracka.ui.components.GymDialog
+import com.dragosfotache.gymtracka.ui.components.GymDialogAction
+import com.dragosfotache.gymtracka.ui.components.SwipeToDeleteSetRow
 import com.dragosfotache.gymtracka.ui.theme.LocalWorkoutGrid
 import com.dragosfotache.gymtracka.ui.theme.WorkoutActionButton
 import com.dragosfotache.gymtracka.ui.theme.WorkoutGrid
+import com.dragosfotache.gymtracka.ui.theme.WorkoutInlineActions
+import com.dragosfotache.gymtracka.ui.theme.WorkoutTextAction
 import com.dragosfotache.gymtracka.ui.theme.WorkoutMuted
 import com.dragosfotache.gymtracka.ui.theme.WorkoutPlaceholder
 import com.dragosfotache.gymtracka.data.gym.WorkoutExerciseDetails
@@ -71,7 +67,6 @@ import com.dragosfotache.gymtracka.ui.util.parseKilograms
 import com.dragosfotache.gymtracka.ui.util.reconcileRepetitionsText
 import com.dragosfotache.gymtracka.ui.util.reconcileStringField
 import com.dragosfotache.gymtracka.ui.util.reconcileWeightText
-import kotlinx.coroutines.launch
 
 @Composable
 internal fun WorkoutExerciseCard(
@@ -85,10 +80,11 @@ internal fun WorkoutExerciseCard(
     onExerciseReplacementRequested: (String) -> Unit,
     onRestStarted: (WorkoutSetEntity, Int) -> Unit,
     onRestCancelled: (String) -> Unit,
+    onExerciseHistoryRequested: (String) -> Unit = {},
 ) {
     val grid = LocalWorkoutGrid.current ?: WorkoutGrid()
     var showDeleteDialog by remember { mutableStateOf(false) }
-    var showExerciseMenu by remember { mutableStateOf(false) }
+    var showExerciseMenu by remember(exercise.workoutExercise.id) { mutableStateOf(false) }
     var showRestDurationDialog by remember { mutableStateOf(false) }
     var notes by remember(exercise.workoutExercise.id) {
         mutableStateOf(exercise.workoutExercise.notes)
@@ -117,69 +113,43 @@ internal fun WorkoutExerciseCard(
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.titleMedium,
             )
-            Box {
-                IconButton(
-                    onClick = { showExerciseMenu = true },
-                    modifier = Modifier.size(grid.line),
-                ) {
-                    Icon(
-                        Icons.Filled.MoreVert,
-                        contentDescription = "Options for ${exercise.workoutExercise.exerciseName}",
-                        modifier = Modifier.size(grid.space(24)),
-                    )
-                }
-                DropdownMenu(
-                    expanded = showExerciseMenu,
-                    onDismissRequest = { showExerciseMenu = false },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Replace") },
-                        onClick = {
-                            showExerciseMenu = false
-                            onExerciseReplacementRequested(exercise.workoutExercise.id)
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = {
-                            Text("Delete", color = MaterialTheme.colorScheme.error)
-                        },
-                        onClick = {
-                            showExerciseMenu = false
-                            showDeleteDialog = true
-                        },
-                    )
-                }
+            IconButton(
+                onClick = { showExerciseMenu = !showExerciseMenu },
+                modifier = Modifier.width(grid.space(48)).heightIn(min = grid.line)
+                    .semantics { stateDescription = if (showExerciseMenu) "Expanded" else "Collapsed" },
+            ) {
+                Icon(
+                    if (showExerciseMenu) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = "Options for ${exercise.workoutExercise.exerciseName}",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(grid.space(24)),
+                )
             }
         }
-        BasicTextField(
-            value = notes,
-            onValueChange = {
+        if (showExerciseMenu) {
+            WorkoutExerciseActions(
+                exerciseName = exercise.workoutExercise.exerciseName,
+                modifier = Modifier.testTag("workout-exercise-actions-${exercise.workoutExercise.id}"),
+                onReplace = {
+                    showExerciseMenu = false
+                    onExerciseReplacementRequested(exercise.workoutExercise.id)
+                },
+                onHistory = {
+                    showExerciseMenu = false
+                    onExerciseHistoryRequested(exercise.workoutExercise.exerciseId)
+                },
+                onDelete = {
+                    showExerciseMenu = false
+                    showDeleteDialog = true
+                },
+            )
+        }
+        WorkoutNotesField(
+            notes = notes,
+            onNotesChanged = {
                 // The local draft follows only accepted edits; refused input while paused
                 // never alters domain-like drafts.
                 if (onNotesChanged(exercise.workoutExercise.id, it)) notes = it
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = grid.line)
-                .border(grid.space(2), MaterialTheme.colorScheme.outline)
-                .padding(horizontal = grid.space(12), vertical = grid.space(12)),
-            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                color = MaterialTheme.colorScheme.onSurface,
-            ),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            minLines = 1,
-            maxLines = Int.MAX_VALUE,
-            decorationBox = { innerTextField ->
-                Box {
-                    if (notes.isEmpty()) {
-                        Text(
-                            "Add notes...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = WorkoutPlaceholder,
-                        )
-                    }
-                    innerTextField()
-                }
             },
         )
         RestDurationRow(restSeconds = restSeconds, onClick = { showRestDurationDialog = true })
@@ -204,24 +174,23 @@ internal fun WorkoutExerciseCard(
     }
 
     if (showDeleteDialog) {
-        AlertDialog(
+        GymDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete exercise?") },
+            title = "Delete exercise?",
             text = {
                 Text("Remove ${exercise.workoutExercise.exerciseName} and all of its sets from this workout?")
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (onExerciseDeleted()) showDeleteDialog = false
-                    },
-                ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
-            },
+            confirmAction = GymDialogAction(
+                text = "Delete",
+                onClick = {
+                    if (onExerciseDeleted()) showDeleteDialog = false
+                },
+                destructive = true,
+            ),
+            dismissAction = GymDialogAction(
+                text = "Cancel",
+                onClick = { showDeleteDialog = false },
+            ),
         )
     }
 
@@ -237,6 +206,55 @@ internal fun WorkoutExerciseCard(
                 if (onRestDurationChanged(exercise.workoutExercise.id, it)) {
                     restSeconds = it
                     showRestDurationDialog = false
+                }
+            },
+        )
+    }
+}
+
+@Composable
+private fun WorkoutExerciseActions(
+    exerciseName: String,
+    modifier: Modifier = Modifier,
+    onReplace: () -> Unit,
+    onHistory: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    WorkoutInlineActions(
+        left = WorkoutTextAction("[Replace]", onReplace, "Replace $exerciseName"),
+        middle = WorkoutTextAction("[History]", onHistory, "History for $exerciseName"),
+        right = WorkoutTextAction("[Delete]", onDelete, "Delete $exerciseName", destructive = true),
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun WorkoutNotesField(notes: String, onNotesChanged: (String) -> Unit) {
+    val grid = LocalWorkoutGrid.current ?: WorkoutGrid()
+    val density = LocalDensity.current
+    val measurer = rememberTextMeasurer()
+    val style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface)
+    BoxWithConstraints(
+        Modifier.fillMaxWidth().border(grid.space(2), MaterialTheme.colorScheme.outline),
+    ) {
+        val padding = grid.space(12)
+        val textWidth = (constraints.maxWidth - with(density) { (padding * 2).roundToPx() }).coerceAtLeast(1)
+        val lines = measurer.measure(
+            notes.ifEmpty { "Add notes..." }, style, constraints = Constraints(maxWidth = textWidth),
+        ).lineCount
+        val rowHeight = maxOf(grid.line, grid.textLine * lines + grid.space(24))
+        BasicTextField(
+            value = notes,
+            onValueChange = onNotesChanged,
+            modifier = Modifier.fillMaxWidth().height(rowHeight).padding(horizontal = padding),
+            textStyle = style,
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            decorationBox = { innerTextField ->
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
+                    if (notes.isEmpty()) {
+                        Text("Add notes...", style = style, color = WorkoutPlaceholder)
+                    }
+                    innerTextField()
                 }
             },
         )
@@ -278,7 +296,7 @@ private fun WorkoutSetColumns(
     val enlargedText = grid.fontScale > 1.2f
     Box(modifier.fillMaxWidth().heightIn(min = grid.line)) {
         Box(
-            Modifier.align(Alignment.CenterStart).width(grid.space(if (enlargedText) 48 else 30)),
+            Modifier.align(Alignment.CenterStart).width(grid.space(if (enlargedText) 48 else 36)),
             contentAlignment = Alignment.Center,
         ) { number() }
         Box(
@@ -294,7 +312,7 @@ private fun WorkoutSetColumns(
             contentAlignment = Alignment.Center,
         ) { repetitions() }
         Box(
-            Modifier.align(Alignment.CenterStart).offset(x = grid.space(348)).width(grid.space(48)),
+            Modifier.align(Alignment.CenterStart).offset(x = grid.space(366)).width(grid.space(36)),
             contentAlignment = Alignment.Center,
         ) { completion() }
     }
@@ -309,9 +327,7 @@ private fun WorkoutSetRow(
     onRestStarted: (WorkoutSetEntity, Int) -> Unit,
     onRestCancelled: (String) -> Unit,
 ) {
-    val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
-    val haptics = LocalHapticFeedback.current
     var weightText by remember(workoutSet.id) {
         mutableStateOf(workoutSet.weightKg?.let(::formatKilograms).orEmpty())
     }
@@ -336,10 +352,6 @@ private fun WorkoutSetRow(
     var completed by remember(workoutSet.id, workoutSet.isCompleted) {
         mutableStateOf(workoutSet.isCompleted)
     }
-    var rowWidth by remember(workoutSet.id) { mutableIntStateOf(0) }
-    var dragOffset by remember(workoutSet.id) { mutableFloatStateOf(0f) }
-    var passedDeleteThreshold by remember(workoutSet.id) { mutableStateOf(false) }
-    val swipeOffset = remember(workoutSet.id) { Animatable(0f) }
     // Completion needs finite nonnegative kilograms and a nonnegative integer
     // repetition count, matching the repository validity rule. Valid values
     // never auto-check: only the checkbox toggles the local flag.
@@ -355,65 +367,21 @@ private fun WorkoutSetRow(
         restSeconds = if (isCompleted) workoutSet.restSeconds else null,
     )
 
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("workout-set-row-${workoutSet.id}")
-            .background(MaterialTheme.colorScheme.error)
-            .onSizeChanged { rowWidth = it.width },
+    SwipeToDeleteSetRow(
+        setId = workoutSet.id,
+        onDelete = { onSetDeleted(workoutSet) },
+        modifier = Modifier.testTag("workout-set-row-${workoutSet.id}"),
+        backgroundColor = if (completed) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.background,
+        deleteDescription = "Delete set ${workoutSet.position + 1}",
     ) {
-        Icon(
-            Icons.Filled.Delete,
-            contentDescription = "Delete set",
-            tint = MaterialTheme.colorScheme.onError,
-            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 12.dp),
-        )
         WorkoutSetColumns(
-            modifier = Modifier
-                .fillMaxWidth()
-                .graphicsLayer { translationX = swipeOffset.value }
-                .pointerInput(workoutSet.id, rowWidth) {
-                    detectHorizontalDragGestures(
-                        onDragStart = {
-                            dragOffset = swipeOffset.value
-                            passedDeleteThreshold = false
-                        },
-                        onHorizontalDrag = { change, dragAmount ->
-                            if (dragAmount < 0f || dragOffset < 0f) {
-                                change.consume()
-                                dragOffset = (dragOffset + dragAmount).coerceIn(-rowWidth.toFloat(), 0f)
-                                val passed = rowWidth > 0 && -dragOffset >= rowWidth / 2f
-                                if (passed && !passedDeleteThreshold) {
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                }
-                                passedDeleteThreshold = passed
-                                scope.launch { swipeOffset.snapTo(dragOffset) }
-                            }
-                        },
-                        onDragEnd = {
-                            val shouldDelete = passedDeleteThreshold
-                            scope.launch {
-                                // A refused deletion snaps the row back so paused admission can
-                                // never leave an existing set visually gone.
-                                if (shouldDelete && onSetDeleted(workoutSet)) {
-                                    swipeOffset.animateTo(-rowWidth.toFloat(), spring())
-                                } else {
-                                    swipeOffset.animateTo(0f, spring())
-                                }
-                            }
-                        },
-                        onDragCancel = {
-                            scope.launch { swipeOffset.animateTo(0f, spring()) }
-                        },
-                    )
-                }
-                .background(if (completed) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.background),
+            modifier = Modifier.fillMaxWidth(),
             number = {
                 Box(
-                    Modifier.fillMaxWidth().heightIn(min = grid.textLine).background(MaterialTheme.colorScheme.outline),
+                    Modifier.size(grid.input).background(MaterialTheme.colorScheme.outline),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("${workoutSet.position + 1}")
+                    Text("${workoutSet.position + 1}", fontSize = (18 * grid.scale).sp)
                 }
             },
             weight = {
@@ -449,7 +417,7 @@ private fun WorkoutSetRow(
             completion = {
                 Box(
                     modifier = Modifier
-                        .size(grid.line)
+                        .requiredSize(maxOf(48.dp, grid.line))
                         .testTag("workout-set-complete-${workoutSet.id}")
                         .semantics { contentDescription = "Complete set ${workoutSet.position + 1}" }
                         .toggleable(
@@ -495,47 +463,18 @@ private fun WorkoutSetRow(
                             Modifier.size(grid.space(36)).background(
                                 MaterialTheme.colorScheme.primary.copy(alpha = if (isCheckEnabled) 1f else 0.35f),
                             ),
-                        )
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(grid.space(24)),
+                            )
+                        }
                     }
                 }
             },
         )
     }
-}
-
-@Composable
-private fun CompactSetTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    showBorder: Boolean,
-    keyboardType: KeyboardType,
-) {
-    val grid = LocalWorkoutGrid.current ?: WorkoutGrid()
-    BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-        textStyle = MaterialTheme.typography.bodyLarge.copy(
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center,
-        ),
-        modifier = modifier
-            .height(grid.input)
-            .then(
-                if (showBorder) {
-                    Modifier.border(grid.space(2), MaterialTheme.colorScheme.outline)
-                } else {
-                    Modifier
-                },
-            )
-            .padding(horizontal = grid.space(6)),
-        decorationBox = { innerTextField ->
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                innerTextField()
-            }
-        },
-    )
 }

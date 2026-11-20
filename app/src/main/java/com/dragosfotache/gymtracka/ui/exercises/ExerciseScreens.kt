@@ -1,7 +1,9 @@
 package com.dragosfotache.gymtracka.ui.exercises
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,47 +11,36 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -60,9 +51,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,12 +66,23 @@ import com.dragosfotache.gymtracka.data.gym.ExerciseDetails
 import com.dragosfotache.gymtracka.data.gym.EquipmentEntity
 import com.dragosfotache.gymtracka.data.gym.ExerciseStateRepository
 import com.dragosfotache.gymtracka.data.sync.store.StaleSessionException
+import com.dragosfotache.gymtracka.ui.components.GymDialog
+import com.dragosfotache.gymtracka.ui.components.GymDialogAction
 import com.dragosfotache.gymtracka.ui.util.pruneMissingSelectedIds
 import kotlinx.coroutines.CancellationException
 import com.dragosfotache.gymtracka.ui.FiniteEditCoordinator
 import com.dragosfotache.gymtracka.ui.rememberFiniteEditCoordinator
 import com.dragosfotache.gymtracka.ui.rememberGymRepository
 import com.dragosfotache.gymtracka.data.gym.MuscleGroupEntity
+import com.dragosfotache.gymtracka.ui.theme.GymAccent
+import com.dragosfotache.gymtracka.ui.theme.GymBackground
+import com.dragosfotache.gymtracka.ui.theme.GymSelectedTab
+import com.dragosfotache.gymtracka.ui.theme.GymSurface
+import com.dragosfotache.gymtracka.ui.theme.LocalWorkoutGrid
+import com.dragosfotache.gymtracka.ui.theme.WorkoutActionButton
+import com.dragosfotache.gymtracka.ui.theme.WorkoutGridLabel
+import com.dragosfotache.gymtracka.ui.theme.WorkoutMuted
+import com.dragosfotache.gymtracka.ui.theme.WorkoutScreenStyle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
@@ -564,28 +569,14 @@ internal fun ExercisesScreen(
             )
         }
     }
-    Column(modifier = modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "Exercises",
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleLarge,
-            )
-            Button(onClick = onCreateExercise) { Text("Create new") }
-        }
-        ExerciseCatalogueContent(
-            state = state,
-            modifier = Modifier.weight(1f),
-            selectable = false,
-            onExerciseSelected = onExerciseSelected,
-            onEditCustomExercise = onEditCustomExercise,
-            onDeleteCustomExercise = state::deleteCustomExercise,
-            listState = listState,
-        )
-    }
+    CatalogueDesignScreen(
+        state = state,
+        listState = listState,
+        modifier = modifier,
+        onCreate = onCreateExercise,
+        onExerciseSelected = onExerciseSelected,
+        onEdit = onEditCustomExercise,
+    )
 }
 
 @Composable
@@ -596,38 +587,14 @@ internal fun ExercisePickerScreen(
     onCancel: () -> Unit,
     state: ExerciseCatalogueState = rememberExerciseCatalogueState(),
 ) {
-    Scaffold(
+    CataloguePickerScreen(
+        state = state,
+        title = "Add exercises",
+        confirmText = "Add selected (${state.selectedExerciseIds.size})",
+        onConfirm = { state.addSelectedExercises(workoutId, onExercisesAdded) },
+        onCancel = onCancel,
         modifier = modifier,
-        topBar = {
-            Surface(modifier = Modifier.statusBarsPadding(), shadowElevation = 3.dp) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("Add exercises", style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.weight(1f))
-                    TextButton(onClick = onCancel) { Text("Cancel") }
-                }
-            }
-        },
-        bottomBar = {
-            Surface(shadowElevation = 3.dp) {
-                Button(
-                    onClick = { state.addSelectedExercises(workoutId, onExercisesAdded) },
-                    enabled = state.selectedExerciseIds.isNotEmpty(),
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                ) {
-                    Text("Add selected (${state.selectedExerciseIds.size})")
-                }
-            }
-        },
-    ) { innerPadding ->
-        ExerciseCatalogueContent(
-            state = state,
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
-            selectable = true,
-        )
-    }
+    )
 }
 
 @Composable
@@ -638,40 +605,14 @@ internal fun RoutineExercisePickerScreen(
     onCancel: () -> Unit,
     state: ExerciseCatalogueState = rememberExerciseCatalogueState(),
 ) {
-    Scaffold(
+    CataloguePickerScreen(
+        state = state,
+        title = "Add exercises",
+        confirmText = "Add selected (${state.selectedExerciseIds.size})",
+        onConfirm = { state.addSelectedExercisesToRoutine(routineId, onExercisesAdded) },
+        onCancel = onCancel,
         modifier = modifier,
-        topBar = {
-            Surface(modifier = Modifier.statusBarsPadding(), shadowElevation = 3.dp) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("Add exercises", style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.weight(1f))
-                    TextButton(onClick = onCancel) { Text("Cancel") }
-                }
-            }
-        },
-        bottomBar = {
-            Surface(shadowElevation = 3.dp) {
-                Button(
-                    onClick = {
-                        state.addSelectedExercisesToRoutine(routineId, onExercisesAdded)
-                    },
-                    enabled = state.selectedExerciseIds.isNotEmpty(),
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                ) {
-                    Text("Add selected (${state.selectedExerciseIds.size})")
-                }
-            }
-        },
-    ) { innerPadding ->
-        ExerciseCatalogueContent(
-            state = state,
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
-            selectable = true,
-        )
-    }
+    )
 }
 
 @Composable
@@ -682,117 +623,69 @@ internal fun ExerciseReplacementPickerScreen(
     onCancel: () -> Unit,
     state: ExerciseCatalogueState = rememberExerciseCatalogueState(),
 ) {
-    Scaffold(
+    CataloguePickerScreen(
+        state = state,
+        title = "Replace exercise",
+        confirmText = "Replace",
+        onConfirm = { state.replaceSelectedExercise(workoutExerciseId, onExerciseReplaced) },
+        onCancel = onCancel,
         modifier = modifier,
-        topBar = {
-            Surface(modifier = Modifier.statusBarsPadding(), shadowElevation = 3.dp) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("Replace exercise", style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.weight(1f))
-                    TextButton(onClick = onCancel) { Text("Cancel") }
-                }
-            }
-        },
-        bottomBar = {
-            Surface(shadowElevation = 3.dp) {
-                Button(
-                    onClick = {
-                        state.replaceSelectedExercise(workoutExerciseId, onExerciseReplaced)
-                    },
-                    enabled = state.selectedExerciseIds.size == 1,
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                ) {
-                    Text("Replace")
-                }
-            }
-        },
-    ) { innerPadding ->
-        ExerciseCatalogueContent(
-            state = state,
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
-            selectable = true,
-            singleSelection = true,
-        )
-    }
+        singleSelection = true,
+    )
 }
 
 @Composable
-private fun ExerciseCatalogueContent(
+private fun CataloguePickerScreen(
     state: ExerciseCatalogueState,
-    selectable: Boolean,
-    modifier: Modifier = Modifier,
+    title: String,
+    confirmText: String,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier,
     singleSelection: Boolean = false,
-    onExerciseSelected: ((String) -> Unit)? = null,
-    onEditCustomExercise: ((String) -> Unit)? = null,
-    onDeleteCustomExercise: ((String) -> Unit)? = null,
-    listState: LazyListState? = null,
 ) {
-    val exercises = state.summaries
-    if (exercises == null) {
-        Column(
-            modifier = modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            CircularProgressIndicator()
-        }
-        return
-    }
-
-    Column(modifier = modifier.fillMaxSize()) {
-        ExerciseSearchField(
-            query = state.searchQuery,
-            onQueryChanged = state::updateSearchQuery,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        )
-        ExerciseFilterControls(
-            exercises = exercises,
-            selectedEquipmentIds = state.selectedEquipmentIds,
-            onEquipmentIdsChanged = state::updateEquipmentIds,
-            selectedMuscleGroupIds = state.selectedMuscleGroupIds,
-            onMuscleGroupIdsChanged = state::updateMuscleGroupIds,
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
-        )
-        LazyColumn(
-            state = listState ?: rememberLazyListState(),
-            modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(horizontal = 16.dp),
-        ) {
-            itemsIndexed(
-                state.filteredExercises,
-                key = { _, summary -> summary.exercise.id },
-            ) { index, summary ->
-                val selected = summary.exercise.id in state.selectedExerciseIds
-                ExerciseListItem(
-                    summary = summary,
-                    selected = selectable && selected,
-                    onClick = if (selectable) {
-                        {
-                            if (singleSelection) {
-                                state.selectExercise(summary.exercise.id)
-                            } else {
-                                state.toggleExercise(summary.exercise.id)
-                            }
-                        }
-                    } else {
-                        onExerciseSelected?.let { onSelected ->
-                            { onSelected(summary.exercise.id) }
-                        }
-                    },
-                    onEdit = onEditCustomExercise?.let { onEdit ->
-                        { onEdit(summary.exercise.id) }
-                    },
-                    onDelete = onDeleteCustomExercise?.let { onDelete ->
-                        { onDelete(summary.exercise.id) }
-                    },
+    BackHandler(onBack = onCancel)
+    WorkoutScreenStyle {
+        val grid = LocalWorkoutGrid.current!!
+        Column(modifier.fillMaxSize().statusBarsPadding().imePadding().padding(top = grid.space(24))) {
+            Row(
+                Modifier.fillMaxWidth().background(GymSurface).padding(horizontal = grid.space(23)),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                WorkoutGridLabel(title, Modifier.weight(1f), fontWeight = FontWeight.Bold, horizontalPadding = 0)
+                WorkoutGridLabel(
+                    "Cancel",
+                    Modifier.clickable(role = Role.Button, onClick = onCancel),
+                    color = GymAccent,
+                    horizontalPadding = 0,
                 )
-                if (index < state.filteredExercises.lastIndex) {
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-                    )
+            }
+            Spacer(Modifier.height(grid.space(24)))
+            ExerciseCatalogueContent(
+                summaries = state.summaries,
+                filteredExercises = state.filteredExercises,
+                searchQuery = state.searchQuery,
+                onSearchQueryChanged = state::updateSearchQuery,
+                selectedEquipmentIds = state.selectedEquipmentIds,
+                onEquipmentIdsChanged = state::updateEquipmentIds,
+                selectedMuscleGroupIds = state.selectedMuscleGroupIds,
+                onMuscleGroupIdsChanged = state::updateMuscleGroupIds,
+                selectedExerciseIds = state.selectedExerciseIds,
+                singleSelection = singleSelection,
+                onExerciseSelected = if (singleSelection) state::selectExercise else state::toggleExercise,
+                listState = rememberLazyListState(),
+                bottomSpacing = grid.space(24),
+                modifier = Modifier.weight(1f),
+            )
+            Box(Modifier.fillMaxWidth().background(GymSurface).padding(horizontal = grid.space(23), vertical = grid.space(12))) {
+                Button(
+                    onClick = onConfirm,
+                    enabled = if (singleSelection) state.selectedExerciseIds.size == 1 else state.selectedExerciseIds.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = grid.line),
+                    shape = RectangleShape,
+                    contentPadding = PaddingValues(grid.space(12)),
+                ) {
+                    Text(confirmText)
                 }
             }
         }
@@ -923,18 +816,19 @@ internal fun ExerciseDetailScreen(
     }
 
     if (showDeleteDialog) {
-        AlertDialog(
+        GymDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete exercise?") },
+            title = "Delete exercise?",
             text = { Text("This will permanently delete ${exercise.name}.") },
-            confirmButton = {
-                TextButton(onClick = { onDelete(exercise.id) }) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
-            },
+            confirmAction = GymDialogAction(
+                text = "Delete",
+                onClick = { onDelete(exercise.id) },
+                destructive = true,
+            ),
+            dismissAction = GymDialogAction(
+                text = "Cancel",
+                onClick = { showDeleteDialog = false },
+            ),
         )
     }
 }
@@ -974,173 +868,183 @@ internal fun CreateExerciseScreen(
     val categoryOptions = state.categories.orEmpty().map { ExerciseFilterOption(it, it) }
     var selectionDialog by remember { mutableStateOf<ExerciseCreationSelection?>(null) }
 
-    Scaffold(
-        modifier = modifier,
-        topBar = {
-            Surface(modifier = Modifier.statusBarsPadding(), shadowElevation = 3.dp) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 16.dp),
-                ) {
-                    IconButton(
-                        onClick = ::requestBack,
-                        modifier = Modifier.align(Alignment.CenterStart).size(36.dp),
+    WorkoutScreenStyle {
+        val grid = LocalWorkoutGrid.current!!
+        Scaffold(
+            modifier = modifier.testTag("exercise-editor-screen"),
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            topBar = {
+                Box(Modifier.fillMaxWidth().statusBarsPadding().padding(top = grid.space(24))) {
+                    Row(
+                        Modifier.fillMaxWidth().background(GymSurface)
+                            .padding(horizontal = grid.space(23)),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back to exercises",
-                            modifier = Modifier.size(20.dp),
+                        IconButton(
+                            onClick = ::requestBack,
+                            modifier = Modifier.size(grid.line),
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back to exercises",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(grid.space(24)).offset(x = -grid.space(3)),
+                            )
+                        }
+                        WorkoutGridLabel(
+                            if (exerciseId == null) "Create exercise" else "Edit exercise",
+                            modifier = Modifier.weight(1f),
+                            fontWeight = FontWeight.Bold,
+                            horizontalPadding = 0,
+                        )
+                        WorkoutActionButton(
+                            "Save", { state.requestSave(onSaved) },
+                            Modifier.width(grid.space(if (grid.fontScale > 1f) 120 else 96)),
                         )
                     }
-                    Text(
-                        if (exerciseId == null) "Create exercise" else "Edit exercise",
-                        modifier = Modifier.align(Alignment.Center),
-                        style = MaterialTheme.typography.titleMedium,
+                }
+            },
+        ) { innerPadding ->
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(innerPadding).imePadding().testTag("exercise-editor-list"),
+                contentPadding = PaddingValues(horizontal = grid.space(23), vertical = grid.space(24)),
+                verticalArrangement = Arrangement.spacedBy(grid.space(24)),
+            ) {
+                item {
+                    ExerciseCreationTextField(
+                        label = "Name",
+                        value = state.name,
+                        onValueChange = state::updateName,
+                        singleLine = true,
                     )
-                    Button(
-                        onClick = { state.requestSave(onSaved) },
-                        modifier = Modifier.align(Alignment.CenterEnd),
-                    ) {
-                        Text("Save")
-                    }
+                }
+                item {
+                    ExerciseCreationSelectionButton(
+                        label = "Primary muscle group",
+                        value = state.muscleGroups
+                            ?.firstOrNull { it.id == state.primaryMuscleGroupId }
+                            ?.name,
+                        onClick = { selectionDialog = ExerciseCreationSelection.PrimaryMuscle },
+                    )
+                }
+                item {
+                    ExerciseCreationSelectionButton(
+                        label = "Secondary muscle group",
+                        value = state.muscleGroups
+                            ?.filter { it.id in state.secondaryMuscleGroupIds }
+                            ?.joinToString { it.name }
+                            ?.takeIf { it.isNotEmpty() },
+                        onClick = { selectionDialog = ExerciseCreationSelection.SecondaryMuscles },
+                    )
+                }
+                item {
+                    ExerciseCreationSelectionButton(
+                        label = "Equipment",
+                        value = state.equipment?.firstOrNull { it.id == state.equipmentId }?.name,
+                        onClick = { selectionDialog = ExerciseCreationSelection.Equipment },
+                    )
+                }
+                item {
+                    ExerciseCreationSelectionButton(
+                        label = "Category",
+                        value = state.category,
+                        onClick = { selectionDialog = ExerciseCreationSelection.Category },
+                    )
+                }
+                item {
+                    ExerciseCreationTextField(
+                        label = "Instructions",
+                        value = state.instructions,
+                        onValueChange = state::updateInstructions,
+                        minLines = 4,
+                    )
                 }
             }
-        },
-    ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            item {
-                ExerciseCreationTextField(
-                    label = "Name",
-                    value = state.name,
-                    onValueChange = state::updateName,
-                    singleLine = true,
-                )
-            }
-            item {
-                ExerciseCreationSelectionButton(
-                    label = "Primary muscle group",
-                    value = state.muscleGroups
-                        ?.firstOrNull { it.id == state.primaryMuscleGroupId }
-                        ?.name,
-                    onClick = { selectionDialog = ExerciseCreationSelection.PrimaryMuscle },
-                )
-            }
-            item {
-                ExerciseCreationSelectionButton(
-                    label = "Secondary muscle group",
-                    value = state.muscleGroups
-                        ?.filter { it.id in state.secondaryMuscleGroupIds }
-                        ?.joinToString { it.name }
-                        ?.takeIf { it.isNotEmpty() },
-                    onClick = { selectionDialog = ExerciseCreationSelection.SecondaryMuscles },
-                )
-            }
-            item {
-                ExerciseCreationSelectionButton(
-                    label = "Equipment",
-                    value = state.equipment?.firstOrNull { it.id == state.equipmentId }?.name,
-                    onClick = { selectionDialog = ExerciseCreationSelection.Equipment },
-                )
-            }
-            item {
-                ExerciseCreationSelectionButton(
-                    label = "Category",
-                    value = state.category,
-                    onClick = { selectionDialog = ExerciseCreationSelection.Category },
-                )
-            }
-            item {
-                ExerciseCreationTextField(
-                    label = "Instructions",
-                    value = state.instructions,
-                    onValueChange = state::updateInstructions,
-                    minLines = 4,
-                )
-            }
         }
-    }
 
-    when (selectionDialog) {
-        ExerciseCreationSelection.PrimaryMuscle -> ExerciseFilterDialog(
-            title = "Primary muscle group",
-            options = muscleOptions,
-            selectedIds = state.primaryMuscleGroupId?.let(::setOf).orEmpty(),
-            onDismiss = { selectionDialog = null },
-            onApply = { selectedIds ->
-                state.updatePrimaryMuscleGroup(selectedIds.singleOrNull())
-                selectionDialog = null
-            },
-            singleSelection = true,
-            confirmText = "Done",
-            clearText = "Clear selection",
-        )
-        ExerciseCreationSelection.SecondaryMuscles -> ExerciseFilterDialog(
-            title = "Secondary muscle groups",
-            options = muscleOptions,
-            selectedIds = state.secondaryMuscleGroupIds,
-            onDismiss = { selectionDialog = null },
-            onApply = { selectedIds ->
-                state.updateSecondaryMuscleGroups(selectedIds)
-                selectionDialog = null
-            },
-            confirmText = "Done",
-            clearText = "Clear selection",
-        )
-        ExerciseCreationSelection.Equipment -> ExerciseFilterDialog(
-            title = "Equipment",
-            options = equipmentOptions,
-            selectedIds = state.equipmentId?.let(::setOf).orEmpty(),
-            onDismiss = { selectionDialog = null },
-            onApply = { selectedIds ->
-                state.updateEquipment(selectedIds.singleOrNull())
-                selectionDialog = null
-            },
-            singleSelection = true,
-            confirmText = "Done",
-            clearText = "Clear selection",
-        )
-        ExerciseCreationSelection.Category -> ExerciseFilterDialog(
-            title = "Category",
-            options = categoryOptions,
-            selectedIds = state.category?.let(::setOf).orEmpty(),
-            onDismiss = { selectionDialog = null },
-            onApply = { selectedIds ->
-                state.updateCategory(selectedIds.singleOrNull())
-                selectionDialog = null
-            },
-            singleSelection = true,
-            confirmText = "Done",
-            clearText = "Clear selection",
-        )
-        null -> Unit
-    }
+        when (selectionDialog) {
+            ExerciseCreationSelection.PrimaryMuscle -> ExerciseFilterDialog(
+                title = "Primary muscle group",
+                options = muscleOptions,
+                selectedIds = state.primaryMuscleGroupId?.let(::setOf).orEmpty(),
+                onDismiss = { selectionDialog = null },
+                onApply = { selectedIds ->
+                    state.updatePrimaryMuscleGroup(selectedIds.singleOrNull())
+                    selectionDialog = null
+                },
+                singleSelection = true,
+                confirmText = "Done",
+                clearText = "Clear selection",
+            )
+            ExerciseCreationSelection.SecondaryMuscles -> ExerciseFilterDialog(
+                title = "Secondary muscle groups",
+                options = muscleOptions,
+                selectedIds = state.secondaryMuscleGroupIds,
+                onDismiss = { selectionDialog = null },
+                onApply = { selectedIds ->
+                    state.updateSecondaryMuscleGroups(selectedIds)
+                    selectionDialog = null
+                },
+                confirmText = "Done",
+                clearText = "Clear selection",
+            )
+            ExerciseCreationSelection.Equipment -> ExerciseFilterDialog(
+                title = "Equipment",
+                options = equipmentOptions,
+                selectedIds = state.equipmentId?.let(::setOf).orEmpty(),
+                onDismiss = { selectionDialog = null },
+                onApply = { selectedIds ->
+                    state.updateEquipment(selectedIds.singleOrNull())
+                    selectionDialog = null
+                },
+                singleSelection = true,
+                confirmText = "Done",
+                clearText = "Clear selection",
+            )
+            ExerciseCreationSelection.Category -> ExerciseFilterDialog(
+                title = "Category",
+                options = categoryOptions,
+                selectedIds = state.category?.let(::setOf).orEmpty(),
+                onDismiss = { selectionDialog = null },
+                onApply = { selectedIds ->
+                    state.updateCategory(selectedIds.singleOrNull())
+                    selectionDialog = null
+                },
+                singleSelection = true,
+                confirmText = "Done",
+                clearText = "Clear selection",
+            )
+            null -> Unit
+        }
 
-    if (showDiscardDialog) {
-        AlertDialog(
-            onDismissRequest = { showDiscardDialog = false },
-            title = { Text("Discard exercise?") },
-            text = { Text("Going back will discard the exercise you are creating.") },
-            confirmButton = {
-                TextButton(onClick = onBack) { Text("Discard", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDiscardDialog = false }) { Text("Cancel") }
-            },
-        )
-    }
+        if (showDiscardDialog) {
+            GymDialog(
+                onDismissRequest = { showDiscardDialog = false },
+                title = "Discard exercise?",
+                text = { Text("Going back will discard the exercise you are creating.") },
+                confirmAction = GymDialogAction(
+                    text = "Discard",
+                    onClick = onBack,
+                    destructive = true,
+                ),
+                dismissAction = GymDialogAction(
+                    text = "Cancel",
+                    onClick = { showDiscardDialog = false },
+                ),
+            )
+        }
 
-    if (state.showNameRequiredDialog) {
-        AlertDialog(
-            onDismissRequest = state::dismissNameRequiredDialog,
-            title = { Text("Exercise name required") },
-            text = { Text("Enter a name before saving this exercise.") },
-            confirmButton = {
-                TextButton(onClick = state::dismissNameRequiredDialog) { Text("OK") }
-            },
-        )
+        if (state.showNameRequiredDialog) {
+            GymDialog(
+                onDismissRequest = state::dismissNameRequiredDialog,
+                title = "Exercise name required",
+                text = { Text("Enter a name before saving this exercise.") },
+                confirmAction = GymDialogAction(
+                    text = "OK",
+                    onClick = state::dismissNameRequiredDialog,
+                ),
+            )
+        }
     }
 }
 
@@ -1159,22 +1063,27 @@ private fun ExerciseCreationTextField(
     singleLine: Boolean = false,
     minLines: Int = 1,
 ) {
+    val grid = LocalWorkoutGrid.current!!
+    var focused by remember { mutableStateOf(false) }
     Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth().border(
+            grid.space(2),
+            if (focused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+        ),
+        color = GymBackground,
+        shape = RectangleShape,
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
+        Column {
+            WorkoutGridLabel(label, Modifier.fillMaxWidth(), color = WorkoutMuted)
             BasicTextField(
                 value = value,
                 onValueChange = onValueChange,
-                modifier = Modifier.fillMaxWidth().testTag(
-                    "exercise-field-${label.lowercase().replace(' ', '-')}",
-                ),
+                modifier = Modifier.fillMaxWidth()
+                    .onFocusChanged { focused = it.isFocused }
+                    .semantics { contentDescription = label }
+                    .testTag("exercise-field-${label.lowercase().replace(' ', '-')}")
+                    .heightIn(min = maxOf(grid.line, grid.textLine * minLines + grid.space(24)))
+                    .padding(horizontal = grid.space(12), vertical = grid.space(12)),
                 singleLine = singleLine,
                 minLines = minLines,
                 textStyle = MaterialTheme.typography.bodyLarge.copy(
@@ -1192,356 +1101,27 @@ private fun ExerciseCreationSelectionButton(
     value: String?,
     onClick: () -> Unit,
 ) {
+    val grid = LocalWorkoutGrid.current!!
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 72.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+            .testTag("exercise-selector-${label.lowercase().replace(' ', '-')}")
+            .clickable(role = Role.Button, onClick = onClick),
+        shape = RectangleShape,
+        color = GymBackground,
+        border = BorderStroke(grid.space(2), MaterialTheme.colorScheme.outline),
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-            Text(
-                value ?: "Select...",
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (value == null) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
+        Column {
+            WorkoutGridLabel(label, Modifier.fillMaxWidth(), color = WorkoutMuted)
+            WorkoutGridLabel(
+                "[${value ?: "Select..."}]", Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.primary,
             )
-        }
-    }
-}
-
-@Composable
-private fun ExerciseListItem(
-    summary: ExerciseSummary,
-    selected: Boolean,
-    onClick: (() -> Unit)?,
-    onEdit: (() -> Unit)? = null,
-    onDelete: (() -> Unit)? = null,
-) {
-    var menuExpanded by remember { mutableStateOf(false) }
-    var showDeleteDialog by remember { mutableStateOf(false) }
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("exercise-row-${summary.exercise.id}")
-            .then(onClick?.let { Modifier.clickable(onClick = it) } ?: Modifier),
-        colors = CardDefaults.cardColors(
-            containerColor = if (selected) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.background,
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-            Box(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = summary.exercise.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(end = if (selected) 40.dp else 0.dp),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (selected) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.tertiary),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            Icons.Filled.Check,
-                            contentDescription = "Selected",
-                            tint = MaterialTheme.colorScheme.onTertiary,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                } else if (summary.exercise.isUserCreated && onEdit != null && onDelete != null) {
-                    Box(modifier = Modifier.align(Alignment.CenterEnd)) {
-                        IconButton(
-                            onClick = { menuExpanded = true },
-                            modifier = Modifier.size(36.dp),
-                        ) {
-                            Icon(
-                                Icons.Filled.MoreVert,
-                                contentDescription = "Exercise options",
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false },
-                            modifier = Modifier.width(128.dp),
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                                onClick = {
-                                    menuExpanded = false
-                                    showDeleteDialog = true
-                                },
-                                modifier = Modifier.height(40.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp),
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Edit") },
-                                onClick = {
-                                    menuExpanded = false
-                                    onEdit()
-                                },
-                                modifier = Modifier.height(40.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp),
-                            )
-                        }
-                    }
-                }
-            }
-            Text(
-                text = muscleGroupText(summary),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = summary.equipment.joinToString { it.name }.ifEmpty { "None" },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-
-    if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete exercise?") },
-            text = { Text("This will permanently delete ${summary.exercise.name}.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteDialog = false
-                        onDelete?.invoke()
-                    },
-                ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
-            },
-        )
-    }
-}
-
-@Composable
-private fun ExerciseSearchField(
-    query: String,
-    onQueryChanged: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(40.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(start = 16.dp, end = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            Icons.Filled.Search,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(22.dp),
-        )
-        BasicTextField(
-            value = query,
-            onValueChange = onQueryChanged,
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodyLarge.copy(
-                color = MaterialTheme.colorScheme.onSurface,
-            ),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            modifier = Modifier.weight(1f).padding(horizontal = 16.dp).testTag("exercise-search"),
-            decorationBox = { innerTextField ->
-                Box {
-                    if (query.isEmpty()) {
-                        Text(
-                            "Search exercises",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    innerTextField()
-                }
-            },
-        )
-        if (query.isNotEmpty()) {
-            Box(
-                modifier = Modifier
-                    .size(20.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                    .clickable { onQueryChanged("") },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Filled.Close,
-                    contentDescription = "Clear search",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(14.dp),
-                )
-            }
         }
     }
 }
 
 private data class ExerciseFilterOption(val id: String, val name: String)
-
-@Composable
-private fun ExerciseFilterControls(
-    exercises: List<ExerciseSummary>,
-    selectedEquipmentIds: Set<String>,
-    onEquipmentIdsChanged: (Set<String>) -> Unit,
-    selectedMuscleGroupIds: Set<String>,
-    onMuscleGroupIdsChanged: (Set<String>) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var showEquipmentDialog by remember { mutableStateOf(false) }
-    var showMuscleGroupDialog by remember { mutableStateOf(false) }
-    val equipmentOptions = exercises
-        .flatMap { it.equipment }
-        .map { ExerciseFilterOption(it.id, it.name) }
-        .distinctBy { it.id }
-        .sortedBy { it.name }
-    val muscleGroupOptions = exercises
-        .flatMap { it.muscleGroups }
-        .map { ExerciseFilterOption(it.id, it.name) }
-        .distinctBy { it.id }
-        .sortedBy { it.name }
-
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        ExerciseFilterButton(
-            text = filterButtonText(
-                selectedEquipmentIds,
-                equipmentOptions,
-                "All Equipment",
-                "Equipment",
-            ),
-            selected = selectedEquipmentIds.isNotEmpty(),
-            onClick = { showEquipmentDialog = true },
-            onClear = if (selectedEquipmentIds.isNotEmpty()) {
-                { onEquipmentIdsChanged(emptySet()) }
-            } else {
-                null
-            },
-            modifier = Modifier.weight(1f).testTag("filter-equipment"),
-        )
-        ExerciseFilterButton(
-            text = filterButtonText(
-                selectedMuscleGroupIds,
-                muscleGroupOptions,
-                "All Muscles",
-                "Muscles",
-            ),
-            selected = selectedMuscleGroupIds.isNotEmpty(),
-            onClick = { showMuscleGroupDialog = true },
-            onClear = if (selectedMuscleGroupIds.isNotEmpty()) {
-                { onMuscleGroupIdsChanged(emptySet()) }
-            } else {
-                null
-            },
-            modifier = Modifier.weight(1f).testTag("filter-muscles"),
-        )
-    }
-
-    if (showEquipmentDialog) {
-        ExerciseFilterDialog(
-            title = "Equipment",
-            options = equipmentOptions,
-            selectedIds = selectedEquipmentIds,
-            onDismiss = { showEquipmentDialog = false },
-            onApply = {
-                onEquipmentIdsChanged(it)
-                showEquipmentDialog = false
-            },
-        )
-    }
-    if (showMuscleGroupDialog) {
-        ExerciseFilterDialog(
-            title = "Muscle groups",
-            options = muscleGroupOptions,
-            selectedIds = selectedMuscleGroupIds,
-            onDismiss = { showMuscleGroupDialog = false },
-            onApply = {
-                onMuscleGroupIdsChanged(it)
-                showMuscleGroupDialog = false
-            },
-        )
-    }
-}
-
-@Composable
-private fun ExerciseFilterButton(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    onClear: (() -> Unit)?,
-    modifier: Modifier = Modifier,
-) {
-    Button(
-        onClick = onClick,
-        modifier = modifier.height(44.dp),
-        shape = RoundedCornerShape(14.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-        ),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp),
-        contentPadding = PaddingValues(horizontal = 12.dp),
-    ) {
-        Text(text, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        onClear?.let { clear ->
-            Box(
-                modifier = Modifier
-                    .padding(start = 6.dp)
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                    .clickable(onClick = clear),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Filled.Close, contentDescription = "Clear filter", modifier = Modifier.size(16.dp))
-            }
-        }
-    }
-}
-
-private fun filterButtonText(
-    selectedIds: Set<String>,
-    options: List<ExerciseFilterOption>,
-    allLabel: String,
-    selectedLabel: String,
-): String {
-    val selectedNames = options.filter { it.id in selectedIds }.map { it.name }
-    return when {
-        selectedNames.isEmpty() -> allLabel
-        selectedNames.size <= 2 -> selectedNames.joinToString(", ")
-        else -> "$selectedLabel (${selectedNames.size})"
-    }
-}
 
 @Composable
 private fun ExerciseFilterDialog(
@@ -1555,23 +1135,23 @@ private fun ExerciseFilterDialog(
     clearText: String = "Clear filters",
 ) {
     var pendingSelectedIds by remember(selectedIds) { mutableStateOf(selectedIds) }
-    AlertDialog(
+    GymDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title, style = MaterialTheme.typography.titleMedium) },
+        title = title,
         text = {
+            val grid = LocalWorkoutGrid.current!!
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 modifier = Modifier.heightIn(max = 360.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(grid.space(12)),
+                verticalArrangement = Arrangement.spacedBy(grid.space(12)),
             ) {
                 items(options, key = { it.id }) { option ->
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp)
+                            .heightIn(min = grid.line)
                             .testTag("filter-option-${option.id}")
-                            .clip(RoundedCornerShape(16.dp))
                             .clickable {
                                 pendingSelectedIds = if (option.id in pendingSelectedIds) {
                                     pendingSelectedIds - option.id
@@ -1582,35 +1162,26 @@ private fun ExerciseFilterDialog(
                                 }
                             },
                         color = if (option.id in pendingSelectedIds) {
-                            MaterialTheme.colorScheme.tertiaryContainer
+                            GymSelectedTab
                         } else {
-                            MaterialTheme.colorScheme.surface
+                            GymBackground
                         },
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RectangleShape,
+                        border = BorderStroke(grid.space(2), MaterialTheme.colorScheme.outline),
                     ) {
-                        Box(
-                            modifier = Modifier.fillMaxSize().padding(16.dp),
-                            contentAlignment = Alignment.CenterStart,
-                        ) {
-                            Text(
-                                option.name,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Normal,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
+                        WorkoutGridLabel(option.name, Modifier.fillMaxWidth())
                     }
                 }
             }
         },
-        confirmButton = {
-            TextButton(onClick = { onApply(pendingSelectedIds) }) { Text(confirmText) }
-        },
-        dismissButton = {
-            TextButton(onClick = { pendingSelectedIds = emptySet() }) { Text(clearText) }
-        },
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        confirmAction = GymDialogAction(
+            text = confirmText,
+            onClick = { onApply(pendingSelectedIds) },
+        ),
+        dismissAction = GymDialogAction(
+            text = clearText,
+            onClick = { pendingSelectedIds = emptySet() },
+        ),
     )
 }
 

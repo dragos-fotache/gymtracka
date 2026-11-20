@@ -1,22 +1,17 @@
 package com.dragosfotache.gymtracka.ui.account
 
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ManageAccounts
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
 import com.dragosfotache.gymtracka.ui.settings.ServerConnectionStatus
+import com.dragosfotache.gymtracka.ui.settings.SettingsAction
+import com.dragosfotache.gymtracka.ui.settings.SettingsLabel
+import com.dragosfotache.gymtracka.ui.settings.SettingsProgress
 import com.dragosfotache.gymtracka.ui.settings.SettingsSection
 import com.dragosfotache.gymtracka.ui.settings.accountNetworkActions
+import com.dragosfotache.gymtracka.ui.theme.WorkoutMuted
 import java.text.DateFormat
 import java.util.Date
 
@@ -45,22 +40,24 @@ internal fun AccountSettingsContent(
     SettingsSection("Sync", "settings-sync") {
         val status = uiState.syncStatus
         if (status == null) {
-            Text(
+            SettingsLabel(
                 "Pending changes: unavailable",
                 modifier = Modifier.testTag("account-pending"),
             )
-            Text(
+            SettingsLabel(
                 "Last success: unavailable",
                 modifier = Modifier.testTag("account-last-success"),
+                color = WorkoutMuted,
             )
         } else {
-            Text(
+            SettingsLabel(
                 "Pending changes: ${status.pendingCount}",
                 modifier = Modifier.testTag("account-pending"),
             )
-            Text(
+            SettingsLabel(
                 "Last success: ${formatLastSuccess(status.lastSuccessMillis)}",
                 modifier = Modifier.testTag("account-last-success"),
+                color = WorkoutMuted,
             )
         }
         if (syncState != null) {
@@ -71,35 +68,33 @@ internal fun AccountSettingsContent(
                 message = retrySeconds?.let(::accountRetryText) ?: presentation.sync,
             )
         } else {
-            presentation.sync?.let { Text(it, modifier = Modifier.testTag("account-sync-status")) }
+            presentation.sync?.let { SettingsLabel(it, modifier = Modifier.testTag("account-sync-status")) }
         }
     }
     SettingsSection("Account", "settings-account") {
-        Text("Signed in", modifier = Modifier.testTag("account-authentication-status"))
-        TextButton(
+        SettingsLabel("Signed in", modifier = Modifier.testTag("account-authentication-status"))
+        SettingsAction(
+            text = "Reauthenticate",
             onClick = onReauthenticate,
             enabled = actions.reauthenticate,
             modifier = Modifier.testTag("account-reauthenticate"),
-        ) {
-            Icon(Icons.Filled.ManageAccounts, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("Reauthenticate")
-        }
+        )
         if (presentation.authentication != "Signed in") {
-            Text(
+            SettingsLabel(
                 presentation.authentication,
                 modifier = Modifier.testTag("account-authentication-message"),
                 color = if (presentation.authenticationNeedsAttention) MaterialTheme.colorScheme.error
                     else MaterialTheme.colorScheme.onSurface,
             )
         }
-        if (!signInAvailable) Text("Foreground sign-in is unavailable on this install.")
-        if (uiState.busy) CircularProgressIndicator()
+        if (!signInAvailable) SettingsLabel("Foreground sign-in is unavailable on this install.", color = WorkoutMuted)
+        if (uiState.busy) SettingsProgress()
         if (uiState.busy) {
-            TextButton(
+            SettingsAction(
+                text = "Cancel",
                 onClick = onCancel,
                 modifier = Modifier.testTag("account-cancel"),
-            ) { Text("Cancel") }
+            )
         }
     }
 }

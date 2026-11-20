@@ -1,32 +1,23 @@
 package com.dragosfotache.gymtracka.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.dp
 import com.dragosfotache.gymtracka.ui.account.AccountStartupApp
 import com.dragosfotache.gymtracka.ui.activeworkout.ActiveWorkoutPill
 import com.dragosfotache.gymtracka.ui.activeworkout.ActiveWorkoutScreen
+import com.dragosfotache.gymtracka.ui.components.GymDialog
+import com.dragosfotache.gymtracka.ui.components.GymDialogAction
 import com.dragosfotache.gymtracka.ui.exercises.ExercisePickerScreen
+import com.dragosfotache.gymtracka.ui.exercises.ExerciseHistoryScreen
 import com.dragosfotache.gymtracka.ui.exercises.ExerciseReplacementPickerScreen
 import com.dragosfotache.gymtracka.ui.exercises.ExercisesScreen
 import com.dragosfotache.gymtracka.ui.exercises.ExerciseDetailScreen
@@ -36,6 +27,7 @@ import com.dragosfotache.gymtracka.ui.routines.RoutineEditorScreen
 import com.dragosfotache.gymtracka.ui.routines.RoutineDetailScreen
 import com.dragosfotache.gymtracka.ui.settings.ServerConnectionState
 import com.dragosfotache.gymtracka.ui.settings.SettingsScreen
+import com.dragosfotache.gymtracka.ui.theme.LocalWorkoutGrid
 import com.dragosfotache.gymtracka.ui.util.formatElapsedTime
 import com.dragosfotache.gymtracka.ui.workouts.WorkoutHistoryDetailScreen
 import com.dragosfotache.gymtracka.ui.workouts.WorkoutHistoryScreen
@@ -64,8 +56,6 @@ internal fun GymAppContent(
     settingsAccountContent: (@Composable () -> Unit)? = null,
     serverConnectionState: ServerConnectionState? = null,
 ) {
-    val density = LocalDensity.current
-    var navigationBarHeight by remember { mutableStateOf(0.dp) }
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
@@ -75,24 +65,18 @@ internal fun GymAppContent(
                 appState.destination == Destination.History ||
                 appState.destination == Destination.Settings
             ) {
-                Box {
-                    GymBottomNavigation(
-                        appState,
-                        Modifier.onSizeChanged { navigationBarHeight = with(density) { it.height.toDp() } },
-                    )
+                Column {
                     appState.activeWorkout?.let { workout ->
                         ActiveWorkoutPill(
                             workout = workout,
                             restTimerRemainingSeconds = appState.activeRestTimer?.let {
                                 appState.restTimerRemainingSeconds
                             },
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .offset(y = -navigationBarHeight),
                             onClick = appState::resumeWorkout,
                             onDiscard = appState::requestDiscardWorkout,
                         )
                     }
+                    GymBottomNavigation(appState)
                 }
             }
         },
@@ -205,6 +189,7 @@ internal fun GymAppContent(
                     onRestTimerAdjusted = appState::adjustRestTimer,
                     onRestTimerCancelled = appState::cancelRestTimerForSet,
                     onExerciseReplacementRequested = appState::showExerciseReplacementPicker,
+                    onExerciseHistoryRequested = appState::showExerciseHistory,
                     onRegisterFinishDrain = appState::registerFinishDrain,
                     onUnregisterFinishDrain = appState::unregisterFinishDrain,
                 )
@@ -233,6 +218,13 @@ internal fun GymAppContent(
                     onPerformAgain = appState::requestPerformAgain,
                 )
             }
+            Destination.ExerciseHistory -> appState.selectedHistoryExerciseId?.let { exerciseId ->
+                ExerciseHistoryScreen(
+                    exerciseId = exerciseId,
+                    modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
+                    onBack = appState::closeExerciseHistory,
+                )
+            }
         }
     }
 
@@ -242,70 +234,78 @@ internal fun GymAppContent(
 @Composable
 private fun GymAppDialogs(appState: GymAppState) {
     if (appState.showDiscardDialog) {
-        AlertDialog(
+        GymDialog(
             onDismissRequest = appState::dismissDiscardDialog,
             text = { Text("Are you sure you want to discard the current workout?") },
-            confirmButton = {
-                TextButton(onClick = appState::confirmDiscardWorkout) {
-                    Text("Discard", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = appState::dismissDiscardDialog) { Text("Cancel") }
-            },
+            confirmAction = GymDialogAction(
+                text = "Discard",
+                onClick = appState::confirmDiscardWorkout,
+                destructive = true,
+            ),
+            dismissAction = GymDialogAction(
+                text = "Cancel",
+                onClick = appState::dismissDiscardDialog,
+            ),
         )
     }
 
     if (appState.showFinishDialog) {
-        AlertDialog(
+        GymDialog(
             onDismissRequest = appState::dismissFinishDialog,
             text = { Text("Finish workout? Unfinished sets will be discarded.") },
-            confirmButton = {
-                TextButton(onClick = appState::confirmFinishWorkout) { Text("Yes") }
-            },
-            dismissButton = {
-                TextButton(onClick = appState::dismissFinishDialog) { Text("Cancel") }
-            },
+            confirmAction = GymDialogAction(
+                text = "Yes",
+                onClick = appState::confirmFinishWorkout,
+            ),
+            dismissAction = GymDialogAction(
+                text = "Cancel",
+                onClick = appState::dismissFinishDialog,
+            ),
         )
     }
 
     if (appState.showNoCompletedSetsDialog) {
-        AlertDialog(
+        GymDialog(
             onDismissRequest = appState::dismissNoCompletedSetsDialog,
             text = { Text("Complete at least one set before finishing this workout.") },
-            confirmButton = {
-                TextButton(onClick = appState::dismissNoCompletedSetsDialog) { Text("OK") }
-            },
+            confirmAction = GymDialogAction(
+                text = "OK",
+                onClick = appState::dismissNoCompletedSetsDialog,
+            ),
         )
     }
 
     if (appState.showStartNewWorkoutDialog) {
-        AlertDialog(
+        GymDialog(
             onDismissRequest = appState::dismissStartNewWorkoutDialog,
             text = { Text("Discard the current workout and start a new one?") },
-            confirmButton = {
-                TextButton(onClick = appState::confirmStartNewWorkout) { Text("Yes") }
-            },
-            dismissButton = {
-                TextButton(onClick = appState::dismissStartNewWorkoutDialog) { Text("Cancel") }
-            },
+            confirmAction = GymDialogAction(
+                text = "Yes",
+                onClick = appState::confirmStartNewWorkout,
+            ),
+            dismissAction = GymDialogAction(
+                text = "Cancel",
+                onClick = appState::dismissStartNewWorkoutDialog,
+            ),
         )
     }
 
     appState.finishedWorkoutSummary?.let { summary ->
-        AlertDialog(
+        GymDialog(
             onDismissRequest = appState::dismissFinishedWorkoutSummary,
-            title = { Text("Workout complete") },
+            title = "Workout complete",
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val grid = LocalWorkoutGrid.current!!
+                Column(verticalArrangement = Arrangement.spacedBy(grid.space(12))) {
                     Text(summary.name, style = MaterialTheme.typography.titleMedium)
                     Text("Duration: ${formatElapsedTime(summary.durationMillis / 1_000)}")
                     Text("Volume: ${summary.volumeKg}")
                 }
             },
-            confirmButton = {
-                TextButton(onClick = appState::dismissFinishedWorkoutSummary) { Text("Done") }
-            },
+            confirmAction = GymDialogAction(
+                text = "Done",
+                onClick = appState::dismissFinishedWorkoutSummary,
+            ),
         )
     }
 }

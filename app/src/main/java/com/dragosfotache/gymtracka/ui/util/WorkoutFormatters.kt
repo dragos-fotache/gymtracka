@@ -71,7 +71,7 @@ internal fun formatWorkoutDuration(durationMillis: Long): String {
     val totalMinutes = (durationMillis.coerceAtLeast(0) / 60_000).toInt()
     val hours = totalMinutes / 60
     val minutes = totalMinutes % 60
-    return if (hours > 0) "$hours h ${minutes}m" else "${minutes}m"
+    return if (hours > 0) "${hours}h ${minutes}m" else "${minutes}m"
 }
 
 internal fun formatElapsedTime(totalSeconds: Long): String {
@@ -90,6 +90,7 @@ internal fun formatCountdown(totalSeconds: Int): String =
 
 internal fun formatRestDuration(totalSeconds: Int): String {
     if (totalSeconds == 0) return "off"
+    if (totalSeconds % 60 == 0) return "${totalSeconds / 60}min"
     return formatRecordedRestDuration(totalSeconds)
 }
 

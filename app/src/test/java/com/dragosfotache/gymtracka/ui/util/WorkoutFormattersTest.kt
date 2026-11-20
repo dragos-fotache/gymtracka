@@ -15,7 +15,7 @@ class WorkoutFormattersTest {
     fun workoutDuration_formatsMinutesAndHours() {
         assertEquals("0m", formatWorkoutDuration(-1))
         assertEquals("59m", formatWorkoutDuration(59 * 60_000L))
-        assertEquals("1 h 5m", formatWorkoutDuration(65 * 60_000L))
+        assertEquals("1h 5m", formatWorkoutDuration(65 * 60_000L))
     }
 
     @Test
@@ -29,6 +29,9 @@ class WorkoutFormattersTest {
     fun restDuration_formatsOffAndRecordedTime() {
         assertEquals("off", formatRestDuration(0))
         assertEquals("45s", formatRestDuration(45))
+        assertEquals("2min", formatRestDuration(120))
+        assertEquals("1min 30s", formatRestDuration(90))
+        assertEquals("2min 0s", formatRecordedRestDuration(120))
         assertEquals("1min 15s", formatRecordedRestDuration(75))
     }
 

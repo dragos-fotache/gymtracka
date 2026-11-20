@@ -267,7 +267,7 @@ class AccountSyncFlowTest {
     }
 
     @Test
-    fun syncFailureRefreshesReachability_andCheckRestoresActionsWithoutRetryingSync() {
+    fun syncFailureRefreshesReachability_andGenuineReconnectionRetriesOnce() {
         val fix = fixture()
         fix.activate()
         val startup = fix.startup(FakeOps(fix.runtime.sessionCoordinator.state.value))
@@ -327,21 +327,29 @@ class AccountSyncFlowTest {
             composeRule.onNodeWithTag(tag).assertIsNotEnabled()
         }
         val beforeCheck = fix.transport.capturedRequests.size
+        val successesBeforeCheck = sync.uiState.value.successfulSyncs
         composeRule.runOnIdle {
             answer = CompletableDeferred<ServerCheckResult>().apply { complete(ServerCheckResult.CONNECTED) }
+            fix.transport.serve = { _, _ -> AppSessionTransport.Frame(200, AppSessionFixtures.EMPTY_PULL_BODY) }
         }
         scrollIfNeeded("settings-server-recheck")
         composeRule.onNodeWithTag("settings-server-recheck").assertIsEnabled().performClick()
-        composeRule.waitUntil(10_000L) { probes == 4 && connection.status.value == ServerConnectionStatus.CONNECTED }
+        // A confirmed Offline -> Online transition requests one fresh sync through the current handle.
+        composeRule.waitUntil(10_000L) {
+            probes == 4 && connection.status.value == ServerConnectionStatus.CONNECTED &&
+                sync.uiState.value.successfulSyncs > successesBeforeCheck && !sync.uiState.value.busy
+        }
         composeRule.onNodeWithTag("settings-server-status").assertTextEquals("Online")
         for (tag in listOf("account-sync-now", "account-reauthenticate")) {
             composeRule.onNodeWithTag(tag).assertIsEnabled()
         }
-        assertEquals(beforeCheck, fix.transport.capturedRequests.size)
+        assertEquals(beforeCheck + 1, fix.transport.capturedRequests.size)
+        assertEquals(successesBeforeCheck + 1, sync.uiState.value.successfulSyncs)
 
         // The same failure on a later run still requests a new check.
         composeRule.runOnIdle {
             answer = CompletableDeferred<ServerCheckResult>().apply { complete(ServerCheckResult.UNREACHABLE) }
+            fix.transport.serve = { _, _ -> throw SyncApiException.Transient() }
         }
         syncAndWait()
         composeRule.waitUntil(10_000L) { probes == 5 && connection.status.value == ServerConnectionStatus.UNREACHABLE }
@@ -367,6 +375,7 @@ class AccountSyncFlowTest {
         openSettings("Checking")
         composeRule.onNodeWithTag("settings-server-recheck").assertIsNotEnabled()
         val before = fix.transport.capturedRequests.size
+        val successesBeforeReconnect = sync.uiState.value.successfulSyncs
         for (tag in listOf("account-sync-now", "account-reauthenticate")) {
             scrollIfNeeded(tag)
             composeRule.onNodeWithTag(tag).assertIsNotEnabled()
@@ -384,6 +393,13 @@ class AccountSyncFlowTest {
         outcomes.forEachIndexed { index, (result, label) ->
             composeRule.runOnIdle { answer.complete(result) }
             composeRule.waitUntil(10_000L) { connection.status.value != ServerConnectionStatus.CHECKING }
+            if (result == ServerCheckResult.CONNECTED) {
+                composeRule.waitUntil(10_000L) {
+                    sync.uiState.value.successfulSyncs > successesBeforeReconnect && !sync.uiState.value.busy
+                }
+            } else {
+                assertEquals(before, fix.transport.capturedRequests.size)
+            }
             scrollIfNeeded("settings-server-status")
             composeRule.onNodeWithTag("settings-server-status").assertTextEquals(label)
             captureSettingsScreenshot("connection-$index")
@@ -405,10 +421,12 @@ class AccountSyncFlowTest {
                 composeRule.waitUntil(10_000L) { probes == index + 2 }
             }
         }
-        assertEquals(before, fix.transport.capturedRequests.size)
+        assertEquals(before + 1, fix.transport.capturedRequests.size)
+        assertEquals(successesBeforeReconnect + 1, sync.uiState.value.successfulSyncs)
+        val afterReconnect = fix.transport.capturedRequests.size
         scrollIfNeeded("account-sync-now")
         composeRule.onNodeWithTag("account-sync-now").performClick()
-        composeRule.waitUntil(10_000L) { fix.transport.capturedRequests.size > before && !sync.uiState.value.busy }
+        composeRule.waitUntil(10_000L) { fix.transport.capturedRequests.size > afterReconnect && !sync.uiState.value.busy }
         // A genuine account authentication stop must not relabel a reachable server as offline.
         fix.transport.serve = { _, _ ->
             AppSessionTransport.Frame(401, """{"errorCode":"reauthentication_required"}""")

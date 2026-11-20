@@ -218,6 +218,28 @@ interface WorkoutDao {
     )
     suspend fun getScopedFinishedWorkouts(accountId: String?): List<WorkoutEntity>
 
+    @Query(
+        """SELECT workouts.id AS workoutId, workouts.name AS workoutName,
+            COALESCE(workouts.finished_at_millis, workouts.started_at_millis) AS performedAtMillis,
+            workout_exercises.id AS entryId, workout_exercises.notes,
+            workout_sets.id AS setId, workout_sets.weight_kg AS weightKg, workout_sets.repetitions
+            FROM workouts
+            INNER JOIN workout_exercises ON workout_exercises.workout_id = workouts.id
+            INNER JOIN exercises ON exercises.id = workout_exercises.exercise_id
+                AND (exercises.is_user_created = 0 OR exercises.account_id IS :accountId)
+                AND exercises.deleted_at_millis IS NULL
+            INNER JOIN workout_sets ON workout_sets.workout_exercise_id = workout_exercises.id
+            WHERE workout_exercises.exercise_id = :exerciseId
+                AND workouts.status = 'finished' AND workouts.account_id IS :accountId
+                AND workouts.deleted_at_millis IS NULL AND workout_sets.is_completed = 1
+            ORDER BY performedAtMillis DESC, workouts.id DESC,
+                workout_exercises.position, workout_exercises.id, workout_sets.position, workout_sets.id""",
+    )
+    suspend fun getScopedExerciseHistorySets(
+        exerciseId: String,
+        accountId: String?,
+    ): List<ExerciseHistorySetRow>
+
     @Transaction
     suspend fun getScopedWorkoutDetails(workoutId: String, accountId: String?): WorkoutDetails? {
         val workout = getScopedWorkout(workoutId, accountId) ?: return null

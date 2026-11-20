@@ -5,6 +5,51 @@ Current behavior is described in [architecture](architecture.md) and the [sync r
 Shared product/API requirements remain in [shared-docs](../shared-docs/docs/backend-contract/README.md);
 items below do not change that contract.
 
+## Visual redesign
+
+The [redesign reference](design/redesign.md) records the current Figcraft frames and approved visual decisions.
+Audit the existing Android UI before applying changes; the reference is not an implementation-status record.
+
+Remaining work and questions:
+
+- The Exercises catalogue and inline equipment/muscle selectors use the reference styling. Emulator checks cover
+  the bundled catalogue, filter application/cancellation/scrolling, navigation retention and 320dp/200% text layouts.
+  Workout-add, routine-add and replacement pickers reuse that browser; emulator checks cover workout selection across
+  search, confirmation/cancellation and narrow enlarged-text picker/filter layouts.
+  Check physical-device keyboard behavior and additional font/display-size combinations. Selected options and applied
+  categories use the existing navigation-selection blue with accent borders.
+
+- Align older mockups with the terminal-like 48 px layout lines and 6 × 12 grid now established for the Exercises
+  frame; keep compact controls centered within those lines.
+- Extend active-workout verification beyond the collapsed/expanded/timer references and 320dp/150% text emulator
+  checks to physical-device keyboard behavior, long notes and extreme numeric inputs. Apply the visual system to
+  the remaining screens and states while preserving product behavior and persistence invariants.
+- Confirm whether redesigned routine panels should show an exercise summary. The old cards include one, while the
+  current collapsed and expanded mockups omit it; expansion currently reveals management actions only.
+- Resolve responsive dimensions, long names and numeric values, font scaling, keyboard behavior, and Android system
+  insets on real devices. The fixed reference frames do not settle those behaviors.
+- Extend the design to remaining screens and states not represented by the current frames. Cover empty,
+  loading, disabled, focused, pressed, and error treatments where applicable.
+- Verify accessible names, selected and expanded semantics, completion controls, and interactive areas when translating
+  the icon-only navigation and compact controls.
+- Workout summaries follow the exercise-history panels and share their set table, adding recorded rest with the
+  final row blank. Emulator checks cover normal and 320dp/200% text layouts; verify table scrolling and system
+  display-size combinations on physical devices.
+- Routine editing follows the workout grid and shares its compact inputs and swipe deletion. Emulator checks cover
+  autosaves, confirmed exercise deletion, swipe thresholds/refusal/renumbering and 320dp/200% text; verify physical
+  keyboard and touch behavior on devices.
+- Read-only routine details use the workout summary panels and shared set table. Emulator checks cover detail/start
+  navigation and 320dp/200% text; verify long routine catalogues and additional display-size combinations on devices.
+- All app-owned dialogs share square borders and bracketed left/right actions. Emulator checks cover normal and
+  doubled text, scrolling bodies, selector drafts, rest wheels and existing confirmation flows; verify additional
+  display sizes, physical-device keyboards and accessibility navigation.
+- The collapsed workout panel uses square borders, grid typography and bracketed resume/discard affordances.
+  Emulator checks cover live rest updates, separate actions, wrapped long names and 320dp/200% text; verify additional
+  display sizes and physical-device accessibility navigation.
+- Settings uses outlined grid panels and bracketed controls, including busy and recovery states. Emulator checks cover
+  normal and 320dp/200% text layouts, metadata/action alignment, lifecycle checks and existing account journeys;
+  verify additional display sizes and physical-device accessibility navigation.
+
 ## Settings verification and connectivity follow-up
 
 The Settings layout and advisory server connectivity are implemented. The Server check confirms only reachability

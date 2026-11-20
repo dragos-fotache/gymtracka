@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -20,11 +21,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -39,46 +37,60 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.dragosfotache.gymtracka.ui.ActiveRestTimer
+import com.dragosfotache.gymtracka.ui.components.GymDialog
+import com.dragosfotache.gymtracka.ui.components.GymDialogAction
 import com.dragosfotache.gymtracka.ui.theme.LocalWorkoutGrid
 import com.dragosfotache.gymtracka.ui.theme.WorkoutActionButton
 import com.dragosfotache.gymtracka.ui.theme.WorkoutGrid
-import com.dragosfotache.gymtracka.ui.ActiveRestTimer
+import com.dragosfotache.gymtracka.ui.theme.WorkoutGridLabel
+import com.dragosfotache.gymtracka.ui.theme.WorkoutMuted
 import com.dragosfotache.gymtracka.ui.util.formatCountdown
 import com.dragosfotache.gymtracka.ui.util.formatRestDuration
 import kotlin.math.abs
+import kotlin.math.floor
 import kotlin.math.roundToInt
 
 @Composable
 internal fun RestDurationRow(restSeconds: Int, onClick: () -> Unit) {
     val grid = LocalWorkoutGrid.current
+    if (grid != null) {
+        WorkoutGridLabel(
+            "[Rest Timer: ${formatRestDuration(restSeconds)}]",
+            modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick),
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+            horizontalPadding = 0,
+        )
+        return
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (grid != null) Modifier.heightIn(min = grid.line) else Modifier)
             .clickable(onClick = onClick)
-            .padding(vertical = if (grid == null) 4.dp else 0.dp),
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             Icons.Filled.Timer,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(grid?.space(18) ?: 28.dp),
+            modifier = Modifier.size(28.dp),
         )
         Text(
             "Rest Timer: ${formatRestDuration(restSeconds)}",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary,
-            fontWeight = if (grid != null) FontWeight.SemiBold else FontWeight.Medium,
-            modifier = Modifier.padding(start = grid?.space(6) ?: 12.dp),
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(start = 12.dp),
         )
     }
 }
@@ -95,39 +107,35 @@ internal fun RestDurationDialog(
     var selectedSeconds by remember(initialRestSeconds) {
         mutableIntStateOf(((initialRestSeconds % 60) / 5 * 5).coerceIn(0, 55))
     }
-    AlertDialog(
+    GymDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Rest timer", style = MaterialTheme.typography.titleMedium) },
+        title = "Rest timer",
         text = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-            ) {
-                RestDurationPickerColumn(
-                    label = "Minutes",
-                    values = (0..9).toList(),
-                    selectedValue = selectedMinutes,
-                    onValueSelected = { selectedMinutes = it },
-                    modifier = Modifier.width(84.dp),
-                )
-                RestDurationPickerColumn(
-                    label = "Seconds",
-                    values = (0..55 step 5).toList(),
-                    selectedValue = selectedSeconds,
-                    onValueSelected = { selectedSeconds = it },
-                    modifier = Modifier.width(84.dp),
-                )
+            val grid = LocalWorkoutGrid.current!!
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val columnUnits = (floor((maxWidth.value / grid.scale - 12) / 12).toInt() * 6).coerceAtLeast(48)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    RestDurationPickerColumn(
+                        label = "Minutes",
+                        values = (0..9).toList(),
+                        selectedValue = selectedMinutes,
+                        onValueSelected = { selectedMinutes = it },
+                        modifier = Modifier.width(grid.space(columnUnits)),
+                    )
+                    RestDurationPickerColumn(
+                        label = "Seconds",
+                        values = (0..55 step 5).toList(),
+                        selectedValue = selectedSeconds,
+                        onValueSelected = { selectedSeconds = it },
+                        modifier = Modifier.width(grid.space(columnUnits)),
+                    )
+                }
             }
         },
-        confirmButton = {
-            Button(
-                onClick = { onDone(selectedMinutes * 60 + selectedSeconds) },
-                modifier = Modifier.fillMaxWidth().height(44.dp),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Text("Done")
-            }
-        },
+        confirmAction = GymDialogAction(
+            text = "Done",
+            onClick = { onDone(selectedMinutes * 60 + selectedSeconds) },
+        ),
     )
 }
 
@@ -139,6 +147,7 @@ private fun RestDurationPickerColumn(
     onValueSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val grid = LocalWorkoutGrid.current!!
     val selectedIndex = values.indexOf(selectedValue).coerceAtLeast(0)
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex)
     var centeredIndex by remember { mutableIntStateOf(selectedIndex) }
@@ -175,43 +184,42 @@ private fun RestDurationPickerColumn(
     }
 
     Column(modifier = modifier) {
-        Text(
+        WorkoutGridLabel(
             label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
+            color = WorkoutMuted,
+            contentAlignment = Alignment.Center,
+            horizontalPadding = 0,
+            modifier = Modifier.fillMaxWidth(),
         )
         Box(
-            modifier = Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(10.dp)),
+            modifier = Modifier.fillMaxWidth().height(grid.line * 3),
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(40.dp)
+                    .height(grid.line)
                     .align(Alignment.Center)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)),
+                    .background(MaterialTheme.colorScheme.primaryContainer),
             )
             LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().testTag("rest-picker-${label.lowercase()}"),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                contentPadding = PaddingValues(vertical = 40.dp),
+                contentPadding = PaddingValues(vertical = grid.line),
             ) {
                 items(values, key = { it }) { value ->
                     val isSelected = values[centeredIndex] == value
-                    Text(
+                    WorkoutGridLabel(
                         value.toString(),
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.bodyLarge,
+                        contentAlignment = Alignment.Center,
+                        horizontalPadding = 0,
                         color = if (isSelected) {
                             MaterialTheme.colorScheme.onSurface
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
                         },
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        modifier = Modifier.fillMaxWidth().height(40.dp).padding(vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
@@ -247,22 +255,24 @@ internal fun RestTimerBar(
                     )
                 }
                 .heightIn(min = grid.line + grid.space(24))
-                .padding(start = grid.space(18), end = grid.space(28), top = grid.space(12), bottom = grid.space(12)),
+                .padding(horizontal = grid.space(23), vertical = grid.space(12)),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             WorkoutActionButton(
-                "−15", { onDurationAdjusted(-15) },
+                "-15", { onDurationAdjusted(-15) },
                 Modifier.width(grid.space(60)).testTag("rest-timer-minus"),
                 fontWeight = FontWeight.Bold,
             )
-            Spacer(Modifier.width(grid.space(24)))
+            Spacer(Modifier.width(grid.space(if (grid.fontScale > 1.2f) 12 else 24)))
             Text(
                 formatCountdown(remainingSeconds),
                 textAlign = TextAlign.Center,
-                modifier = Modifier.width(grid.space((60 * grid.fontScale).roundToInt())),
+                modifier = Modifier.width(grid.space(
+                    if (grid.fontScale > 1.2f) (72 * grid.fontScale).roundToInt() else 60,
+                )),
                 maxLines = 1,
             )
-            Spacer(Modifier.width(grid.space(24)))
+            Spacer(Modifier.width(grid.space(if (grid.fontScale > 1.2f) 12 else 24)))
             WorkoutActionButton(
                 "+15", { onDurationAdjusted(15) },
                 Modifier.width(grid.space(60)).testTag("rest-timer-plus"),

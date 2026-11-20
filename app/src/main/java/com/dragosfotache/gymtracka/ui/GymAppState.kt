@@ -49,6 +49,7 @@ internal enum class Destination {
     AddExercises,
     ReplaceExercise,
     WorkoutHistoryDetail,
+    ExerciseHistory,
 }
 
 internal data class FinishedWorkoutSummary(
@@ -96,6 +97,8 @@ internal class GymAppState(
     var activeWorkout by mutableStateOf<WorkoutEntity?>(null)
         private set
     var selectedHistoryWorkoutId by mutableStateOf<String?>(null)
+        private set
+    var selectedHistoryExerciseId by mutableStateOf<String?>(null)
         private set
     var replacingWorkoutExerciseId by mutableStateOf<String?>(null)
         private set
@@ -312,6 +315,7 @@ internal class GymAppState(
             if (destination != capturedDestination) return
             activeWorkout = null
             selectedHistoryWorkoutId = null
+            selectedHistoryExerciseId = null
             selectedRoutineId = null
             editingRoutineId = null
             selectedExerciseId = null
@@ -439,13 +443,15 @@ internal class GymAppState(
         val activeChanged = capturedActiveId != newestActive?.id
         val inOldActiveFlow = capturedDestination == Destination.ActiveWorkout ||
             capturedDestination == Destination.AddExercises ||
-            capturedDestination == Destination.ReplaceExercise
+            capturedDestination == Destination.ReplaceExercise ||
+            capturedDestination == Destination.ExerciseHistory
         if (activeChanged) {
             // Any active ID change retires old-root dialog/source intent: a collapsed
             // confirmation must never capture the replacement root. Unrelated tab and
             // nested selections are preserved.
             activeWorkout = newestActive
             replacingWorkoutExerciseId = null
+            selectedHistoryExerciseId = null
             showDiscardDialog = false
             showFinishDialog = false
             showNoCompletedSetsDialog = false
@@ -762,6 +768,19 @@ internal class GymAppState(
         invalidateForNavigation()
         selectedHistoryWorkoutId = workoutId
         destination = Destination.WorkoutHistoryDetail
+    }
+
+    fun showExerciseHistory(exerciseId: String) {
+        if (activeWorkout == null) return
+        invalidateForNavigation()
+        selectedHistoryExerciseId = exerciseId
+        destination = Destination.ExerciseHistory
+    }
+
+    fun closeExerciseHistory() {
+        invalidateForNavigation()
+        selectedHistoryExerciseId = null
+        destination = if (activeWorkout != null) Destination.ActiveWorkout else Destination.Workout
     }
 
     fun closeWorkoutHistory() {

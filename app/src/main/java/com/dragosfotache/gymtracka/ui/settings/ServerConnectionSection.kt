@@ -6,11 +6,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Circle
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -23,6 +20,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
+import com.dragosfotache.gymtracka.ui.theme.LocalWorkoutGrid
 
 @Composable
 internal fun ServerConnectionSection(state: ServerConnectionState?) {
@@ -40,18 +38,19 @@ internal fun ServerConnectionSection(state: ServerConnectionState?) {
         }
     }
     val status = state?.status?.collectAsState()?.value ?: ServerConnectionStatus.NOT_CHECKED
+    val grid = LocalWorkoutGrid.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
+        SettingsLabel(
             when (status) {
                 ServerConnectionStatus.CHECKING -> "Checking"
                 ServerConnectionStatus.CONNECTED -> "Online"
                 else -> "Offline"
             },
-            modifier = Modifier.testTag("settings-server-status"),
+            modifier = Modifier.weight(1f).testTag("settings-server-status"),
         )
         Icon(
             Icons.Filled.Circle,
@@ -61,16 +60,14 @@ internal fun ServerConnectionSection(state: ServerConnectionState?) {
                 ServerConnectionStatus.CONNECTED -> Color(0xFF2E7D32)
                 else -> MaterialTheme.colorScheme.error
             },
-            modifier = Modifier.size(10.dp).testTag("settings-server-status-dot"),
+            modifier = Modifier.size(grid?.space(12) ?: 10.dp).testTag("settings-server-status-dot"),
         )
     }
-    TextButton(
+    SettingsAction(
+        text = "Check",
         onClick = { state?.recheck() },
         enabled = state != null && status != ServerConnectionStatus.CHECKING &&
             lifecycleState.isAtLeast(Lifecycle.State.STARTED),
         modifier = Modifier.testTag("settings-server-recheck"),
-    ) {
-        Icon(Icons.Filled.Refresh, contentDescription = null)
-        Text("Check")
-    }
+    )
 }

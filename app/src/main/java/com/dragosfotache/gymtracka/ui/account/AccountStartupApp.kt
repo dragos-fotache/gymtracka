@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -58,6 +57,8 @@ import com.dragosfotache.gymtracka.data.sync.store.PushRunOwner
 import com.dragosfotache.gymtracka.ui.AccountGymAppState
 import com.dragosfotache.gymtracka.ui.Destination
 import com.dragosfotache.gymtracka.ui.GymApp
+import com.dragosfotache.gymtracka.ui.components.GymDialog
+import com.dragosfotache.gymtracka.ui.components.GymDialogAction
 import com.dragosfotache.gymtracka.ui.rememberAccountGymAppState
 import com.dragosfotache.gymtracka.ui.settings.ServerConnectionState
 import com.dragosfotache.gymtracka.ui.settings.ServerConnectionStatus
@@ -657,32 +658,26 @@ private fun ImportWarningDialog(
     consent: AccountImportConsent,
 ) {
     val decision = pending ?: return
-    AlertDialog(
+    GymDialog(
         onDismissRequest = { consent.answer(decision, false) },
         modifier = Modifier.testTag("account-import-warning"),
-        title = { Text("Replace cloud workout?") },
+        title = "Replace cloud workout?",
         text = {
             Text(
                 "Importing your original local active workout may replace the cloud active workout. " +
                     "Already accepted remote imports cannot be undone by cancellation.",
             )
         },
-        confirmButton = {
-            TextButton(
-                onClick = { consent.answer(decision, true) },
-                modifier = Modifier.testTag("account-import-confirm"),
-            ) {
-                Text("Import")
-            }
-        },
-        dismissButton = {
-            TextButton(
-                onClick = { consent.answer(decision, false) },
-                modifier = Modifier.testTag("account-import-cancel"),
-            ) {
-                Text("Cancel")
-            }
-        },
+        confirmAction = GymDialogAction(
+            text = "Import",
+            onClick = { consent.answer(decision, true) },
+            modifier = Modifier.testTag("account-import-confirm"),
+        ),
+        dismissAction = GymDialogAction(
+            text = "Cancel",
+            onClick = { consent.answer(decision, false) },
+            modifier = Modifier.testTag("account-import-cancel"),
+        ),
     )
 }
 

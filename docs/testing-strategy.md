@@ -29,6 +29,13 @@ without it, default device tests do not contain the external Room/service journe
 | App and timer | Active discovery/replacement, shared finite admission, transition/publication drains, terminal at-most-once writes, clocks and hardware |
 | Compose/app flows | Catalogue/picker/custom/routine/set/history controls, Settings selection/sections/large-text scrolling, startup/privacy, actual feature factories, focus/dialog preservation and timer/editor barriers |
 | Workout presentation | Four-column layout, editing completed sets, timer actions at narrow widths and enlarged text, reference screenshots from real in-memory Room fixtures |
+| Collapsed workout | Separate resume/discard actions, live rest updates, complete countdowns and wrapped names at 320dp/200% text |
+| Routine editor | Workout-style controls, autosaving compact fields, inline confirmed exercise deletion, set swipe thresholds/refusal/renumbering and 320dp/200% text |
+| Dialog presentation | Shared left/right bracketed actions, single-action alignment, long-body scrolling, enlarged-text action stacking, selector drafts and rest wheels |
+| History presentation | Separate date/time and sets/best-set rows, independent inline action disclosure, detail navigation, empty state and long summaries/actions at 320dp/200% text |
+| Workout summary | Outlined exercise panels, aligned recorded-rest column, blank final/single-set rest, unknown/zero rest, unchanged stored values, Back navigation and horizontally scrollable columns at 320dp/200% text |
+| Exercise history | Account/catalogue/tombstone filtering, completed sets and ordering, grouped workout panels, empty/retry/unavailable states, late-read guards, active-workout return and timer preservation |
+| Catalogue presentation | Real bundled 899-exercise catalogue; shared tab/picker controls, inline filter application, clear/cancel, late-option scrolling, navigation retention, selection across search, confirmation-only commits, 320dp/200% text and rendered captures |
 | Workout landing | Title/detail navigation, independent inline routine actions, starting from a template, shared icon navigation and 320dp/double-text controls |
 | Wire and HTTP | Duplicate raw keys, family identity, exact durable bytes, auth scalar/expiry rules, origin/TLS/redirect/retry refusal, framing/UTF-8/cancellation |
 | Canonical/outbox | Watermarks, frozen-head replay, outcomes/retry, atomic acknowledgment, newer intent, strict retained evidence, transaction rollback and reopen |
@@ -70,11 +77,49 @@ Run from the repository root:
 ```
 
 The connected task needs an available emulator/device. Select a test device explicitly when several are attached.
-`WorkoutAppearanceTest` checks workout editing and timer controls at normal/narrow widths and 150% text. It writes
+`WorkoutAppearanceTest` checks completed-set editing, inline exercise action expansion/replacement/delete cancellation,
+and timer controls at normal/narrow widths, including 320dp with 150% text. It writes collapsed, expanded and timer
 PNG captures under the target application's private `files/workout-appearance/` directory for visual review; these
 captures are verification artifacts rather than golden-image assertions.
+`ActiveWorkoutPillAppearanceTest` checks separate resume/discard callbacks, live rest presentation and removal,
+aligned labels/actions, grid dimensions and complete long names/countdowns at 320dp with 200% text. Captures live
+under `files/active-workout-pill/`. Existing app-flow and Settings journeys exercise resumption and confirmed discard
+through the root scaffold, including continued timer identity across tabs.
+`RoutineEditorAppearanceTest` uses real in-memory Room to check autosaved inputs, inline exercise deletion with
+confirmation/cancellation, short and refused swipe restoration, accepted swipe persistence and renumbering, and
+readable controls at 320dp with 200% text. Captures live under `files/routine-editor/`. Focused/app-flow tests also
+exercise set addition/swipe deletion, draft validation, routine creation/save/start and the shared workout swipe.
+`ExerciseHistoryRepositoryTest` checks the real Room query and repository fences. `ExerciseHistoryStateTest` uses
+virtual time and deferred reads for refresh ordering, retry and revocation. `ExerciseHistoryFlowTest` opens history
+through the real local app shell, checks action alignment and workout panels, verifies toolbar/system Back with an
+active timer, and exercises scrolling at 320dp with 150% text. Its isolated in-memory fixtures leave the user's database
+untouched; captures are stored in `files/exercise-history/`.
+`WorkoutHistoryAppearanceTest` uses real in-memory Room through the local app shell for history panels, chevron
+disclosure and detail navigation. It checks long names and intact action labels at 320dp with 200% text and writes
+screenshots under `files/workout-history/`. Existing focused/app-flow tests exercise save-as-routine, perform-again
+replacement and confirmed deletion through the bracketed actions.
+`WorkoutSummaryAppearanceTest` opens the summary from the History workout title using real in-memory Room. It checks
+recorded, unknown and zero rest, omitted final rest for multi- and single-set exercises, preserved storage, totals,
+toolbar/system Back and readable columns/actions at 320dp with 200% text. Captures live under `files/workout-summary/`.
+`ExerciseHistoryFlowTest` also exercises the shared set table without the summary's rest column.
+`HistoryGridAssertions` checks actual character origins on the six-unit horizontal grid, heading/value alignment,
+consistent columns across panels, and row baselines on the twelve-unit vertical grid in both history screens.
+The summary also checks action-label alignment and grid row height at normal and doubled text sizes.
 `WorkoutLandingTest` checks the landing-page title, chevrons, edit/start/create routing and shared navigation, including
-320dp width with 200% text. It writes collapsed, expanded and enlarged-text PNGs under `files/workout-landing/`.
+320dp width with 200% text. It opens read-only routine details, starts a workout from their fixed action, and returns
+from the details toolbar at enlarged text size. Landing and routine-details PNGs live under `files/workout-landing/`.
+`CatalogueAppearanceTest` uses an isolated migrated copy of the bundled catalogue through the local app shell. It
+checks both inline selectors, cancellation, Clear/Show, search/category intersections, selection retention across tabs,
+scrolling to late options and category-label layout at normal/320dp widths and 200% text. Its workout picker journeys
+verify selection across search, an empty result, confirmation-only persistence, filter Back handling and cancellation
+at 320dp/200% text. PNG captures of both the tab and picker live under `files/catalogue-appearance/`.
+`FocusedComposeInteractionTest` also checks multi-select toggling, cancellation and single-select replacement with
+preserved workout entry/set data. These tests bypass configured account startup and do not write the user's database.
+`DialogAppearanceTest` checks the shared modal action alignment, single-action placement, long-body scrolling and
+stacked long labels at 200% text. It exercises all four custom-editor selectors through apply/clear and the rest picker
+at normal and doubled text, with captures under `files/dialogs/`. Existing app-flow, focused, routine and account-root
+tests cover the corresponding confirmation callbacks. Rest-wheel refresh tests select the wheel by its stable tag,
+independently of the dialog body's scrolling container.
 Focused examples:
 
 ```sh
@@ -107,6 +152,9 @@ whitespace and scope with `git diff --check`; it does not require executing Andr
 
 `SettingsTabTest` exercises all four tab selections with a running timer, pill resumption, preserved workout/set data,
 terminal rest persistence, offline presentation without a configured checker and scrolling at 200% font size.
+`AccountSettingsPresentationTest` additionally checks square-panel text/action alignment, grid row heights, whole
+timestamps/errors/action labels at 320dp/200% text, and authentication cancellation. Optional `settings-grid-*.png`
+captures show normal, enlarged-text, rejected-change and authenticating states using inert account fixtures.
 `GymAppStateTest` additionally uses virtual time to verify continued countdown/wake-lock ownership and exactly one
 terminal rest write across Settings navigation. `ServerConnectionStateTest` uses virtual time and
 cancellation-resistant gates for entry/recheck, timeout,
@@ -128,6 +176,8 @@ The sync flow also checks fresh reachability after a retryable HTTP/transport fa
 and offline, repeated identical failures, permanent errors retaining Online, and explicit Check restoring actions
 without treating initial/repeated Online checks as reconnection. Confirmed Offline→Online transitions
 are separately covered by the real-backend reconnect regressions.
+The UI flow checks exactly one fresh sync after a confirmed Offline→Online transition through the same account,
+and waits for that run to settle before exercising the next manual action.
 
 To capture synthetic-fixture screenshots for visual inspection, add
 `-Pandroid.testInstrumentationRunnerArguments.settingsScreenshots=true` to a focused `SettingsTabTest`,
